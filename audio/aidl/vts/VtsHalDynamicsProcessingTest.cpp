@@ -120,7 +120,7 @@ class DynamicsProcessingTestHelper : public EffectHelper {
 
     void setParamsAndProcess(std::vector<float>& input, std::vector<float>& output);
 
-    float calculateDb(const std::vector<float>& input, size_t startSamplePos);
+    float calculateDb(const std::vector<float>& input, size_t startSamplePos, size_t endSamplePos);
 
     void getMagnitudeValue(const std::vector<float>& output, std::vector<float>& bufferMag);
 
@@ -430,9 +430,11 @@ bool DynamicsProcessingTestHelper::isAllParamsValid() {
 // This function calculates power for both and mono and stereo data as the total power for
 // interleaved multichannel data can be calculated by treating it as a continuous mono input.
 float DynamicsProcessingTestHelper::calculateDb(const std::vector<float>& input,
-                                                size_t startSamplePos = 0) {
+                                                size_t startSamplePos = 0,
+                                                size_t endSamplePos = 0) {
+    size_t sampleCount = (endSamplePos == 0 ? input.size() : endSamplePos) - startSamplePos;
     return audio_utils_compute_power_mono(input.data() + startSamplePos, AUDIO_FORMAT_PCM_FLOAT,
-                                          input.size() - startSamplePos);
+                                          sampleCount);
 }
 
 void DynamicsProcessingTestHelper::setParamsAndProcess(std::vector<float>& input,
@@ -900,6 +902,54 @@ class DynamicsProcessingLimiterConfigDataTest
         }
     }
 
+    void testReleaseTimeParam(float thresholdDb, bool isLimiterEngaged) {
+        for (size_t i = mInput.size() / 2; i < mInput.size(); i++) {
+            mInput[i] = mInput[i] / 2;
+        }
+        float firstHalfDb = calculateDb(mInput, 0, mInput.size() / 2);
+        float secondHalfDb = calculateDb(mInput, mInput.size() / 2, mInput.size());
+        mInputDb = calculateDb(mInput, 0, mInput.size());
+
+        float referenceDb;
+        if (isLimiterEngaged) {
+            ASSERT_TRUE(thresholdDb < firstHalfDb && thresholdDb >= secondHalfDb)
+                    << "Threshold level: " << thresholdDb << "First half level: " << firstHalfDb
+                    << "Second half level: " << secondHalfDb;
+            referenceDb = FLT_MAX;
+        } else {
+            ASSERT_TRUE(thresholdDb > firstHalfDb && thresholdDb > secondHalfDb)
+                    << "Threshold level: " << thresholdDb << "First half level: " << firstHalfDb
+                    << "Second half level: " << secondHalfDb;
+            referenceDb = mInputDb;
+        }
+        std::vector<float> output(mInput.size());
+        for (float releaseTimeMs : kReleaseTimeMsValues) {
+            cleanUpLimiterConfig();
+            for (int i = 0; i < mChannelCount; i++) {
+                fillLimiterConfig(mLimiterConfigList, i, true, kDefaultLinkerGroup,
+                                  kDefaultAttackTime, releaseTimeMs, kDefaultRatio, thresholdDb,
+                                  kDefaultPostGain);
+            }
+            ASSERT_NO_FATAL_FAILURE(setLimiterParamsAndProcess(mInput, output));
+            if (!isAllParamsValid()) {
+                continue;
+            }
+            float outputDb = calculateDb(output, kStartIndex);
+            if (isLimiterEngaged) {
+                /*Release time determines how quickly the compressor returns to normal after the
+                 * input falls below the threshold. As the release time increases, it takes longer
+                 * for the compressor to stop compressing, resulting in a decrease in output
+                 * decibels as the release time increases*/
+                ASSERT_LT(outputDb, referenceDb) << "Release Time: " << releaseTimeMs;
+                referenceDb = outputDb;
+            } else {
+                // No change in the outputdB when the limiter is not enganged
+                EXPECT_NEAR(outputDb, referenceDb, kToleranceDb)
+                        << "Release Time: " << releaseTimeMs;
+            }
+        }
+    }
+
     void cleanUpLimiterConfig() {
         CleanUp();
         mLimiterConfigList.clear();
@@ -913,6 +963,7 @@ class DynamicsProcessingLimiterConfigDataTest
     static constexpr float kLimiterTestToleranceDb = 0.05;
     static constexpr float kMinDifferenceDb = 5;
     const std::vector<bool> kEnableValues = {true, false, true};
+    const std::vector<float> kReleaseTimeMsValues = {0, 10, 20, 30, 40, 50};
     std::vector<DynamicsProcessing::LimiterConfig> mLimiterConfigList;
     int mBufferSize;
 };
@@ -1005,6 +1056,18 @@ TEST_P(DynamicsProcessingLimiterConfigDataTest, LimiterEnableDisableViaEngine) {
         ASSERT_NO_FATAL_FAILURE(
                 testEnableDisableConfiguration(true /*Limiter Enabled*/, isEngineLimiterEnabled));
     }
+}
+
+TEST_P(DynamicsProcessingLimiterConfigDataTest, LimiterReleaseTime) {
+    // Using a threshold dB value that compresses only the first half of the input.
+    float thresholdDb = -7;
+    ASSERT_NO_FATAL_FAILURE(testReleaseTimeParam(thresholdDb, true));
+}
+
+TEST_P(DynamicsProcessingLimiterConfigDataTest, LimiterNotEngagedReleaseTimeTest) {
+    // Using threshold value such that limiter does not engage with the input
+    float thresholdDb = -1;
+    ASSERT_NO_FATAL_FAILURE(testReleaseTimeParam(thresholdDb, false));
 }
 
 INSTANTIATE_TEST_SUITE_P(DynamicsProcessingTest, DynamicsProcessingLimiterConfigDataTest,
