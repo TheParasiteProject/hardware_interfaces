@@ -367,13 +367,17 @@ GrpcVehicleProxyServer& GrpcVehicleProxyServer::Start() {
 }
 
 GrpcVehicleProxyServer& GrpcVehicleProxyServer::Shutdown() {
+    LOG(INFO) << __func__ << ": Start shutting down GrpcVehicleProxyServer";
     std::shared_lock read_lock(mConnectionMutex);
+    LOG(INFO) << __func__ << ": Waiting for value stream connection to shutdown";
     for (auto& conn : mValueStreamingConnections) {
         conn->Shutdown();
     }
+    LOG(INFO) << __func__ << ": Waiting for supported values change stream connection to shutdown";
     for (auto& conn : mSupportedValuesChangeConnections) {
         conn->Shutdown();
     }
+    LOG(INFO) << __func__ << ": Requesting server to shutdown";
     if (mServer) {
         mServer->Shutdown();
     }
@@ -381,9 +385,11 @@ GrpcVehicleProxyServer& GrpcVehicleProxyServer::Shutdown() {
 }
 
 void GrpcVehicleProxyServer::Wait() {
+    LOG(INFO) << __func__ << ": Waiting for server to shutdown";
     if (mServer) {
         mServer->Wait();
     }
+    LOG(INFO) << __func__ << ": Server shutdown complete";
     mServer.reset();
 }
 
