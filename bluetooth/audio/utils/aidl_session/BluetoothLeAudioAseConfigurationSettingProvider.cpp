@@ -380,28 +380,36 @@ void populateVendorCodecConfiguration(LeAudioAseConfiguration& ase) {
   }
 }
 
-// Parse into AseDirectionConfiguration
-AseDirectionConfiguration
-AudioSetConfigurationProviderJson::SetConfigurationFromFlatSubconfig(
-    const le_audio::AudioSetSubConfiguration* flat_subconfig,
-    const le_audio::QosConfiguration* qos_cfg, CodecLocation location,
-    ConfigurationFlags& configurationFlags) {
-  AseDirectionConfiguration direction_conf;
+bool isOpusHiResCodec(const LeAudioAseConfiguration& ase) {
+  if (ase.codecId.has_value() &&
+      ase.codecId.value().getTag() == CodecId::vendor) {
+    auto cid = ase.codecId.value().get<CodecId::vendor>();
+    if (cid == opus_codec) {
+      // Based on the sampling freq
+      for (auto ltv : ase.codecConfiguration) {
+        if (ltv.getTag() == CodecSpecificConfigurationLtv::samplingFrequency) {
+          if (ltv.get<CodecSpecificConfigurationLtv::samplingFrequency>() ==
+              CodecSpecificConfigurationLtv::SamplingFrequency::HZ96000) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
 
-  LeAudioAseConfiguration ase;
-  LeAudioAseQosConfiguration qos;
+LeAudioDataPathConfiguration populateDatapath(
+    const CodecLocation& location, const LeAudioAseConfiguration& ase) {
   LeAudioDataPathConfiguration path;
-
-  // Translate into LeAudioAseConfiguration
-  populateAseConfiguration(ase, flat_subconfig, qos_cfg, configurationFlags);
-
-  // Translate into LeAudioAseQosConfiguration
-  populateAseQosConfiguration(qos, qos_cfg, ase,
-                              flat_subconfig->ase_channel_cnt());
-
-  // Populate vendorCodecConfiguration using the correct LTV
-  populateVendorCodecConfiguration(ase);
-
+  // Move codecId to iso data path
+  path.isoDataPathConfiguration.codecId = ase.codecId.value();
+  // Specific vendor datapath logic
+  if (isOpusHiResCodec(ase)) {
+    path.isoDataPathConfiguration.isTransparent = true;
+    path.dataPathId = kIsoDataPathHciLinkFeedback;
+    return path;
+  }
   // Translate location to data path id
   switch (location) {
     case CodecLocation::ADSP:
@@ -417,12 +425,34 @@ AudioSetConfigurationProviderJson::SetConfigurationFromFlatSubconfig(
       path.dataPathId = kIsoDataPathPlatformDefault;
       break;
   }
-  // Move codecId to iso data path
-  path.isoDataPathConfiguration.codecId = ase.codecId.value();
+  return path;
+}
+
+// Parse into AseDirectionConfiguration
+AseDirectionConfiguration
+AudioSetConfigurationProviderJson::SetConfigurationFromFlatSubconfig(
+    const le_audio::AudioSetSubConfiguration* flat_subconfig,
+    const le_audio::QosConfiguration* qos_cfg, CodecLocation location,
+    ConfigurationFlags& configurationFlags) {
+  AseDirectionConfiguration direction_conf;
+
+  LeAudioAseConfiguration ase;
+  LeAudioAseQosConfiguration qos;
+
+  // Translate into LeAudioAseConfiguration
+  populateAseConfiguration(ase, flat_subconfig, qos_cfg, configurationFlags);
+
+  // Translate into LeAudioAseQosConfiguration
+  populateAseQosConfiguration(qos, qos_cfg, ase,
+                              flat_subconfig->ase_channel_cnt());
+
+  // Populate vendorCodecConfiguration using the correct LTV
+  populateVendorCodecConfiguration(ase);
 
   direction_conf.aseConfiguration = ase;
   direction_conf.qosConfiguration = qos;
-  direction_conf.dataPathConfiguration = path;
+  // Populate the correct datapath.
+  direction_conf.dataPathConfiguration = populateDatapath(location, ase);
 
   return direction_conf;
 }

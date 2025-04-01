@@ -15,6 +15,7 @@ namespace audio {
 /* Datapath */
 constexpr uint8_t kIsoDataPathHci = 0x00;
 constexpr uint8_t kIsoDataPathPlatformDefault = 0x01;
+constexpr uint8_t kIsoDataPathHciLinkFeedback = 0x19;
 constexpr uint8_t kIsoDataPathDisabled = 0xFF;
 
 /* Direction */

@@ -513,6 +513,21 @@ bool isOpusCodec(const LeAudioAseConfiguration& ase) {
   return false;
 }
 
+bool isOpusHiResCodec(const LeAudioAseConfiguration& ase) {
+  if (isOpusCodec(ase)) {
+    for (auto ltv : ase.codecConfiguration) {
+      // Base on sampling frequency
+      if (ltv.getTag() == CodecSpecificConfigurationLtv::samplingFrequency) {
+        if (ltv.get<CodecSpecificConfigurationLtv::samplingFrequency>() ==
+            CodecSpecificConfigurationLtv::SamplingFrequency::HZ96000) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 void LeAudioOffloadAudioProvider::
     filterRequirementAseDirectionConfigurationExact(
         std::optional<std::vector<std::optional<AseDirectionConfiguration>>>&
@@ -532,7 +547,13 @@ void LeAudioOffloadAudioProvider::
     auto cfg = direction_configuration.value();
     if (!com::android::btaudio::hal::flags::le_audio_allow_opus() &&
         isOpusCodec(cfg.aseConfiguration)) {
-      LOG(DEBUG) << ": Ignore opus codec";
+      LOG(DEBUG) << __func__ << ": Ignore opus codec";
+      valid_direction_configurations = std::nullopt;
+      return;
+    }
+    if (!com::android::btaudio::hal::flags::leaudio_sw_offload() &&
+        isOpusHiResCodec(cfg.aseConfiguration)) {
+      LOG(DEBUG) << ": Ignore opus high res codec";
       valid_direction_configurations = std::nullopt;
       return;
     }
@@ -545,7 +566,7 @@ void LeAudioOffloadAudioProvider::
     if (cfg.aseConfiguration.codecId.has_value() &&
         cfg.aseConfiguration.codecId.value().getTag() == CodecId::vendor) {
       valid_direction_configurations.value().push_back(cfg);
-      LOG(INFO) << __func__ << ": ignore allocation for vendor codec! = ";
+      LOG(INFO) << __func__ << ": ignore allocation for vendor codec.";
       continue;
     }
     // For exact match, we require this direction to have the same allocation.
