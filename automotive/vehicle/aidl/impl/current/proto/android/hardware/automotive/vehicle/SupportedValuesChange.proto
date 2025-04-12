@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-#pragma once
+syntax = "proto3";
 
-#include "config/Config.h"
+package android.hardware.automotive.vehicle.proto;
 
-namespace aidl::android::hardware::biometrics::fingerprint {
+import "android/hardware/automotive/vehicle/PropIdAreaId.proto";
 
-class FingerprintConfig : public Config {
-    Config::Data* getConfigData(int* size) override;
-    std::string getSubTag() { return "Fingerprint "; }
+message SupportedValuesChange {
+    repeated PropIdAreaId prop_id_area_ids = 1;
 };
-
-}  // namespace aidl::android::hardware::biometrics::fingerprint

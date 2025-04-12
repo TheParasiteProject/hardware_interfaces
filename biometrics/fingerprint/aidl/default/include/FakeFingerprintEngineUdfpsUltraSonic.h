@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,19 @@
  */
 
 #pragma once
+#include "FakeFingerprintEngineUdfps.h"
 
-#include "config/Config.h"
+using namespace ::aidl::android::hardware::biometrics::common;
 
 namespace aidl::android::hardware::biometrics::fingerprint {
 
-class FingerprintConfig : public Config {
-    Config::Data* getConfigData(int* size) override;
-    std::string getSubTag() { return "Fingerprint "; }
+// A fake engine that is backed by system properties instead of hardware.
+class FakeFingerprintEngineUdfpsUltraSonic : public FakeFingerprintEngineUdfps {
+  public:
+    FakeFingerprintEngineUdfpsUltraSonic();
+    ~FakeFingerprintEngineUdfpsUltraSonic() {}
+    ndk::ScopedAStatus onPointerDownImpl(int32_t pointerId, int32_t x, int32_t y, float minor,
+                                         float major) override;
 };
 
 }  // namespace aidl::android::hardware::biometrics::fingerprint

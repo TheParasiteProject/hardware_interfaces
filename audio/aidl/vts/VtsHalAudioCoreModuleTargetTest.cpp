@@ -862,23 +862,33 @@ class MmapSharedMemory {
 
 struct StreamEventReceiver {
     virtual ~StreamEventReceiver() = default;
-    enum class Event { None, DrainReady, Error, TransferReady };
+    enum class Event : int { None = 0, DrainReady = 1, Error = 2, TransferReady = 4 };
     virtual std::tuple<int, Event> getLastEvent() const = 0;
     virtual std::tuple<int, Event> waitForEvent(int clientEventSeq) = 0;
     static constexpr int kEventSeqInit = -1;
 };
 std::string toString(StreamEventReceiver::Event event) {
-    switch (event) {
-        case StreamEventReceiver::Event::None:
-            return "None";
-        case StreamEventReceiver::Event::DrainReady:
-            return "DrainReady";
-        case StreamEventReceiver::Event::Error:
-            return "Error";
-        case StreamEventReceiver::Event::TransferReady:
-            return "TransferReady";
+    if (event == StreamEventReceiver::Event::None) return "None";
+    std::string result;
+    for (auto e : {StreamEventReceiver::Event::DrainReady, StreamEventReceiver::Event::Error,
+                   StreamEventReceiver::Event::TransferReady}) {
+        if (static_cast<int>(event) & static_cast<int>(e)) {
+            if (!result.empty()) result.append("|");
+            switch (e) {
+                case StreamEventReceiver::Event::DrainReady:
+                    result.append("DrainReady");
+                    break;
+                case StreamEventReceiver::Event::Error:
+                    result.append("Error");
+                    break;
+                case StreamEventReceiver::Event::TransferReady:
+                    result.append("TransferReady");
+                    break;
+                default:;  // Should not happen
+            }
+        }
     }
-    return std::to_string(static_cast<int32_t>(event));
+    return result;
 }
 
 // Note: we use a reference wrapper, not a pointer, because methods of std::*list
@@ -1092,9 +1102,9 @@ class StreamCommonLogic : public StreamLogic {
             expEvent != nullptr) {
             auto [eventSeq, event] = mEventReceiver->waitForEvent(mLastEventSeq);
             mLastEventSeq = eventSeq;
-            if (event != *expEvent) {
+            if ((static_cast<int>(event) & static_cast<int>(*expEvent)) == 0) {
                 // TODO: Make available as an error so it can be displayed by GTest
-                LOG(ERROR) << __func__ << ": expected event " << toString(*expEvent) << ", got "
+                LOG(ERROR) << __func__ << ": expected event(s) " << toString(*expEvent) << ", got "
                            << toString(event);
                 return {};
             }
@@ -2644,14 +2654,18 @@ TEST_P(AudioCoreModule, SetVendorParameters) {
 
 // See b/262930731. In the absence of offloaded effect implementations,
 // currently we can only pass a nullptr, and the HAL module must either reject
-// it as an invalid argument, or say that offloaded effects are not supported.
+// it as an invalid/null argument, or say that offloaded effects are not supported.
 TEST_P(AudioCoreModule, AddRemoveEffectInvalidArguments) {
-    ndk::ScopedAStatus addEffectStatus = module->addDeviceEffect(-1, nullptr);
-    ndk::ScopedAStatus removeEffectStatus = module->removeDeviceEffect(-1, nullptr);
-    if (addEffectStatus.getExceptionCode() != EX_UNSUPPORTED_OPERATION) {
-        EXPECT_EQ(EX_ILLEGAL_ARGUMENT, addEffectStatus.getExceptionCode());
-        EXPECT_EQ(EX_ILLEGAL_ARGUMENT, removeEffectStatus.getExceptionCode());
-    } else if (removeEffectStatus.getExceptionCode() != EX_UNSUPPORTED_OPERATION) {
+    const binder_exception_t addException = module->addDeviceEffect(-1, nullptr).getExceptionCode();
+    const binder_exception_t removeException =
+            module->removeDeviceEffect(-1, nullptr).getExceptionCode();
+    EXPECT_EQ(addException, removeException);
+    if (addException != EX_UNSUPPORTED_OPERATION) {
+        EXPECT_TRUE(addException == EX_ILLEGAL_ARGUMENT || addException == EX_NULL_POINTER)
+                << "unexpected addException: " << addException;
+        EXPECT_TRUE(removeException == EX_ILLEGAL_ARGUMENT || removeException == EX_NULL_POINTER)
+                << "unexpected removeException: " << removeException;
+    } else if (removeException != EX_UNSUPPORTED_OPERATION) {
         GTEST_FAIL() << "addDeviceEffect and removeDeviceEffect must be either supported or "
                      << "not supported together";
     } else {
@@ -2663,8 +2677,15 @@ TEST_P(AudioCoreModule, AddRemoveEffectInvalidArguments) {
     for (const auto& config : configs) {
         WithAudioPortConfig portConfig(config);
         ASSERT_NO_FATAL_FAILURE(portConfig.SetUp(module.get()));
-        EXPECT_STATUS(EX_ILLEGAL_ARGUMENT, module->addDeviceEffect(portConfig.getId(), nullptr));
-        EXPECT_STATUS(EX_ILLEGAL_ARGUMENT, module->removeDeviceEffect(portConfig.getId(), nullptr));
+        const binder_exception_t addException =
+                module->addDeviceEffect(portConfig.getId(), nullptr).getExceptionCode();
+        const binder_exception_t removeException =
+                module->removeDeviceEffect(portConfig.getId(), nullptr).getExceptionCode();
+        EXPECT_EQ(addException, removeException);
+        EXPECT_TRUE(addException == EX_ILLEGAL_ARGUMENT || addException == EX_NULL_POINTER)
+                << "unexpected addException: " << addException;
+        EXPECT_TRUE(removeException == EX_ILLEGAL_ARGUMENT || removeException == EX_NULL_POINTER)
+                << "unexpected removeException: " << removeException;
     }
 }
 
@@ -3840,7 +3861,7 @@ class AudioStream : public AudioCoreModule {
 
     // See b/262930731. In the absence of offloaded effect implementations,
     // currently we can only pass a nullptr, and the HAL module must either reject
-    // it as an invalid argument, or say that offloaded effects are not supported.
+    // it as an invalid/null argument, or say that offloaded effects are not supported.
     void AddRemoveEffectInvalidArguments() {
         constexpr bool connectedOnly = true;
         const auto ports = moduleConfig->getMixPorts(IOTraits<Stream>::is_input, connectedOnly);
@@ -3859,13 +3880,19 @@ class AudioStream : public AudioCoreModule {
             std::shared_ptr<IStreamCommon> streamCommon;
             ASSERT_IS_OK(stream.getStream()->getStreamCommon(&streamCommon));
             ASSERT_NE(nullptr, streamCommon);
-            ndk::ScopedAStatus addEffectStatus = streamCommon->addEffect(nullptr);
-            ndk::ScopedAStatus removeEffectStatus = streamCommon->removeEffect(nullptr);
-            if (addEffectStatus.getExceptionCode() != EX_UNSUPPORTED_OPERATION) {
-                EXPECT_EQ(EX_ILLEGAL_ARGUMENT, addEffectStatus.getExceptionCode());
-                EXPECT_EQ(EX_ILLEGAL_ARGUMENT, removeEffectStatus.getExceptionCode());
+            const binder_exception_t addException =
+                    streamCommon->addEffect(nullptr).getExceptionCode();
+            const binder_exception_t removeException =
+                    streamCommon->removeEffect(nullptr).getExceptionCode();
+            EXPECT_EQ(addException, removeException);
+            if (addException != EX_UNSUPPORTED_OPERATION) {
+                EXPECT_TRUE(addException == EX_ILLEGAL_ARGUMENT || addException == EX_NULL_POINTER)
+                        << "unexpected addException: " << addException;
+                EXPECT_TRUE(removeException == EX_ILLEGAL_ARGUMENT ||
+                            removeException == EX_NULL_POINTER)
+                        << "unexpected removeException: " << removeException;
                 atLeastOneSupports = true;
-            } else if (removeEffectStatus.getExceptionCode() != EX_UNSUPPORTED_OPERATION) {
+            } else if (removeException != EX_UNSUPPORTED_OPERATION) {
                 ADD_FAILURE() << "addEffect and removeEffect must be either supported or "
                               << "not supported together";
                 atLeastOneSupports = true;
@@ -5092,6 +5119,179 @@ static const NamedCommandSequence kDrainEarlyOffloadSeq =
                         StreamTypeFilter::OFFLOAD, makeDrainEarlyOffloadCommands(),
                         true /*validatePositionIncrease*/);
 
+// DRAINING_en ->(onDrainReady) DRAINING_en_sent ->(burst) DRAINING_en_sent
+//   ->(onTransferReady) DRAINING
+//   ->(onDrainReady)    IDLE | TRANSFERRING
+std::shared_ptr<StateSequence> makeDrainEarlyAddSecondClipOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node lastDraining = d->makeFinalNode(State::DRAINING);
+    StateDag::Node lastIdle = d->makeFinalNode(State::IDLE);
+    StateDag::Node lastTransferring = d->makeFinalNode(State::TRANSFERRING);
+    // Wait for onTransferReady or the second onDrainReady event.
+    // Somewhat counter intuitive that onTransferReady leaves the stream in the DRAINING state
+    // (it is still draining the first clip, but at the same time accepting data for the next one).
+    StateDag::Node continueDraining = d->makeNode(
+            State::DRAINING,
+            static_cast<StreamEventReceiver::Event>(static_cast<int>(kDrainReadyEvent) |
+                                                    static_cast<int>(kTransferReadyEvent)),
+            lastDraining, lastIdle, lastTransferring);
+    StateDag::Node secondClip = d->makeNode(State::DRAINING, kBurstCommand, continueDraining);
+    // The first onDrainReady event.
+    StateDag::Node draining = d->makeNode(State::DRAINING, kDrainReadyEvent, secondClip);
+    StateDag::Node drain = d->makeNode(State::ACTIVE, kDrainOutEarlyCommand, draining);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyAddSecondClipOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyAddSecondClip"), kAidlVersion3, "aosp.clipTransitionSupport", 0,
+        StreamTypeFilter::OFFLOAD, makeDrainEarlyAddSecondClipOffloadCommands(),
+        true /*validatePositionIncrease*/);
+
+// DRAINING_en ->(burst) TRANSFERRING | IDLE
+std::shared_ptr<StateSequence> makeDrainEarlyCancelOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node lastIdle = d->makeFinalNode(State::IDLE);
+    StateDag::Node lastTransferring = d->makeFinalNode(State::TRANSFERRING);
+    // Cancel draining by sending the burst command before the first onDrainReady event.
+    StateDag::Node draining =
+            d->makeNode(State::DRAINING, kBurstCommand, lastIdle, lastTransferring);
+    StateDag::Node drain = d->makeNode(State::ACTIVE, kDrainOutEarlyCommand, draining);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyCancelOffloadSeq =
+        std::make_tuple(std::string("DrainEarlyCancel"), kAidlVersion3,
+                        "aosp.clipTransitionSupport", 0, StreamTypeFilter::OFFLOAD,
+                        makeDrainEarlyOffloadCommands(), true /*validatePositionIncrease*/);
+
+//  DRAINING_en ->(pause) DRAIN_PAUSED_en ->(start) DRAINING_en -> same as DrainEarlyOffload
+std::shared_ptr<StateSequence> makeDrainEarlyPauseBeforeNotifOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node lastIdle = d->makeFinalNode(State::IDLE);
+    StateDag::Node lastTransferring = d->makeFinalNode(State::TRANSFERRING);
+    // The second onDrainReady event.
+    StateDag::Node continueDraining =
+            d->makeNode(State::DRAINING, kDrainReadyEvent, lastIdle, lastTransferring);
+    // Pause draining by sending the pause command before the first onDrainReady event.
+    StateDag::Node drain = d->makeNodes({std::make_pair(State::ACTIVE, kDrainOutEarlyCommand),
+                                         std::make_pair(State::DRAINING, kPauseCommand),
+                                         std::make_pair(State::DRAIN_PAUSED, kStartCommand),
+                                         // The first onDrainReady event.
+                                         std::make_pair(State::DRAINING, kDrainReadyEvent)},
+                                        continueDraining);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyPauseBeforeNotifOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyPauseBeforeNotif"), kAidlVersion3, "aosp.clipTransitionSupport", 0,
+        StreamTypeFilter::OFFLOAD, makeDrainEarlyPauseBeforeNotifOffloadCommands(),
+        true /*validatePositionIncrease*/);
+
+// DRAINING_en ->(pause) DRAIN_PAUSED_en ->(burst) TRANSFER_PAUSED
+std::shared_ptr<StateSequence> makeDrainEarlyPauseBeforeNotifCancelOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node drain = d->makeNodes(
+            {std::make_pair(State::ACTIVE, kDrainOutEarlyCommand),
+             std::make_pair(State::DRAINING, kPauseCommand),
+             // Pause draining by sending the pause command before the first onDrainReady event.
+             std::make_pair(State::DRAIN_PAUSED, kBurstCommand)},
+            State::TRANSFER_PAUSED);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyPauseBeforeNotifCancelOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyPauseBeforeNotifCancel"), kAidlVersion3,
+        "aosp.clipTransitionSupport", 0, StreamTypeFilter::OFFLOAD,
+        makeDrainEarlyPauseBeforeNotifCancelOffloadCommands(), true /*validatePositionIncrease*/);
+
+// DRAINING_en ->(pause) DRAIN_PAUSED_en ->(flush) IDLE
+std::shared_ptr<StateSequence> makeDrainEarlyPauseBeforeNotifFlushOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node drain = d->makeNodes(
+            {std::make_pair(State::ACTIVE, kDrainOutEarlyCommand),
+             std::make_pair(State::DRAINING, kPauseCommand),
+             // Cancel draining by sending the flush command before the first onDrainReady event.
+             std::make_pair(State::DRAIN_PAUSED, kFlushCommand)},
+            State::IDLE);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyPauseBeforeNotifFlushOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyPauseBeforeNotifFlush"), kAidlVersion3, "aosp.clipTransitionSupport",
+        0, StreamTypeFilter::OFFLOAD, makeDrainEarlyPauseBeforeNotifFlushOffloadCommands(),
+        true /*validatePositionIncrease*/);
+
+// DRAINING_en ->(onDrainReady) DRAINING_en_sent ->(pause) DRAIN_PAUSED_en_sent ->(flush) IDLE
+std::shared_ptr<StateSequence> makeDrainEarlyPauseAfterNotifFlushOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node drain = d->makeNodes(
+            {std::make_pair(State::ACTIVE, kDrainOutEarlyCommand),
+             std::make_pair(State::DRAINING, kDrainReadyEvent),
+             std::make_pair(State::DRAINING, kPauseCommand),
+             // Cancel draining by sending the flush command after the first onDrainReady event.
+             std::make_pair(State::DRAIN_PAUSED, kFlushCommand)},
+            State::IDLE);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyPauseAfterNotifFlushOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyPauseAfterNotifFlush"), kAidlVersion3, "aosp.clipTransitionSupport",
+        0, StreamTypeFilter::OFFLOAD, makeDrainEarlyPauseAfterNotifFlushOffloadCommands(),
+        true /*validatePositionIncrease*/);
+
+// DRAINING_en ->(onDrainReady) DRAINING_en_sent ->(pause) DRAIN_PAUSED_en_sent ->(burst)
+//   DRAIN_PAUSED_en_sent ->(start) DRAINING_en_sent ->(onDrainReady) IDLE | TRANSFERRING
+std::shared_ptr<StateSequence> makeDrainEarlyPauseAfterReadyOffloadCommands() {
+    using State = StreamDescriptor::State;
+    auto d = std::make_unique<StateDag>();
+    StateDag::Node lastIdle = d->makeFinalNode(State::IDLE);
+    StateDag::Node lastTransferring = d->makeFinalNode(State::TRANSFERRING);
+    // The second onDrainReady event.
+    StateDag::Node continueDraining =
+            d->makeNode(State::DRAINING, kDrainReadyEvent, lastIdle, lastTransferring);
+    StateDag::Node drain = d->makeNodes(
+            {std::make_pair(State::ACTIVE, kDrainOutEarlyCommand),
+             std::make_pair(State::DRAINING, kDrainReadyEvent),
+             std::make_pair(State::DRAINING, kPauseCommand),
+             std::make_pair(State::DRAIN_PAUSED, kBurstCommand),
+             // Burst commands sent in the 'en_sent' sub-state must not affect the state.
+             std::make_pair(State::DRAIN_PAUSED, kStartCommand)},
+            continueDraining);
+    StateDag::Node active = makeAsyncBurstCommands(d.get(), 10, drain);
+    StateDag::Node idle = d->makeNode(State::IDLE, kBurstCommand, active);
+    idle.children().push_back(d->makeNode(State::TRANSFERRING, kTransferReadyEvent, active));
+    d->makeNode(State::STANDBY, kStartCommand, idle);
+    return std::make_shared<StateSequenceFollower>(std::move(d));
+}
+static const NamedCommandSequence kDrainEarlyPauseAfterReadyOffloadSeq = std::make_tuple(
+        std::string("DrainEarlyPauseAfterReady"), kAidlVersion3, "aosp.clipTransitionSupport", 0,
+        StreamTypeFilter::OFFLOAD, makeDrainEarlyPauseAfterReadyOffloadCommands(),
+        true /*validatePositionIncrease*/);
+
 std::shared_ptr<StateSequence> makeDrainPauseOutCommands(bool isSync) {
     using State = StreamDescriptor::State;
     auto d = std::make_unique<StateDag>();
@@ -5338,7 +5538,13 @@ INSTANTIATE_TEST_SUITE_P(
                                          kStandbyOutSyncSeq, kStandbyOutAsyncSeq, kPauseOutSyncSeq,
                                          kPauseOutAsyncSeq, kFlushOutSyncSeq, kFlushOutAsyncSeq,
                                          kDrainPauseFlushOutSyncSeq, kDrainPauseFlushOutAsyncSeq,
-                                         kDrainEarlyOffloadSeq),
+                                         kDrainEarlyOffloadSeq, kDrainEarlyAddSecondClipOffloadSeq,
+                                         kDrainEarlyCancelOffloadSeq,
+                                         kDrainEarlyPauseBeforeNotifOffloadSeq,
+                                         kDrainEarlyPauseBeforeNotifCancelOffloadSeq,
+                                         kDrainEarlyPauseBeforeNotifFlushOffloadSeq,
+                                         kDrainEarlyPauseAfterNotifFlushOffloadSeq,
+                                         kDrainEarlyPauseAfterReadyOffloadSeq),
                          testing::Values(false, true)),
         GetStreamIoTestName);
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(AudioStreamIoOut);
