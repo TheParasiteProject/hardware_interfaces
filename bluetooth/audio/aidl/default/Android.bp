@@ -39,6 +39,7 @@ cc_library_shared {
         "libfmq",
         "liblog",
         "libbluetooth_audio_session_aidl",
+        "server_configurable_flags",
     ],
     static_libs: [
         "btaudiohal_flags_c_lib",
