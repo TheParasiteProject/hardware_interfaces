@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "aidl/android/hardware/bluetooth/audio/ChannelMode.h"
 #include "aidl/android/hardware/bluetooth/audio/CodecId.h"
 #include "aidl/android/hardware/bluetooth/audio/CodecSpecificConfigurationLtv.h"
 #include "aidl/android/hardware/bluetooth/audio/CodecType.h"
@@ -180,6 +181,7 @@ OpusConfiguration getOpusConfigFromCodecConfig(
       opus_config.blocksPerSdu = block.value;
     }
   }
+  opus_config.channelMode = ChannelMode::STEREO;
   return opus_config;
 }
 

@@ -110,6 +110,30 @@ std::map<int32_t, CodecSpecificConfigurationLtv::FrameDuration>
         {10000, CodecSpecificConfigurationLtv::FrameDuration::US10000},
 };
 
+bool isOpusCodec(const LeAudioAseConfiguration& ase) {
+  if (ase.codecId.has_value() &&
+      ase.codecId.value().getTag() == CodecId::vendor) {
+    auto cid = ase.codecId.value().get<CodecId::vendor>();
+    return cid == opus_codec;
+  }
+  return false;
+}
+
+bool isOpusHiResCodec(const LeAudioAseConfiguration& ase) {
+  if (isOpusCodec(ase)) {
+    for (auto ltv : ase.codecConfiguration) {
+      // Base on sampling frequency
+      if (ltv.getTag() == CodecSpecificConfigurationLtv::samplingFrequency) {
+        if (ltv.get<CodecSpecificConfigurationLtv::samplingFrequency>() ==
+            CodecSpecificConfigurationLtv::SamplingFrequency::HZ96000) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 LeAudioOffloadOutputAudioProvider::LeAudioOffloadOutputAudioProvider()
     : LeAudioOffloadAudioProvider() {
   session_type_ = SessionType::LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH;
@@ -356,11 +380,16 @@ bool LeAudioOffloadAudioProvider::filterMatchedAseConfiguration(
     }
   }
 
-  if (requirement_cfg.targetLatency !=
-          LeAudioAseConfiguration::TargetLatency::UNDEFINED &&
-      setting_cfg.targetLatency != requirement_cfg.targetLatency) {
-    return false;
+  if (isOpusCodec(setting_cfg)) {
+    LOG(INFO) << __func__ << ": ignore target latency for vendor codec.";
+  } else {
+    if (requirement_cfg.targetLatency !=
+            LeAudioAseConfiguration::TargetLatency::UNDEFINED &&
+        setting_cfg.targetLatency != requirement_cfg.targetLatency) {
+      return false;
+    }
   }
+
   // Ignore PHY requirement
 
   // Check all codec configuration
@@ -419,11 +448,21 @@ void LeAudioOffloadAudioProvider::filterCapabilitiesAseDirectionConfiguration(
             direction_configuration.value().aseConfiguration.codecId.value(),
             capabilities.codecId))
       continue;
+    if (direction_configuration.value()
+            .aseConfiguration.codecId.value()
+            .getTag() == CodecId::vendor) {
+      LOG(DEBUG) << __func__ << ": vendor codec capability matched, config = "
+                 << direction_configuration.value().aseConfiguration.toString()
+                 << ", cap = " << capabilities.toString();
+      valid_direction_configurations.push_back(direction_configuration);
+      continue;
+    }
     // Check matching for codec configuration <=> codec capabilities
     if (!isCapabilitiesMatchedCodecConfiguration(
             direction_configuration.value().aseConfiguration.codecConfiguration,
             capabilities.codecSpecificCapabilities))
       continue;
+    // Matched case, add the configuration for this direction.
     valid_direction_configurations.push_back(direction_configuration);
   }
 }
@@ -502,30 +541,6 @@ std::vector<AseDirectionConfiguration> getValidConfigurationsFromAllocation(
     if (temp.size() == channel_count) return temp;
   }
   return {};
-}
-
-bool isOpusCodec(const LeAudioAseConfiguration& ase) {
-  if (ase.codecId.has_value() &&
-      ase.codecId.value().getTag() == CodecId::vendor) {
-    auto cid = ase.codecId.value().get<CodecId::vendor>();
-    return cid == opus_codec;
-  }
-  return false;
-}
-
-bool isOpusHiResCodec(const LeAudioAseConfiguration& ase) {
-  if (isOpusCodec(ase)) {
-    for (auto ltv : ase.codecConfiguration) {
-      // Base on sampling frequency
-      if (ltv.getTag() == CodecSpecificConfigurationLtv::samplingFrequency) {
-        if (ltv.get<CodecSpecificConfigurationLtv::samplingFrequency>() ==
-            CodecSpecificConfigurationLtv::SamplingFrequency::HZ96000) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
 }
 
 void LeAudioOffloadAudioProvider::
@@ -1453,7 +1468,8 @@ LeAudioOffloadAudioProvider::getLeAudioBroadcastConfiguration(
   }
 
   // Broadcast setting are from provider info
-  // We will allow empty capability input, match all settings with requirements.
+  // We will allow empty capability input, match all settings with
+  // requirements.
   getBroadcastSettings();
   std::vector<LeAudioBroadcastConfigurationSetting> filtered_settings;
   if (!in_remoteSinkAudioCapabilities.has_value() ||
