@@ -177,65 +177,58 @@ void BluetoothAudioPortAidl::controlResultHandler(uint16_t cookie,
         return;
     }
     if (mCookie != cookie) {
-        LOG(ERROR) << "control_result_cb: proxy of device port (cookie="
-                   << StringPrintf("%#hx", cookie) << ") is corrupted";
+        LOG(ERROR) << "control_result_cb: proxy of device port is corrupted "
+                   << "cookie=" << StringPrintf("%#hx", cookie) << ", expected "
+                   << StringPrintf("%#hx", mCookie);
         return;
     }
     BluetoothStreamState previous_state = mState;
-    LOG(INFO) << "control_result_cb:" << debugMessage() << ", previous_state=" << previous_state
-              << ", status=" << toString(status);
-
+    ::android::base::LogSeverity severity = ::android::base::FATAL;
     switch (previous_state) {
         case BluetoothStreamState::STARTED:
             /* Only Suspend signal can be send in STARTED state*/
             if (status == BluetoothAudioStatus::RECONFIGURATION ||
                 status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::INFO;
             } else {
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
+                severity = ::android::base::WARNING;
             }
             break;
         case BluetoothStreamState::STARTING:
             if (status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STARTED;
+                severity = ::android::base::INFO;
             } else {
                 // Set to standby since the stack may be busy switching between outputs
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::WARNING;
             }
             break;
         case BluetoothStreamState::SUSPENDING:
             if (status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::INFO;
             } else {
-                // It will be failed if the headset is disconnecting, and set to disable
+                // Will fail if the headset is disconnecting, so set to disable
                 // to wait for re-init again
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
                 mState = BluetoothStreamState::DISABLED;
+                severity = ::android::base::WARNING;
             }
             break;
         default:
-            LOG(ERROR) << "control_result_cb: unexpected previous_state="
-                       << StringPrintf(
-                                  "control_result_cb: status=%s failure for session_type= %s, "
-                                  "cookie=%#hx, previous_state=%#hhx",
-                                  toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                                  previous_state);
-            return;
+            severity = ::android::base::ERROR;
     }
-    mInternalCv.notify_all();
+    if (previous_state != mState) {
+        LOG(severity) << "control_result_cb" << debugMessage() << ", status=" << toString(status)
+                      << ", " << previous_state << " -> " << mState;
+    } else {
+        LOG(severity) << "control_result_cb" << debugMessage() << ", status=" << toString(status)
+                      << ", " << previous_state;
+    }
+    if (severity != ::android::base::ERROR) {
+        mInternalCv.notify_all();
+    }
 }
 
 void BluetoothAudioPortAidl::lowLatencyAllowedHandler(uint16_t cookie, bool allowed) {
@@ -264,14 +257,15 @@ void BluetoothAudioPortAidl::sessionChangedHandler(uint16_t cookie) {
         return;
     }
     if (mCookie != cookie) {
-        LOG(ERROR) << "session_changed_cb: proxy of device port (cookie="
-                   << StringPrintf("%#hx", cookie) << ") is corrupted";
+        LOG(ERROR) << "session_changed_cb: proxy of device port is corrupted "
+                   << "cookie=" << StringPrintf("%#hx", cookie) << ", expected "
+                   << StringPrintf("%#hx", mCookie);
         return;
     }
     BluetoothStreamState previous_state = mState;
-    LOG(VERBOSE) << "session_changed_cb:" << debugMessage()
-                 << ", previous_state=" << previous_state;
     mState = BluetoothStreamState::DISABLED;
+    LOG(DEBUG) << "session_changed_cb" << debugMessage() << ", " << previous_state << " -> "
+               << mState;
     mInternalCv.notify_all();
 }
 
@@ -326,7 +320,7 @@ bool BluetoothAudioPortAidl::loadAudioConfig(PcmConfiguration& audio_cfg) {
         return false;
     }
     audio_cfg = hal_audio_cfg.get<AudioConfiguration::pcmConfig>();
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state*=" << getState() << ", PcmConfig=["
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << ", PcmConfig=["
                  << audio_cfg.toString() << "]";
     if (audio_cfg.channelMode == ChannelMode::UNKNOWN) {
         LOG(ERROR) << __func__ << debugMessage()
@@ -354,10 +348,11 @@ bool BluetoothAudioPortAidl::standby() {
         return false;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " request";
+    BluetoothStreamState previous_state = mState;
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << mState << " request";
     if (mState == BluetoothStreamState::DISABLED) {
         mState = BluetoothStreamState::STANDBY;
-        LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " done";
+        LOG(INFO) << __func__ << debugMessage() << ", " << previous_state << " -> " << mState;
         return true;
     }
     return false;
@@ -365,17 +360,20 @@ bool BluetoothAudioPortAidl::standby() {
 
 bool BluetoothAudioPortAidl::condWaitState(BluetoothStreamState state) {
     const auto waitTime = std::chrono::milliseconds(kMaxWaitingTimeMs);
-    LOG(DEBUG) << __func__ << debugMessage() << " waiting to change from " << state;
     if (state == BluetoothStreamState::STARTING || state == BluetoothStreamState::SUSPENDING) {
+        LOG(DEBUG) << __func__ << debugMessage() << " waiting to change from " << state;
         std::unique_lock lock(mCvMutex);
         base::ScopedLockAssertion lock_assertion(mCvMutex);
         mInternalCv.wait_for(lock, waitTime, [this, state] {
             base::ScopedLockAssertion lock_assertion(mCvMutex);
             return mState != state;
         });
-        LOG(DEBUG) << __func__ << debugMessage() << " changed from " << state << " to " << mState;
-        return mState == (state == BluetoothStreamState::STARTING ? BluetoothStreamState::STARTED
-                                                                  : BluetoothStreamState::STANDBY);
+        const bool expected =
+                mState == (state == BluetoothStreamState::STARTING ? BluetoothStreamState::STARTED
+                                                                   : BluetoothStreamState::STANDBY);
+        LOG(expected ? INFO : WARNING)
+                << __func__ << debugMessage() << ", " << state << " -> " << mState;
+        return expected;
     }
     LOG(ERROR) << __func__ << debugMessage() << " called to wait when in " << state;
     return false;
@@ -494,12 +492,13 @@ void BluetoothAudioPortAidl::stop() {
         return;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " request";
+    BluetoothStreamState previous_state = mState;
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << mState << " request";
     if (mState != BluetoothStreamState::DISABLED) {
         BluetoothAudioSessionControl::StopStream(mSessionType);
         mState = BluetoothStreamState::DISABLED;
+        LOG(INFO) << __func__ << debugMessage() << ", " << previous_state << " -> " << mState;
     }
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " done";
 }
 
 size_t BluetoothAudioPortAidlOut::writeData(const void* buffer, size_t bytes) const {
@@ -600,8 +599,7 @@ bool BluetoothAudioPortAidl::setState(BluetoothStreamState state) {
         return false;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(DEBUG) << __func__ << debugMessage() << ": BluetoothAudioPortAidl old state = " << mState
-               << " new state = " << state;
+    LOG(INFO) << __func__ << debugMessage() << ": " << mState << " -> " << state;
     mState = state;
     return true;
 }
