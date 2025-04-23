@@ -358,13 +358,12 @@ bool BluetoothAudioPortAidl::standby() {
     return false;
 }
 
-bool BluetoothAudioPortAidl::condWaitState(BluetoothStreamState state) {
+bool BluetoothAudioPortAidl::condWaitState(std::unique_lock<std::mutex>* lock) {
     const auto waitTime = std::chrono::milliseconds(kMaxWaitingTimeMs);
+    const auto state = mState;
     if (state == BluetoothStreamState::STARTING || state == BluetoothStreamState::SUSPENDING) {
         LOG(DEBUG) << __func__ << debugMessage() << " waiting to change from " << state;
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
-        mInternalCv.wait_for(lock, waitTime, [this, state] {
+        mInternalCv.wait_for(*lock, waitTime, [this, state] {
             base::ScopedLockAssertion lock_assertion(mCvMutex);
             return mState != state;
         });
@@ -385,6 +384,7 @@ bool BluetoothAudioPortAidl::start() {
         return false;
     }
 
+    bool retval = false;
     {
         std::unique_lock lock(mCvMutex);
         base::ScopedLockAssertion lock_assertion(mCvMutex);
@@ -395,19 +395,11 @@ bool BluetoothAudioPortAidl::start() {
         } else if (mState == BluetoothStreamState::SUSPENDING ||
                    mState == BluetoothStreamState::STARTING) {
             /* If port is in transient state, give some time to respond */
-            auto state_ = mState;
-            lock.unlock();
-            if (!condWaitState(state_)) {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState() << " failure";
+            if (!condWaitState(&lock)) {
+                LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
                 return false;
             }
         }
-    }
-
-    bool retval = false;
-    {
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
         if (mState == BluetoothStreamState::STARTED) {
             retval = true;
         } else if (mState == BluetoothStreamState::STANDBY) {
@@ -418,11 +410,20 @@ bool BluetoothAudioPortAidl::start() {
             const bool low_latency = mSupportsLowLatency.value_or(false);
             mState = BluetoothStreamState::STARTING;
             lock.unlock();
-            if (BluetoothAudioSessionControl::StartStream(mSessionType, low_latency)) {
-                retval = condWaitState(BluetoothStreamState::STARTING);
+            const bool startSuccess =
+                    BluetoothAudioSessionControl::StartStream(mSessionType, low_latency);
+            lock.lock();
+            if (startSuccess && mState == BluetoothStreamState::STARTING) {
+                retval = condWaitState(&lock);
+            } else if (startSuccess && mState == BluetoothStreamState::STARTED) {
+                retval = true;
             } else {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState()
-                           << " StartStream failed";
+                // !startSuccess => no session instance
+                const BluetoothStreamState newState = startSuccess ? BluetoothStreamState::STANDBY
+                                                                   : BluetoothStreamState::DISABLED;
+                LOG(ERROR) << __func__ << debugMessage() << ", startSuccess=" << startSuccess
+                           << ", state=" << mState << " -> " << newState;
+                mState = newState;
             }
         }
         if (retval) {
@@ -432,7 +433,6 @@ bool BluetoothAudioPortAidl::start() {
             LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
         }
     }
-
     return retval;  // false if any failure like timeout
 }
 
@@ -442,6 +442,7 @@ bool BluetoothAudioPortAidl::suspend() {
         return false;
     }
 
+    bool retval = false;
     {
         std::unique_lock lock(mCvMutex);
         base::ScopedLockAssertion lock_assertion(mCvMutex);
@@ -451,29 +452,26 @@ bool BluetoothAudioPortAidl::suspend() {
         } else if (mState == BluetoothStreamState::SUSPENDING ||
                    mState == BluetoothStreamState::STARTING) {
             /* If port is in transient state, give some time to respond */
-            auto state_ = mState;
-            lock.unlock();
-            if (!condWaitState(state_)) {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState() << " failure";
+            if (!condWaitState(&lock)) {
+                LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
                 return false;
             }
         }
-    }
-
-    bool retval = false;
-    {
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
         if (mState == BluetoothStreamState::STANDBY) {
             retval = true;
         } else if (mState == BluetoothStreamState::STARTED) {
             mState = BluetoothStreamState::SUSPENDING;
             lock.unlock();
-            if (BluetoothAudioSessionControl::SuspendStream(mSessionType)) {
-                retval = condWaitState(BluetoothStreamState::SUSPENDING);
+            const bool suspendSuccess = BluetoothAudioSessionControl::SuspendStream(mSessionType);
+            lock.lock();
+            if (suspendSuccess && mState == BluetoothStreamState::SUSPENDING) {
+                retval = condWaitState(&lock);
+            } else if (suspendSuccess && mState == BluetoothStreamState::STANDBY) {
+                retval = true;
             } else {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState()
-                           << " SuspendStream failed";
+                LOG(ERROR) << __func__ << debugMessage() << ", suspendSuccess=" << suspendSuccess
+                           << ", state=" << mState << " -> DISABLED";
+                mState = BluetoothStreamState::DISABLED;
             }
         }
         if (retval) {
@@ -482,7 +480,6 @@ bool BluetoothAudioPortAidl::suspend() {
             LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
         }
     }
-
     return retval;  // false if any failure like timeout
 }
 
@@ -590,6 +587,7 @@ bool BluetoothAudioPortAidl::updateSinkMetadata(const SinkMetadata& sink_metadat
 }
 
 BluetoothStreamState BluetoothAudioPortAidl::getState() const {
+    std::lock_guard guard(mCvMutex);
     return mState;
 }
 
