@@ -30,6 +30,7 @@ using aidl::android::hardware::bluetooth::audio::AudioConfiguration;
 using aidl::android::hardware::bluetooth::audio::BluetoothAudioSessionControl;
 using aidl::android::hardware::bluetooth::audio::BluetoothAudioStatus;
 using aidl::android::hardware::bluetooth::audio::ChannelMode;
+using aidl::android::hardware::bluetooth::audio::LatencyMode;
 using aidl::android::hardware::bluetooth::audio::PcmConfiguration;
 using aidl::android::hardware::bluetooth::audio::PortStatusCallbacks;
 using aidl::android::hardware::bluetooth::audio::PresentationPosition;
@@ -66,10 +67,11 @@ std::ostream& operator<<(std::ostream& os, const BluetoothStreamState& state) {
     }
 }
 
-BluetoothAudioPortAidl::BluetoothAudioPortAidl()
+BluetoothAudioPortAidl::BluetoothAudioPortAidl(std::optional<bool> supportsLowLatency)
     : mCookie(::aidl::android::hardware::bluetooth::audio::kObserversCookieUndefined),
       mState(BluetoothStreamState::DISABLED),
-      mSessionType(SessionType::UNKNOWN) {}
+      mSessionType(SessionType::UNKNOWN),
+      mSupportsLowLatency(supportsLowLatency) {}
 
 BluetoothAudioPortAidl::~BluetoothAudioPortAidl() {
     unregisterPort();
@@ -91,10 +93,14 @@ bool BluetoothAudioPortAidl::registerPort(const AudioDeviceDescription& descript
     auto session_changed_cb = [port = this](uint16_t cookie) {
         port->sessionChangedHandler(cookie);
     };
-    // TODO: Add audio_config_changed_cb
+    auto low_latency_allowed_cb = [port = this](uint16_t cookie, bool allowed) {
+        port->lowLatencyAllowedHandler(cookie, allowed);
+    };
+
     PortStatusCallbacks cbacks = {
             .control_result_cb_ = control_result_cb,
             .session_changed_cb_ = session_changed_cb,
+            .low_latency_mode_allowed_cb_ = low_latency_allowed_cb,
     };
     mCookie = BluetoothAudioSessionControl::RegisterControlResultCback(mSessionType, cbacks);
     auto isOk = (mCookie != ::aidl::android::hardware::bluetooth::audio::kObserversCookieUndefined);
@@ -171,65 +177,77 @@ void BluetoothAudioPortAidl::controlResultHandler(uint16_t cookie,
         return;
     }
     if (mCookie != cookie) {
-        LOG(ERROR) << "control_result_cb: proxy of device port (cookie="
-                   << StringPrintf("%#hx", cookie) << ") is corrupted";
+        LOG(ERROR) << "control_result_cb: proxy of device port is corrupted "
+                   << "cookie=" << StringPrintf("%#hx", cookie) << ", expected "
+                   << StringPrintf("%#hx", mCookie);
         return;
     }
     BluetoothStreamState previous_state = mState;
-    LOG(INFO) << "control_result_cb:" << debugMessage() << ", previous_state=" << previous_state
-              << ", status=" << toString(status);
-
+    ::android::base::LogSeverity severity = ::android::base::FATAL;
     switch (previous_state) {
         case BluetoothStreamState::STARTED:
             /* Only Suspend signal can be send in STARTED state*/
             if (status == BluetoothAudioStatus::RECONFIGURATION ||
                 status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::INFO;
             } else {
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
+                severity = ::android::base::WARNING;
             }
             break;
         case BluetoothStreamState::STARTING:
             if (status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STARTED;
+                severity = ::android::base::INFO;
             } else {
                 // Set to standby since the stack may be busy switching between outputs
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::WARNING;
             }
             break;
         case BluetoothStreamState::SUSPENDING:
             if (status == BluetoothAudioStatus::SUCCESS) {
                 mState = BluetoothStreamState::STANDBY;
+                severity = ::android::base::INFO;
             } else {
-                // It will be failed if the headset is disconnecting, and set to disable
+                // Will fail if the headset is disconnecting, so set to disable
                 // to wait for re-init again
-                LOG(WARNING) << StringPrintf(
-                        "control_result_cb: status=%s failure for session_type= %s, cookie=%#hx, "
-                        "previous_state=%#hhx",
-                        toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                        previous_state);
                 mState = BluetoothStreamState::DISABLED;
+                severity = ::android::base::WARNING;
             }
             break;
         default:
-            LOG(ERROR) << "control_result_cb: unexpected previous_state="
-                       << StringPrintf(
-                                  "control_result_cb: status=%s failure for session_type= %s, "
-                                  "cookie=%#hx, previous_state=%#hhx",
-                                  toString(status).c_str(), toString(mSessionType).c_str(), mCookie,
-                                  previous_state);
-            return;
+            severity = ::android::base::ERROR;
     }
-    mInternalCv.notify_all();
+    if (previous_state != mState) {
+        LOG(severity) << "control_result_cb" << debugMessage() << ", status=" << toString(status)
+                      << ", " << previous_state << " -> " << mState;
+    } else {
+        LOG(severity) << "control_result_cb" << debugMessage() << ", status=" << toString(status)
+                      << ", " << previous_state;
+    }
+    if (severity != ::android::base::ERROR) {
+        mInternalCv.notify_all();
+    }
+}
+
+void BluetoothAudioPortAidl::lowLatencyAllowedHandler(uint16_t cookie, bool allowed) {
+    if (mCookie != cookie) {
+        LOG(ERROR) << "low_latency_allowed_cb: proxy of device port (cookie="
+                   << StringPrintf("%#hx", cookie) << ") is corrupted";
+        return;
+    }
+    LOG(INFO) << "low_latency_allowed_cb:" << debugMessage() << ", allowed=" << allowed;
+    std::vector<LatencyMode> latency_modes;
+    if (!getRecommendedLatencyModes(&latency_modes)) return;
+    std::shared_ptr<BluetoothAudioPortCallbacks> callbacks;
+    {
+        std::lock_guard guard(mCvMutex);
+        callbacks = mCallbacks;
+    }
+    if (callbacks) {
+        callbacks->onRecommendedLatencyModeChanged(latency_modes);
+    }
 }
 
 void BluetoothAudioPortAidl::sessionChangedHandler(uint16_t cookie) {
@@ -239,14 +257,15 @@ void BluetoothAudioPortAidl::sessionChangedHandler(uint16_t cookie) {
         return;
     }
     if (mCookie != cookie) {
-        LOG(ERROR) << "session_changed_cb: proxy of device port (cookie="
-                   << StringPrintf("%#hx", cookie) << ") is corrupted";
+        LOG(ERROR) << "session_changed_cb: proxy of device port is corrupted "
+                   << "cookie=" << StringPrintf("%#hx", cookie) << ", expected "
+                   << StringPrintf("%#hx", mCookie);
         return;
     }
     BluetoothStreamState previous_state = mState;
-    LOG(VERBOSE) << "session_changed_cb:" << debugMessage()
-                 << ", previous_state=" << previous_state;
     mState = BluetoothStreamState::DISABLED;
+    LOG(DEBUG) << "session_changed_cb" << debugMessage() << ", " << previous_state << " -> "
+               << mState;
     mInternalCv.notify_all();
 }
 
@@ -271,6 +290,22 @@ bool BluetoothAudioPortAidl::getPreferredDataIntervalUs(size_t& interval_us) con
     return true;
 }
 
+bool BluetoothAudioPortAidl::getRecommendedLatencyModes(std::vector<LatencyMode>* latency_modes) {
+    if (!inUse()) {
+        LOG(ERROR) << __func__ << debugMessage() << ": BluetoothAudioPortAidl is not in use";
+        return false;
+    }
+    *latency_modes = BluetoothAudioSessionControl::GetSupportedLatencyModes(mSessionType);
+    LOG(INFO) << __func__ << debugMessage() << ": "
+              << ::android::internal::ToString(*latency_modes);
+    {
+        std::lock_guard guard(mCvMutex);
+        mSupportsLowLatency = std::find(latency_modes->begin(), latency_modes->end(),
+                                        LatencyMode::LOW_LATENCY) != latency_modes->end();
+    }
+    return true;
+}
+
 bool BluetoothAudioPortAidl::loadAudioConfig(PcmConfiguration& audio_cfg) {
     if (!inUse()) {
         LOG(ERROR) << __func__ << debugMessage() << ": BluetoothAudioPortAidl is not in use";
@@ -285,7 +320,7 @@ bool BluetoothAudioPortAidl::loadAudioConfig(PcmConfiguration& audio_cfg) {
         return false;
     }
     audio_cfg = hal_audio_cfg.get<AudioConfiguration::pcmConfig>();
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state*=" << getState() << ", PcmConfig=["
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << ", PcmConfig=["
                  << audio_cfg.toString() << "]";
     if (audio_cfg.channelMode == ChannelMode::UNKNOWN) {
         LOG(ERROR) << __func__ << debugMessage()
@@ -313,28 +348,31 @@ bool BluetoothAudioPortAidl::standby() {
         return false;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " request";
+    BluetoothStreamState previous_state = mState;
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << mState << " request";
     if (mState == BluetoothStreamState::DISABLED) {
         mState = BluetoothStreamState::STANDBY;
-        LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " done";
+        LOG(INFO) << __func__ << debugMessage() << ", " << previous_state << " -> " << mState;
         return true;
     }
     return false;
 }
 
-bool BluetoothAudioPortAidl::condWaitState(BluetoothStreamState state) {
+bool BluetoothAudioPortAidl::condWaitState(std::unique_lock<std::mutex>* lock) {
     const auto waitTime = std::chrono::milliseconds(kMaxWaitingTimeMs);
-    LOG(DEBUG) << __func__ << debugMessage() << " waiting to change from " << state;
+    const auto state = mState;
     if (state == BluetoothStreamState::STARTING || state == BluetoothStreamState::SUSPENDING) {
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
-        mInternalCv.wait_for(lock, waitTime, [this, state] {
+        LOG(DEBUG) << __func__ << debugMessage() << " waiting to change from " << state;
+        mInternalCv.wait_for(*lock, waitTime, [this, state] {
             base::ScopedLockAssertion lock_assertion(mCvMutex);
             return mState != state;
         });
-        LOG(DEBUG) << __func__ << debugMessage() << " changed from " << state << " to " << mState;
-        return mState == (state == BluetoothStreamState::STARTING ? BluetoothStreamState::STARTED
-                                                                  : BluetoothStreamState::STANDBY);
+        const bool expected =
+                mState == (state == BluetoothStreamState::STARTING ? BluetoothStreamState::STARTED
+                                                                   : BluetoothStreamState::STANDBY);
+        LOG(expected ? INFO : WARNING)
+                << __func__ << debugMessage() << ", " << state << " -> " << mState;
+        return expected;
     }
     LOG(ERROR) << __func__ << debugMessage() << " called to wait when in " << state;
     return false;
@@ -346,6 +384,7 @@ bool BluetoothAudioPortAidl::start() {
         return false;
     }
 
+    bool retval = false;
     {
         std::unique_lock lock(mCvMutex);
         base::ScopedLockAssertion lock_assertion(mCvMutex);
@@ -356,29 +395,35 @@ bool BluetoothAudioPortAidl::start() {
         } else if (mState == BluetoothStreamState::SUSPENDING ||
                    mState == BluetoothStreamState::STARTING) {
             /* If port is in transient state, give some time to respond */
-            auto state_ = mState;
-            lock.unlock();
-            if (!condWaitState(state_)) {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState() << " failure";
+            if (!condWaitState(&lock)) {
+                LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
                 return false;
             }
         }
-    }
-
-    bool retval = false;
-    {
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
         if (mState == BluetoothStreamState::STARTED) {
             retval = true;
         } else if (mState == BluetoothStreamState::STANDBY) {
+            if (!mSupportsLowLatency.has_value()) {
+                std::vector<LatencyMode> latency_modes;
+                getRecommendedLatencyModes(&latency_modes);
+            }
+            const bool low_latency = mSupportsLowLatency.value_or(false);
             mState = BluetoothStreamState::STARTING;
             lock.unlock();
-            if (BluetoothAudioSessionControl::StartStream(mSessionType)) {
-                retval = condWaitState(BluetoothStreamState::STARTING);
+            const bool startSuccess =
+                    BluetoothAudioSessionControl::StartStream(mSessionType, low_latency);
+            lock.lock();
+            if (startSuccess && mState == BluetoothStreamState::STARTING) {
+                retval = condWaitState(&lock);
+            } else if (startSuccess && mState == BluetoothStreamState::STARTED) {
+                retval = true;
             } else {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState()
-                           << " StartStream failed";
+                // !startSuccess => no session instance
+                const BluetoothStreamState newState = startSuccess ? BluetoothStreamState::STANDBY
+                                                                   : BluetoothStreamState::DISABLED;
+                LOG(ERROR) << __func__ << debugMessage() << ", startSuccess=" << startSuccess
+                           << ", state=" << mState << " -> " << newState;
+                mState = newState;
             }
         }
         if (retval) {
@@ -388,7 +433,6 @@ bool BluetoothAudioPortAidl::start() {
             LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
         }
     }
-
     return retval;  // false if any failure like timeout
 }
 
@@ -398,6 +442,7 @@ bool BluetoothAudioPortAidl::suspend() {
         return false;
     }
 
+    bool retval = false;
     {
         std::unique_lock lock(mCvMutex);
         base::ScopedLockAssertion lock_assertion(mCvMutex);
@@ -407,29 +452,26 @@ bool BluetoothAudioPortAidl::suspend() {
         } else if (mState == BluetoothStreamState::SUSPENDING ||
                    mState == BluetoothStreamState::STARTING) {
             /* If port is in transient state, give some time to respond */
-            auto state_ = mState;
-            lock.unlock();
-            if (!condWaitState(state_)) {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState() << " failure";
+            if (!condWaitState(&lock)) {
+                LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
                 return false;
             }
         }
-    }
-
-    bool retval = false;
-    {
-        std::unique_lock lock(mCvMutex);
-        base::ScopedLockAssertion lock_assertion(mCvMutex);
         if (mState == BluetoothStreamState::STANDBY) {
             retval = true;
         } else if (mState == BluetoothStreamState::STARTED) {
             mState = BluetoothStreamState::SUSPENDING;
             lock.unlock();
-            if (BluetoothAudioSessionControl::SuspendStream(mSessionType)) {
-                retval = condWaitState(BluetoothStreamState::SUSPENDING);
+            const bool suspendSuccess = BluetoothAudioSessionControl::SuspendStream(mSessionType);
+            lock.lock();
+            if (suspendSuccess && mState == BluetoothStreamState::SUSPENDING) {
+                retval = condWaitState(&lock);
+            } else if (suspendSuccess && mState == BluetoothStreamState::STANDBY) {
+                retval = true;
             } else {
-                LOG(ERROR) << __func__ << debugMessage() << ", state=" << getState()
-                           << " SuspendStream failed";
+                LOG(ERROR) << __func__ << debugMessage() << ", suspendSuccess=" << suspendSuccess
+                           << ", state=" << mState << " -> DISABLED";
+                mState = BluetoothStreamState::DISABLED;
             }
         }
         if (retval) {
@@ -438,7 +480,6 @@ bool BluetoothAudioPortAidl::suspend() {
             LOG(ERROR) << __func__ << debugMessage() << ", state=" << mState << " failure";
         }
     }
-
     return retval;  // false if any failure like timeout
 }
 
@@ -448,12 +489,13 @@ void BluetoothAudioPortAidl::stop() {
         return;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " request";
+    BluetoothStreamState previous_state = mState;
+    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << mState << " request";
     if (mState != BluetoothStreamState::DISABLED) {
         BluetoothAudioSessionControl::StopStream(mSessionType);
         mState = BluetoothStreamState::DISABLED;
+        LOG(INFO) << __func__ << debugMessage() << ", " << previous_state << " -> " << mState;
     }
-    LOG(VERBOSE) << __func__ << debugMessage() << ", state=" << getState() << " done";
 }
 
 size_t BluetoothAudioPortAidlOut::writeData(const void* buffer, size_t bytes) const {
@@ -481,6 +523,17 @@ size_t BluetoothAudioPortAidlOut::writeData(const void* buffer, size_t bytes) co
     auto totalWrite = BluetoothAudioSessionControl::OutWritePcmData(mSessionType, dst.get(),
                                                                     write_frames * 2);
     return totalWrite * 2;
+}
+
+bool BluetoothAudioPortAidlOut::setLatencyMode(
+        ::aidl::android::hardware::bluetooth::audio::LatencyMode latency_mode) {
+    if (!inUse()) {
+        LOG(ERROR) << __func__ << debugMessage() << ": BluetoothAudioPortAidl is not in use";
+        return false;
+    }
+    LOG(INFO) << __func__ << debugMessage() << ": " << toString(latency_mode);
+    BluetoothAudioSessionControl::SetLatencyMode(mSessionType, latency_mode);
+    return true;
 }
 
 size_t BluetoothAudioPortAidlIn::readData(void* buffer, size_t bytes) const {
@@ -534,6 +587,7 @@ bool BluetoothAudioPortAidl::updateSinkMetadata(const SinkMetadata& sink_metadat
 }
 
 BluetoothStreamState BluetoothAudioPortAidl::getState() const {
+    std::lock_guard guard(mCvMutex);
     return mState;
 }
 
@@ -543,10 +597,15 @@ bool BluetoothAudioPortAidl::setState(BluetoothStreamState state) {
         return false;
     }
     std::lock_guard guard(mCvMutex);
-    LOG(DEBUG) << __func__ << debugMessage() << ": BluetoothAudioPortAidl old state = " << mState
-               << " new state = " << state;
+    LOG(INFO) << __func__ << debugMessage() << ": " << mState << " -> " << state;
     mState = state;
     return true;
+}
+
+void BluetoothAudioPortAidl::setCallbacks(
+        const std::shared_ptr<BluetoothAudioPortCallbacks>& callbacks) {
+    std::lock_guard l(mCvMutex);
+    mCallbacks = callbacks;
 }
 
 bool BluetoothAudioPortAidl::isA2dp() const {
@@ -565,6 +624,10 @@ bool BluetoothAudioPortAidl::isLeAudio() const {
 
 std::string BluetoothAudioPortAidl::debugMessage() const {
     return StringPrintf(": session_type=%s, cookie=%#hx", toString(mSessionType).c_str(), mCookie);
+}
+
+std::string BluetoothAudioPortAidl::getSessionNameForDebug() const {
+    return toString(mSessionType);
 }
 
 }  // namespace android::bluetooth::audio::aidl
