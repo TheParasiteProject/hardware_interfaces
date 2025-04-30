@@ -545,12 +545,6 @@ void LeAudioOffloadAudioProvider::
       return;
     }
     auto cfg = direction_configuration.value();
-    if (!com::android::btaudio::hal::flags::le_audio_allow_opus() &&
-        isOpusCodec(cfg.aseConfiguration)) {
-      LOG(DEBUG) << __func__ << ": Ignore opus codec";
-      valid_direction_configurations = std::nullopt;
-      return;
-    }
     if (!com::android::btaudio::hal::flags::leaudio_sw_offload() &&
         isOpusHiResCodec(cfg.aseConfiguration)) {
       LOG(DEBUG) << ": Ignore opus high res codec";
