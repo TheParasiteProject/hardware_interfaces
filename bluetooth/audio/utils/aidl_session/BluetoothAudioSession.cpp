@@ -412,10 +412,9 @@ bool BluetoothAudioSession::IsSessionReady(bool is_primary_hal) {
       ::android::base::GetBoolProperty(kPropertyLeaSwOffload, false)) {
     if (session_type_ ==
         SessionType::LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
-      bool sw_offload_enabled =
-          LeAudioSwOffloadInstance::is_using_swoffload_.load();
-      is_mq_valid &=
-          (is_primary_hal ? !sw_offload_enabled : sw_offload_enabled);
+      if (!is_primary_hal) {
+        is_mq_valid &= LeAudioSwOffloadInstance::is_using_swoffload_.load();
+      }
     }
   }
 
