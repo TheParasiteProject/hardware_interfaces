@@ -94,6 +94,7 @@ TEST_P(RadioImsTest, updateImsRegistrationInfo) {
     regInfo.accessNetworkType = AccessNetwork::EUTRAN;
     regInfo.suggestedAction = SuggestedAction::NONE;
     regInfo.capabilities = ImsRegistration::IMS_MMTEL_CAPABILITY_NONE;
+    regInfo.throttlingTimeSec = 0;
 
     ndk::ScopedAStatus res =
             radio_ims->updateImsRegistrationInfo(serial, regInfo);
