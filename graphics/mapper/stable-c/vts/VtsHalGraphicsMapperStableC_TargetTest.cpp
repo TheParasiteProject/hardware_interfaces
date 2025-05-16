@@ -180,16 +180,14 @@ class GraphicsTestsBase {
     AIMapper_loadIMapperFn getIMapperLoader() const { return mIMapperLoader; }
     int32_t* getHalVersion() const { return mIMapperHALVersion; }
 
-    std::unique_ptr<BufferAllocation> allocate(const BufferDescriptorInfo& descriptorInfo) {
+    std::unique_ptr<BufferAllocation> allocate(const BufferDescriptorInfo& descriptorInfo,
+                                               bool raise_failure = true) {
         AllocationResult result;
         ::ndk::ScopedAStatus status = mAllocator->allocate2(descriptorInfo, 1, &result);
         if (!status.isOk()) {
             status_t error = status.getExceptionCode();
-            if (error == EX_SERVICE_SPECIFIC) {
-                error = status.getServiceSpecificError();
-                EXPECT_NE(OK, error) << "Failed to set error properly";
-            } else {
-                EXPECT_EQ(OK, error) << "Allocation transport failure";
+            if (raise_failure) {
+                ADD_FAILURE() << "Allocation transport failure: " << error;
             }
             return nullptr;
         } else {

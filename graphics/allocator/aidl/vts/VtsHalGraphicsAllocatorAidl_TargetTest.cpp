@@ -204,11 +204,8 @@ class GraphicsTestsBase {
         }
         if (!status.isOk()) {
             status_t error = status.getExceptionCode();
-            if (error == EX_SERVICE_SPECIFIC) {
-                error = status.getServiceSpecificError();
-                EXPECT_NE(OK, error) << "Failed to set error properly";
-            } else {
-                EXPECT_EQ(OK, error) << "Allocation transport failure";
+            if (raise_failure) {
+                ADD_FAILURE() << "Allocation transport failure: " << error;
             }
             return nullptr;
         } else {
