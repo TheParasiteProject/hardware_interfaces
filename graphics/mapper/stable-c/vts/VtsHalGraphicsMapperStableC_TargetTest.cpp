@@ -807,7 +807,7 @@ TEST_P(GraphicsMapperStableCTests, Lock_YCRCB_420_SP) {
             .usage = BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN,
             .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info));
         GTEST_SUCCEED() << "YCRCB_420_SP format is unsupported";
@@ -1028,7 +1028,7 @@ TEST_P(GraphicsMapperStableCTests, Lock_RAW10) {
             .usage = BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN,
             .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info));
         GTEST_SUCCEED() << "RAW10 format is unsupported";
@@ -1078,7 +1078,7 @@ TEST_P(GraphicsMapperStableCTests, Lock_RAW12) {
             .usage = BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN,
             .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info));
         GTEST_SUCCEED() << "RAW12 format is unsupported";
@@ -1128,7 +1128,7 @@ TEST_P(GraphicsMapperStableCTests, Lock_YCBCR_P010) {
             .usage = BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN,
             .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info));
         GTEST_SUCCEED() << "YCBCR_P010 format is unsupported";
@@ -1175,7 +1175,7 @@ TEST_P(GraphicsMapperStableCTests, Lock_YCBCR_P210) {
         .usage = BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN,
         .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info));
         GTEST_SUCCEED() << "YCBCR_P210 format is unsupported";
@@ -1555,7 +1555,7 @@ TEST_P(GraphicsMapperStableCTests, GetProtectedContent) {
             .usage = BufferUsage::PROTECTED | BufferUsage::COMPOSER_OVERLAY,
             .reservedSize = 0,
     };
-    auto buffer = allocate(info);
+    auto buffer = allocate(info, false);
     if (!buffer) {
         ASSERT_FALSE(isSupported(info))
                 << "Allocation of trivial sized buffer failed, so isSupported() must be false";
