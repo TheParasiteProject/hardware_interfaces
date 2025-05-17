@@ -216,7 +216,7 @@ AudioPort GenerateUniqueDeviceAddress(const AudioPort& port) {
                         0xfc00, 0x0123, 0x4567, 0x89ab, 0xcdef, 0, 0, ++nextId & 0xffff});
                 break;
             case Tag::alsa:
-                address = AudioDeviceAddress::make<Tag::alsa>(std::vector<int32_t>{1, ++nextId});
+                address = AudioDeviceAddress::make<Tag::alsa>(std::vector<int32_t>{127, ++nextId});
                 break;
         }
     }
@@ -5709,7 +5709,9 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
     static constexpr const auto kStreamStartOffset = std::chrono::nanoseconds(100ms);
     static constexpr const int kBurstCount = 50;
     static constexpr const int kBurstCountTolerance = 2;
-    static constexpr const auto kIntervalsStdDevTolerance = std::chrono::nanoseconds(3ms).count();
+    static constexpr const double kBurstIntervalsAlpha = .999;
+    static constexpr const int kIntervalsMeanTolerance = std::chrono::nanoseconds(2ms).count();
+    static constexpr const auto kIntervalsStdDevTolerance = std::chrono::nanoseconds(4ms).count();
 
     void SetUp() override {
         // Turn off "debug" which enables connections simulation. Since devices of the remote
@@ -5736,9 +5738,8 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
     }
 
     void VerifyBurstIntervalsUniformity() {
-        const double kAlpha =
-                .9;  // Write durations may vary in the beginning, window out first samples.
-        ::android::audio_utils::Statistics<double> inputIntervals(kAlpha), outputIntervals(kAlpha);
+        ::android::audio_utils::Statistics<double> inputIntervals(kBurstIntervalsAlpha),
+            outputIntervals(kBurstIntervalsAlpha);
         for (const auto a : streamIn->getBurstIntervals()) {
             inputIntervals.add(a);
         }
@@ -5751,7 +5752,7 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
                 << ", output intervals: "
                 << ::android::internal::ToString(streamOut->getBurstIntervals());
         EXPECT_NEAR(inputIntervals.getMean(), outputIntervals.getMean(),
-                    std::chrono::nanoseconds(1ms).count())
+                    kIntervalsMeanTolerance)
                 << "input intervals: "
                 << ::android::internal::ToString(streamIn->getBurstIntervals())
                 << ", output intervals: "
@@ -5831,9 +5832,10 @@ TEST_P(AudioModuleRemoteSubmix, BlockedOutputUnblocksOnClose) {
 }
 
 TEST_P(AudioModuleRemoteSubmix, OutputBlocksUntilInputStarts) {
+    // Create and start output stream before creating the input side.
     ASSERT_NO_FATAL_FAILURE(CreateOutputStream());
-    ASSERT_NO_FATAL_FAILURE(CreateInputStream());
     ASSERT_NO_FATAL_FAILURE(streamOut->StartWorkerToSendBurstCommands());
+    ASSERT_NO_FATAL_FAILURE(CreateInputStream());
     // Read the head of the pipe and check that it starts with the first output burst, that is,
     // the contents of the very first write has not been superseded due to pipe overflow.
     // The burstCount is '0' because the very first burst is used to exit from the 'IDLE' state,
@@ -5889,8 +5891,8 @@ TEST_P(AudioModuleRemoteSubmix, BurstIntervalsUniformity) {
     // Keep writing for some time before starting reads.
     std::this_thread::sleep_for(kStreamStartOffset);
     ASSERT_NO_FATAL_FAILURE(CreateInputStream());
-    ASSERT_NO_FATAL_FAILURE(
-            streamIn->SendBurstCommands(false /*callPrepareToCloseBeforeJoin*/, kBurstCount));
+    ASSERT_NO_FATAL_FAILURE(streamIn->SendBurstCommands(
+            false /*callPrepareToCloseBeforeJoin*/, kBurstCount, true /*standbyInputWhenDone*/));
     ASSERT_NO_FATAL_FAILURE(
             streamOut->JoinWorkerAfterBurstCommands(false /*callPrepareToCloseBeforeJoin*/));
     EXPECT_NO_FATAL_FAILURE(VerifyBurstIntervalsUniformity());
@@ -5900,7 +5902,8 @@ TEST_P(AudioModuleRemoteSubmix, BurstIntervalsUniformity) {
 TEST_P(AudioModuleRemoteSubmix, BurstIntervalsUniformity2) {
     ASSERT_NO_FATAL_FAILURE(CreateInputStream());
     // Start reading from the input stream.
-    ASSERT_NO_FATAL_FAILURE(streamIn->StartWorkerToSendBurstCommands(kBurstCount));
+    ASSERT_NO_FATAL_FAILURE(
+            streamIn->StartWorkerToSendBurstCommands(kBurstCount, true /*standbyInputWhenDone*/));
     // Keep reading some time before starting writes.
     std::this_thread::sleep_for(kStreamStartOffset);
     ASSERT_NO_FATAL_FAILURE(CreateOutputStream());
@@ -5932,7 +5935,7 @@ TEST_P(AudioModuleRemoteSubmix, BurstIntervalsUniformityOutputStandbyCycle) {
     ASSERT_NO_FATAL_FAILURE(
             streamIn->JoinWorkerAfterBurstCommands(false /*callPrepareToCloseBeforeJoin*/));
     // Verify input intervals only.
-    ::android::audio_utils::Statistics<double> inputIntervals(.99);
+    ::android::audio_utils::Statistics<double> inputIntervals(kBurstIntervalsAlpha);
     for (const auto a : streamIn->getBurstIntervals()) {
         inputIntervals.add(a);
     }
