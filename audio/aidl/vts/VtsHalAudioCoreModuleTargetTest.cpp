@@ -1208,6 +1208,10 @@ class StreamReaderLogic : public StreamCommonLogic {
             LOG(ERROR) << __func__ << ": no next command";
             return Status::ABORT;
         }
+        if (isMmapped() && command.getTag() == StreamDescriptor::Command::Tag::burst) {
+            // The value of the 'burst' command for MMap must be '0'.
+            command.get<StreamDescriptor::Command::Tag::burst>() = 0;
+        }
         LOG(DEBUG) << "Writing command: " << command.toString();
         if (!getCommandMQ()->writeBlocking(&command, 1)) {
             LOG(ERROR) << __func__ << ": writing of command into MQ failed";
@@ -1352,6 +1356,10 @@ class StreamWriterLogic : public StreamCommonLogic {
             }
             if (isMmapped() ? !writeDataToMmap() : !writeDataToMQ()) {
                 return Status::ABORT;
+            }
+            if (isMmapped()) {
+                // The value of the 'burst' command for MMap must be '0'.
+                command.get<StreamDescriptor::Command::Tag::burst>() = 0;
             }
             registerBurstNow();
         }
