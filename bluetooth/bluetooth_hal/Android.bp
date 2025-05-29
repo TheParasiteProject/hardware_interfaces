@@ -220,6 +220,7 @@ cc_test {
         ":test_mock_transport_srcs",
         ":test_mock_util_srcs",
         ":test_mock_debug_srcs",
+        ":test_mock_router_client_agent_srcs",
     ],
     static_libs: [
         "libgmock",
