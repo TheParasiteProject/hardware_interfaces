@@ -16,21 +16,16 @@
 
 #pragma once
 
-#include <map>
-#include <mutex>
-
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
-#include "bluetooth_hal/hci_monitor.h"
-#include "bluetooth_hal/hci_router_client_callback.h"
+#include "bluetooth_hal/hci_router_callback.h"
 
 namespace bluetooth_hal {
 namespace hci {
 
-class HciRouterClient : public HciRouterClientCallback {
+class HciRouterClientCallback : public HciRouterCallback {
  public:
-  HciRouterClient();
-  ~HciRouterClient();
+  virtual ~HciRouterClientCallback() = default;
 
   /**
    * @brief Called when the controller responds to a command.
@@ -57,7 +52,7 @@ class HciRouterClient : public HciRouterClientCallback {
    * implementation.
    *
    */
-  MonitorMode OnPacketCallback(const HalPacket& packet) override;
+  virtual MonitorMode OnPacketCallback(const HalPacket& packet) override = 0;
 
   /**
    * @brief Called when the HAL state changes.
@@ -66,7 +61,7 @@ class HciRouterClient : public HciRouterClientCallback {
    * @param new_state The new HAL state.
    *
    * @note It is **not recommended** to implement this method. The
-   * `HciRouterClient` class handles all HAL state change logic. Instead,
+   * `HciRouterClientAgent` class handles all HAL state change logic. Instead,
    * subclasses can use the following methods to determine the HAL state:
    *        - `OnBluetoothChipReady()`
    *        - `OnBluetoothChipClosed()`
@@ -76,24 +71,8 @@ class HciRouterClient : public HciRouterClientCallback {
    *        - `IsBluetoothChipReady()`
    *
    */
-  void OnHalStateChanged(::bluetooth_hal::HalState new_state,
-                         ::bluetooth_hal::HalState old_state) override;
-
- protected:
-  /**
-   * @brief Callback invoked when a received HCI packet matches a registered
-   * monitor.
-   *
-   * This method is invoked by the `HciRouterClient` class when an incoming HCI
-   * packet is received that matches the monitor mode registered by the
-   * `RegisterMonitor` method.
-   *
-   * @param mode The monitor mode that was triggered.
-   * @param packet The received HCI packet.
-   *
-   */
-  virtual void OnMonitorPacketCallback(MonitorMode mode,
-                                       const HalPacket& packet) = 0;
+  virtual void OnHalStateChanged(HalState new_state,
+                                 HalState old_state) override = 0;
 
   /**
    * @brief Called when the Bluetooth chip is ready.
@@ -130,78 +109,6 @@ class HciRouterClient : public HciRouterClientCallback {
    *
    */
   virtual void OnBluetoothDisabled() = 0;
-
-  /**
-   * @brief Returns whether Bluetooth is enabled.
-   *
-   * @return `true` if Bluetooth is enabled, `false` otherwise.
-   *
-   */
-  bool IsBluetoothEnabled();
-
-  /**
-   * @brief Returns whether the Bluetooth chip is ready.
-   *
-   * @return `true` if the Bluetooth chip is ready, `false` otherwise.
-   *
-   */
-  bool IsBluetoothChipReady();
-
-  /**
-   * @brief Registers a monitor to receive HCI events.
-   *
-   * @param monitor The monitor to register.
-   * @param mode The monitor mode to register.
-   *
-   * @return `true` if the monitor was registered successfully, `false`
-   * otherwise.
-   *
-   */
-  bool RegisterMonitor(const HciMonitor& monitor, MonitorMode mode);
-
-  /**
-   * @brief Unregisters a monitor.
-   *
-   * @param monitor The monitor to unregister.
-   *
-   * @return `true` if the monitor was unregistered successfully, `false`
-   * otherwise.
-   *
-   */
-  bool UnregisterMonitor(const HciMonitor& monitor);
-
-  /**
-   * @brief Sends a command to the HCI router.
-   *
-   * This method should only be used to send HCI commands.
-   *
-   * @param packet The HAL packet containing the command.
-   *
-   * @return `true` if the command was sent successfully, `false` otherwise.
-   *
-   */
-  bool SendCommand(const HalPacket& packet);
-
-  /**
-   * @brief Sends data to the HCI router.
-   *
-   * This method can be used to send various types of packets to the HAL,
-   * excluding HCI commands and events.
-   *
-   * @param packet The HAL packet containing the data.
-   *
-   * @return `true` if the data was sent successfully, `false` otherwise.
-   *
-   */
-  bool SendData(const HalPacket& packet);
-
- private:
-  void HandleBluetoothEnable(const HalPacket& packet);
-  std::map<HciMonitor, MonitorMode> monitors_;
-  std::recursive_mutex mutex_;
-  ::bluetooth_hal::HalState current_state_;
-  bool is_bluetooth_chip_ready_ = false;
-  bool is_bluetooth_enabled_ = false;
 };
 
 }  // namespace hci
