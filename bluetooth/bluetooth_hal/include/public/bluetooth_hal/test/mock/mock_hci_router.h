@@ -45,12 +45,6 @@ class MockHciRouter : public HciRouter {
 
   MOCK_METHOD(bool, SendCommandNoAck, (const HalPacket& packet), (override));
 
-  MOCK_METHOD(bool, RegisterCallback, (HciRouterCallback * callback),
-              (override));
-
-  MOCK_METHOD(bool, UnregisterCallback, (HciRouterCallback * callback),
-              (override));
-
   MOCK_METHOD(::bluetooth_hal::HalState, GetHalState, (), (override));
 
   MOCK_METHOD(void, UpdateHalState, (::bluetooth_hal::HalState state),
