@@ -4386,6 +4386,14 @@ TEST_P(AudioStreamOut, PlaybackRate) {
         ASSERT_TRUE(portConfig.has_value()) << "No profiles specified for output mix port";
         WithStream<IStreamOut> stream(portConfig.value());
         ASSERT_NO_FATAL_FAILURE(stream.SetUp(module.get(), kDefaultLargeBufferSizeFrames));
+        if (stream.getInterfaceVersion() >= kAidlVersion3) {
+            AudioPlaybackRate playbackRate;
+            status = stream.get()->getPlaybackRateParameters(&playbackRate);
+            if (status.getExceptionCode() != EX_UNSUPPORTED_OPERATION) {
+                EXPECT_NE(playbackRate.speed, 0);
+                EXPECT_NE(playbackRate.pitch, 0);
+            }
+        }
         bool isSupported = false;
         EXPECT_NO_FATAL_FAILURE(TestAccessors<AudioPlaybackRate>(
                 stream.get(), &IStreamOut::getPlaybackRateParameters,
