@@ -79,8 +79,6 @@ class RadioDataResponse : public BnRadioDataResponse {
 
     virtual ndk::ScopedAStatus setUserDataRoamingEnabledResponse(
             const RadioResponseInfo& info) override;
-
-    virtual ndk::ScopedAStatus notifyImsDataNetworkResponse(const RadioResponseInfo& info) override;
 };
 
 /* Callback class for radio data indication */
