@@ -94,6 +94,10 @@ class ModuleConfig {
             bool singlePort) const {
         return getMmapMixPorts(true /*isInput*/, connectedOnly, singlePort);
     }
+    std::vector<aidl::android::media::audio::common::AudioPort> getNonMmapMixPorts(
+            bool isInput,
+            bool connectedOnly /*Permanently attached and connected external devices*/,
+            bool singlePort) const;
     std::vector<aidl::android::media::audio::common::AudioPort> getRemoteSubmixPorts(
             bool isInput, bool singlePort) const;
 
