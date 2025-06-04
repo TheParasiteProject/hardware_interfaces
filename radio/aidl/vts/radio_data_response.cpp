@@ -124,9 +124,3 @@ ndk::ScopedAStatus RadioDataResponse::setUserDataRoamingEnabledResponse(
     parent_data.notify(info.serial);
     return ndk::ScopedAStatus::ok();
 }
-
-ndk::ScopedAStatus RadioDataResponse::notifyImsDataNetworkResponse(const RadioResponseInfo& info) {
-    rspInfo = info;
-    parent_data.notify(info.serial);
-    return ndk::ScopedAStatus::ok();
-}
