@@ -32,6 +32,8 @@ class BqrEvent : public ::bluetooth_hal::hci::HalPacket {
   BqrEventType GetBqrEventType() const;
 
  protected:
+  void ParseData();
+
   bool is_valid_;
   BqrReportId report_id_;
   BqrEventType bqr_event_type_;

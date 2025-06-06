@@ -94,6 +94,7 @@ filegroup {
     name: "hal_bqr_srcs",
     srcs: [
         "bqr/bqr_event.cc",
+        "bqr/bqr_link_quality_event.cc",
     ],
 }
 
@@ -533,6 +534,8 @@ cc_test {
     srcs: [
         "bqr/bqr_event.cc",
         "bqr/bqr_event_test.cc",
+        "bqr/bqr_link_quality_event.cc",
+        "bqr/bqr_link_quality_event_test.cc",
     ],
     shared_libs: [
         "libbase",

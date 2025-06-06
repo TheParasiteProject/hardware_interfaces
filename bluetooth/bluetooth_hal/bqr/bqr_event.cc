@@ -40,14 +40,13 @@ enum class Offset : uint8_t {
 constexpr size_t kBqrEventHeaderLength = 5;
 }  // namespace
 
-BqrEvent::BqrEvent(const HalPacket& packet) : HalPacket(packet) {
-  is_valid_ = (size() >= kBqrEventHeaderLength &&
-               GetType() == HciPacketType::kEvent && IsVendorEvent() &&
-               At(Offset::kSubEvent) ==
-                   static_cast<uint8_t>(GoogleEventSubCode::kBqrEvent));
-  report_id_ = is_valid_ ? static_cast<BqrReportId>(At(Offset::kReportId))
-                         : BqrReportId::kNone;
-  bqr_event_type_ = GetBqrEventTypeFromReportId(report_id_);
+BqrEvent::BqrEvent(const HalPacket& packet)
+    : HalPacket(packet),
+      is_valid_(size() >= kBqrEventHeaderLength &&
+                GetType() == HciPacketType::kEvent && IsVendorEvent() &&
+                At(Offset::kSubEvent) ==
+                    static_cast<uint8_t>(GoogleEventSubCode::kBqrEvent)) {
+  ParseData();
 }
 
 bool BqrEvent::IsValid() const { return is_valid_; }
@@ -55,6 +54,12 @@ bool BqrEvent::IsValid() const { return is_valid_; }
 BqrReportId BqrEvent::GetBqrReportId() const { return report_id_; }
 
 BqrEventType BqrEvent::GetBqrEventType() const { return bqr_event_type_; }
+
+void BqrEvent::ParseData() {
+  report_id_ = is_valid_ ? static_cast<BqrReportId>(At(Offset::kReportId))
+                         : BqrReportId::kNone;
+  bqr_event_type_ = GetBqrEventTypeFromReportId(report_id_);
+}
 
 }  // namespace bqr
 }  // namespace bluetooth_hal
