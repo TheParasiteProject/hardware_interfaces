@@ -22,6 +22,7 @@ import android.hardware.radio.network.BarringInfo;
 import android.hardware.radio.network.CellIdentity;
 import android.hardware.radio.network.CellInfo;
 import android.hardware.radio.network.CellularIdentifierDisclosure;
+import android.hardware.radio.network.DisplayNetworkType;
 import android.hardware.radio.network.EmergencyRegResult;
 import android.hardware.radio.network.LinkCapacityEstimate;
 import android.hardware.radio.network.NetworkScanResult;
@@ -318,4 +319,24 @@ oneway interface IRadioNetworkIndication {
      */
     void securityAlgorithmsUpdated(
             in RadioIndicationType type, in SecurityAlgorithmUpdate securityAlgorithmUpdate);
+
+    /**
+     * Indicates that the modem suggests display network type has changed.
+     *
+     * This unsolicited indication is sent by the modem to the framework whenever
+     * it determines that the user-facing representation of the network service
+     * (e.g., "5G+", "5G UW", "5G UC") should be updated.
+     *
+     * The Android framework, upon receiving this indication, should evaluate the
+     * new {@link DisplayNetworkType}. If the feature is enabled (e.g., via the
+     * {@code KEY_USE_MODEM_DISPLAY_NETWORK_TYPE_BOOL} carrier configuration),
+     * the framework should update the network indicator icon and related text in the UI
+     * accordingly.
+     *
+     * @param type The type of indication, which will be {@link RadioIndicationType#UNSOLICITED}
+     * for this message.
+     * @param dnt The new display network type category suggested by the modem.
+     * @hide
+     */
+    void displayNetworkTypeChanged(in RadioIndicationType type, in DisplayNetworkType dnt);
 }
