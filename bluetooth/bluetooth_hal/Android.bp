@@ -23,6 +23,7 @@ cc_defaults {
         ":hal_hwinit_srcs",
         ":hal_transport_srcs",
         ":hal_util_srcs",
+        ":hal_bqr_srcs",
     ],
     cflags: [
         "-Wall",
@@ -86,6 +87,13 @@ filegroup {
         "debug/stack_trace_helper.cc",
         "debug/vnd_snoop_logger.cc",
         "debug/debug_event_watcher.cc",
+    ],
+}
+
+filegroup {
+    name: "hal_bqr_srcs",
+    srcs: [
+        "bqr/bqr_event.cc",
     ],
 }
 
@@ -513,6 +521,18 @@ cc_test {
     srcs: [
         "util/timer_manager.cc",
         "util/timer_manager_test.cc",
+    ],
+    shared_libs: [
+        "libbase",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_bqr_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
+        "bqr/bqr_event.cc",
+        "bqr/bqr_event_test.cc",
     ],
     shared_libs: [
         "libbase",
