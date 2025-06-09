@@ -114,12 +114,23 @@ void TransportUartH4::Cleanup() {
 bool TransportUartH4::IsTransportActive() const { return uart_fd_.ok(); }
 
 bool TransportUartH4::Send(const HalPacket& packet) {
-  // TODO: b/401131063 - Handle LPM here once the timer util is ready.
   if (!data_processor_) {
     return false;
   }
   ResumeFromLowPowerMode();
-  return data_processor_->Send(std::span(packet)) == packet.size();
+  bool sent_successfully =
+      data_processor_->Send(std::span(packet)) == packet.size();
+  RefreshLpmTimer();
+  return sent_successfully;
+}
+
+void TransportUartH4::RefreshLpmTimer() {
+  std::unique_lock<std::recursive_mutex> lock(mutex_);
+  if (is_lpm_resumed_) {
+    low_power_timer_.Schedule(
+        std::bind_front(&TransportUartH4::SuspendToLowPowerMode, this),
+        std::chrono::milliseconds{kLpmTimeoutMs});
+  }
 }
 
 bool TransportUartH4::ResumeFromLowPowerMode() {
@@ -131,9 +142,6 @@ bool TransportUartH4::ResumeFromLowPowerMode() {
   if (IsTransportWakelockEnabled()) {
     Wakelock::GetWakelock().Acquire(WakeSource::kTransport);
   }
-  low_power_timer_.Schedule(
-      std::bind_front(&TransportUartH4::SuspendToLowPowerMode, this),
-      std::chrono::milliseconds{kLpmTimeoutMs});
   if (!PowerManager::ResumeFromLowPowerMode()) {
     return false;
   }
