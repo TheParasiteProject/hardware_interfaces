@@ -60,6 +60,7 @@ TransportType TransportUartH4::GetInstanceTransportType() const {
 
 bool TransportUartH4::Initialize(
     TransportInterfaceCallback* transport_interface_callback) {
+  LOG(INFO) << __func__ << ": Initializing UART H4 transport.";
   TransportInterface::Subscribe(*this);
 
   transport_interface_callback_ = transport_interface_callback;
@@ -69,6 +70,7 @@ bool TransportUartH4::Initialize(
   if (!PowerManager::PowerControl(true)) {
     LOG(ERROR) << __func__ << ": Cannot power on the device.";
     Cleanup();
+
     return false;
   }
 
@@ -76,6 +78,7 @@ bool TransportUartH4::Initialize(
   if (!InitializeDataPath()) {
     LOG(ERROR) << __func__ << ": Cannot initialize the data path.";
     Cleanup();
+
     return false;
   }
 
@@ -85,6 +88,7 @@ bool TransportUartH4::Initialize(
   if (!IsTransportActive()) {
     LOG(ERROR) << __func__ << ": Transport is not active.";
     Cleanup();
+
     return false;
   }
 
@@ -92,15 +96,20 @@ bool TransportUartH4::Initialize(
 
   data_processor_ = std::make_unique<DataProcessor>(
       uart_fd_.get(), [&](const HalPacket& packet) {
+        LOG(VERBOSE)
+            << __func__
+            << ": Packet ready from data processor, notifying callback.";
         transport_interface_callback_->OnTransportPacketReady(packet);
       });
   data_processor_->StartProcessing();
 
   LOG(INFO) << __func__ << ": Initialization is completed.";
+
   return true;
 }
 
 void TransportUartH4::Cleanup() {
+  LOG(INFO) << __func__ << ": Cleaning up UART H4 transport.";
   TransportInterface::Unsubscribe(*this);
   data_processor_.reset();
   TerminateDataPath();
@@ -111,16 +120,32 @@ void TransportUartH4::Cleanup() {
   }
 }
 
-bool TransportUartH4::IsTransportActive() const { return uart_fd_.ok(); }
+bool TransportUartH4::IsTransportActive() const {
+  bool active = uart_fd_.ok();
+  LOG(VERBOSE) << __func__ << ": UART FD is " << (active ? "valid" : "invalid")
+               << ", transport is " << (active ? "active" : "inactive");
+  return active;
+}
 
 bool TransportUartH4::Send(const HalPacket& packet) {
   if (!data_processor_) {
     return false;
   }
-  ResumeFromLowPowerMode();
+
+  if (!ResumeFromLowPowerMode()) {
+    LOG(WARNING)
+        << __func__
+        << ": Failed to resume from low power mode after sending packet.";
+  }
+
   bool sent_successfully =
       data_processor_->Send(std::span(packet)) == packet.size();
+  if (!sent_successfully) {
+    LOG(ERROR) << __func__ << ": Failed to send packet.";
+  }
+
   RefreshLpmTimer();
+
   return sent_successfully;
 }
 
@@ -135,85 +160,149 @@ void TransportUartH4::RefreshLpmTimer() {
 
 bool TransportUartH4::ResumeFromLowPowerMode() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
+  LOG(DEBUG) << __func__ << ": Attempting to resume from low power mode.";
+
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported() ||
       !IsLowPowerModeSetupCompleted() || is_lpm_resumed_) {
+    LOG(DEBUG) << __func__ << ": LPM not supported ("
+               << HalConfigLoader::GetLoader().IsLowPowerModeSupported()
+               << "), or not setup (" << IsLowPowerModeSetupCompleted()
+               << "), or already resumed (" << is_lpm_resumed_
+               << "). Skipping resume.";
     return true;
   }
+
   if (IsTransportWakelockEnabled()) {
     Wakelock::GetWakelock().Acquire(WakeSource::kTransport);
   }
+
   if (!PowerManager::ResumeFromLowPowerMode()) {
+    LOG(ERROR) << __func__
+               << ": PowerManager failed to resume from low power mode.";
     return false;
   }
+
   is_lpm_resumed_ = true;
+  LOG(INFO) << __func__ << ": Successfully resumed from low power mode.";
+
   return true;
 }
 
 bool TransportUartH4::SuspendToLowPowerMode() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
+  LOG(DEBUG) << __func__ << ": Attempting to suspend to low power mode.";
+
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported() ||
       !IsLowPowerModeSetupCompleted() || !is_lpm_resumed_) {
+    LOG(DEBUG) << __func__
+               << ": LPM not supported, or not setup, or not resumed. Skipping "
+                  "suspend.";
     return true;
   }
+
   if (IsTransportWakelockEnabled()) {
     Wakelock::GetWakelock().Release(WakeSource::kTransport);
   }
+
   if (!PowerManager::SuspendToLowPowerMode()) {
+    LOG(ERROR) << __func__
+               << ": PowerManager failed to suspend to low power mode.";
     return false;
   }
+
   is_lpm_resumed_ = false;
+  LOG(INFO) << __func__ << ": Successfully suspend to low power mode.";
+
   return true;
 }
 
 bool TransportUartH4::IsLowPowerModeSetupCompleted() const {
-  return PowerManager::IsLowPowerModeSetupCompleted();
+  bool completed = PowerManager::IsLowPowerModeSetupCompleted();
+  LOG(VERBOSE) << __func__ << ": Low power mode setup is "
+               << (completed ? "completed" : "not completed") << ".";
+  return completed;
 }
 
-bool TransportUartH4::InitializeDataPath() { return UartManager::Open(); };
+bool TransportUartH4::InitializeDataPath() {
+  bool success = UartManager::Open();
+  LOG(INFO) << __func__
+            << ": UART open: " << (success ? "successfully." : "failed.");
+  return success;
+};
 
-void TransportUartH4::TerminateDataPath() { UartManager::Close(); };
+void TransportUartH4::TerminateDataPath() {
+  LOG(DEBUG) << __func__ << ": Terminating data path (UART close).";
+  UartManager::Close();
+};
 
 bool TransportUartH4::SetupLowPowerMode() {
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported()) {
+    LOG(INFO) << __func__
+              << ": Low power mode not supported by config. Skipping setup.";
     return true;
   }
-  return PowerManager::SetupLowPowerMode();
+
+  bool success = PowerManager::SetupLowPowerMode();
+  LOG(INFO) << __func__ << ": Low power mode setup "
+            << (success ? "succeeded" : "failed") << ".";
+
+  return success;
 };
 
 void TransportUartH4::TeardownLowPowerMode() {
+  LOG(DEBUG) << __func__ << ": Tearing down low power mode.";
+
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported()) {
+    LOG(INFO) << __func__
+              << ": Low power mode not supported by config. Skipping teardown.";
     return;
   }
+
   low_power_timer_.Cancel();
   SuspendToLowPowerMode();
   PowerManager::TeardownLowPowerMode();
 };
 
 void TransportUartH4::NotifyHalStateChange(HalState hal_state) {
+  LOG(INFO) << __func__ << ": HAL state changed to "
+            << static_cast<int>(hal_state);
   switch (hal_state) {
     case HalState::kFirmwareDownloading:
+      LOG(DEBUG) << __func__
+                 << ": Updating UART baud rate for firmware download.";
       UartManager::UpdateBaudRate(
           HalConfigLoader::GetLoader().GetUartBaudRate(TransportType::kUartH4));
       break;
     case HalState::kFirmwareDownloadCompleted:
+      LOG(DEBUG) << __func__
+                 << ": Updating UART baud rate after firmware download.";
       UartManager::UpdateBaudRate(BaudRate::kRate115200);
       break;
     case HalState::kFirmwareReady:
+      LOG(DEBUG)
+          << __func__
+          << ": Firmware ready. Updating UART baud rate and setting up LPM.";
       UartManager::UpdateBaudRate(
           HalConfigLoader::GetLoader().GetUartBaudRate(TransportType::kUartH4));
       SetupLowPowerMode();
       ResumeFromLowPowerMode();
       break;
     default:
+      LOG(DEBUG) << __func__ << ": No action for HAL state "
+                 << static_cast<int>(hal_state);
       break;
   }
 }
 
 void TransportUartH4::EnableTransportWakelock(bool enable) {
+  LOG(INFO) << __func__ << ": Transport wakelock "
+            << (enable ? "enabled" : "disabled") << ".";
   transport_wakelock_enabled_ = enable;
 }
 
 bool TransportUartH4::IsTransportWakelockEnabled() {
+  LOG(VERBOSE) << __func__ << ": Transport wakelock is "
+               << (transport_wakelock_enabled_ ? "enabled" : "disabled") << ".";
   return transport_wakelock_enabled_;
 }
 
