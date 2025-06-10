@@ -160,6 +160,8 @@ class TransportUartH4 : virtual public TransportInterface,
   bool SetupLowPowerMode() override;
   void TeardownLowPowerMode() override;
 
+  void RefreshLpmTimer();
+
   std::unique_ptr<DataProcessor> data_processor_;
   std::recursive_mutex mutex_;
   ::bluetooth_hal::util::Timer low_power_timer_;
