@@ -14,41 +14,36 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.bqr"
+#pragma once
 
-#include "bluetooth_hal/bqr/bqr_handler.h"
-
-#include <cstdint>
-
-#include "android-base/logging.h"
-#include "bluetooth_hal/bqr/bqr_event.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
-#include "bluetooth_hal/hci_monitor.h"
 #include "bluetooth_hal/hci_router_client.h"
 
 namespace bluetooth_hal {
-namespace bqr {
+namespace debug {
 
-using ::bluetooth_hal::hci::HalPacket;
-using ::bluetooth_hal::hci::MonitorMode;
+class DebugMonitor : public ::bluetooth_hal::hci::HciRouterClient {
+ public:
+  DebugMonitor();
+  bool IsBluetoothEnabled();
 
-BqrHandler::BqrHandler() {
-  RegisterMonitor(bqr_event_monitor, MonitorMode::kMonitor);
-}
+ protected:
+  void OnCommandCallback(
+      [[maybe_unused]] const ::bluetooth_hal::hci::HalPacket& packet) override {
+  };
+  void OnMonitorPacketCallback(
+      ::bluetooth_hal::hci::MonitorMode mode,
+      const ::bluetooth_hal::hci::HalPacket& packet) override;
+  void OnBluetoothChipReady() override {};
+  void OnBluetoothChipClosed() override {};
+  void OnBluetoothEnabled() override {};
+  void OnBluetoothDisabled() override {};
 
-BqrHandler& BqrHandler::GetHandler() {
-  static BqrHandler handler;
-  return handler;
-}
+ private:
+  ::bluetooth_hal::hci::HciCommandMonitor debug_info_command_monitor_;
+  ::bluetooth_hal::hci::HciEventMonitor debug_info_event_monitor_;
+};
 
-void BqrHandler::OnMonitorPacketCallback([[maybe_unused]] MonitorMode mode,
-                                         const HalPacket& packet) {
-  BqrEvent bqr_event(packet);
-  if (bqr_event.IsValid()) {
-    // TODO: b/417588634 - Handle BQR event here.
-  }
-}
-
-}  //  namespace bqr
+}  //  namespace debug
 }  //  namespace bluetooth_hal

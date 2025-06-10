@@ -41,7 +41,6 @@ class BqrHandler : public ::bluetooth_hal::hci::HciRouterClient {
   void OnBluetoothEnabled() override {};
   void OnBluetoothDisabled() override {};
 
-  ::bluetooth_hal::hci::HciCommandMonitor debug_info_command_monitor_;
   ::bluetooth_hal::hci::HciBqrEventMonitor bqr_event_monitor;
 };
 
