@@ -417,6 +417,13 @@ bool HciRouterImpl::Send(const HalPacket& packet) {
 
 bool HciRouterImpl::SendCommand(const HalPacket& packet,
                                 const HalPacketCallback& callback) {
+  if (packet.GetCommandOpcode() ==
+      static_cast<uint16_t>(CommandOpCode::kGoogleDebugInfo)) {
+    // Skip HCI queue for Google Debug Info command, as it is designed to ignore
+    // the HCI command credit.
+    SendCommandNoAck(packet);
+    return true;
+  }
   tx_handler_->Post(TxTask::SendOrQueueCommand(
       packet, std::make_shared<HalPacketCallback>(callback)));
   return true;

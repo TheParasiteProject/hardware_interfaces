@@ -557,6 +557,26 @@ TEST_F(HciRouterTest, HandleSendHciCommandInCallbackAfterAnotherSendCommand) {
   EXPECT_FALSE(GetIsRouterBusy());
 }
 
+TEST_F(HciRouterTest, HandleSendDebugInfoCommandAfterSendCommand) {
+  auto [cmd_reset, blocker] = CreateCommandEventPacketsWithOrderEnsured(
+      {0x01, 0x03, 0x0c, 0x00}, empty_packet_);
+  HalPacket cmd_debug_info({0x01, 0x5B, 0xFD, 0x00});
+
+  // Expect both cmd_reset and cmd_debug_info are sent to the transport layer.
+  EXPECT_CALL(mock_transport_interface_, Send(cmd_reset)).Times(1);
+  EXPECT_CALL(mock_transport_interface_, Send(cmd_debug_info)).Times(1);
+
+  // Send the first command with a client callback.
+  HalPacket event;
+  EXPECT_TRUE(router_->SendCommand(cmd_reset, EmptyHalPacketCallback));
+  EXPECT_TRUE(GetIsRouterBusy());
+
+  // Send the second command (Debug Info) without waiting the event for the
+  // first command.
+  EXPECT_TRUE(router_->SendCommand(cmd_debug_info, EmptyHalPacketCallback));
+  on_transport_packet_ready_(blocker);
+}
+
 TEST_F(HciRouterTest, HandleSendCommandNoAck) {
   HalPacket cmd_reset({0x01, 0x03, 0x0c, 0x00});
   HalPacket cmd_set_host_le_support({0x01, 0x6d, 0x0c, 0x02, 0x01, 0x00});
