@@ -423,12 +423,11 @@ const std::map<BqrErrorCode, std::string> error_code_string = {
      "Arbitrator Detected Invalid Packet Size (BtChre)"},
 };
 
-DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor,
-                         DebugCentral& debugcentral)
-    : debugcentral_(&debugcentral), anchor_(anchor), type_(type) {
+DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
+    : anchor_(anchor), type_(type) {
   std::stringstream ss;
   ss << anchor << " [ IN]";
-  debugcentral_->UpdateRecord(type_, ss.str());
+  DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
 DebugAnchor::~DebugAnchor() {
@@ -437,14 +436,15 @@ DebugAnchor::~DebugAnchor() {
   }
   std::stringstream ss;
   ss << anchor_ << " [OUT]";
-  debugcentral_->UpdateRecord(
+  DebugCentral::Get().UpdateRecord(
       static_cast<AnchorType>(static_cast<uint8_t>(type_) + 1), ss.str());
   anchor_.clear();
 }
 
-DebugCentral DebugCentral::instance_;
-
-DebugCentral* DebugCentral::Get() { return &instance_; }
+DebugCentral& DebugCentral::Get() {
+  static DebugCentral debug_central;
+  return debug_central;
+}
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log

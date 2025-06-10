@@ -134,7 +134,7 @@ enum class AnchorType : uint8_t {
   do {                                                 \
     char log[128] = {0};                               \
     std::snprintf(log, sizeof(log), fmt, __VA_ARGS__); \
-    DebugCentral::Get()->UpdateRecord(type, log);      \
+    DebugCentral::Get().UpdateRecord(type, log);       \
   } while (0)
 
 /*
@@ -146,7 +146,7 @@ enum class AnchorType : uint8_t {
 #else
 #define DURATION_TRACKER(type, anchor)    \
   ::bluetooth_hal::debug::DebugAnchor a = \
-      ::bluetooth_hal::debug::DebugCentral::Get()->SetAnchor(type, anchor);
+      ::bluetooth_hal::debug::DebugCentral::Get().SetAnchor(type, anchor);
 #endif
 
 /*
@@ -176,14 +176,12 @@ class DebugCentral;
 
 class DebugAnchor {
  public:
-  DebugAnchor(AnchorType type, const std::string& anchor,
-              DebugCentral& debugcentral);
+  DebugAnchor(AnchorType type, const std::string& anchor);
 
   // Manually release the auto debug anchor.
   ~DebugAnchor();
 
  private:
-  DebugCentral* debugcentral_;
   std::string anchor_;
   AnchorType type_;
 };
@@ -233,7 +231,7 @@ class DebugCentral {
   /*
    * Get a singleton static instance of the debug central.
    */
-  static DebugCentral* Get();
+  static DebugCentral& Get();
 
 #if 0
   /*
@@ -284,12 +282,11 @@ class DebugCentral {
    * 13:36:17:024
    */
   DebugAnchor SetAnchor(AnchorType type, const std::string& anchor) {
-    return DebugAnchor(type, anchor, instance_);
+    return DebugAnchor(type, anchor);
   }
 
  private:
   static constexpr int kMaxHistory = 400;
-  static DebugCentral instance_;
   // Determine if we should hijack the vendor debug event or not
   bool hijack_event_ = false;
   bool has_client_ = false;
@@ -335,7 +332,7 @@ class LogHelper {
 #ifdef UNIT_TEST
       (void)type_;
 #else
-      DebugCentral::Get()->UpdateRecord(type_, log_message);
+      DebugCentral::Get().UpdateRecord(type_, log_message);
 #endif
       LOG(severity_) << log_message;
     }
