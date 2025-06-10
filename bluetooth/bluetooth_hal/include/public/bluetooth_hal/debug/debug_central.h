@@ -235,13 +235,6 @@ class DebugCentral {
    */
   static DebugCentral* Get();
 
-  /*
-   * Get the stack callback function
-   */
-  void Prepare(::bluetooth_hal::hci::HalPacketCallback notify_cb) {
-    notify_cb_ = notify_cb;
-  }
-
 #if 0
   /*
    * Start to monitor error event
@@ -260,11 +253,6 @@ class DebugCentral {
   void Dump(int fd);
 
   /*
-   * Upadte if there is a client connect bthal.
-   */
-  void HasClientConnectWith(bool has_client);
-
-  /*
    * set bluetooth serial port information.
    */
   void SetBtUartDebugPort(const std::string& uart_port);
@@ -279,11 +267,6 @@ class DebugCentral {
    * report eror code to stack via BQR root inflammation event
    */
   void ReportBqrError(BqrErrorCode error, std::string extra_info);
-
-  /*
-   * Detect if current HCI command is host get controller debug dump opcode ?
-   */
-  bool IsControllerDebugDumpOpcode(const ::bluetooth_hal::hci::HalPacket& data);
 
   /*
    * Two kinds of debug anchor are supported to collect log messages.
@@ -310,7 +293,6 @@ class DebugCentral {
   // Determine if we should hijack the vendor debug event or not
   bool hijack_event_ = false;
   bool has_client_ = false;
-  ::bluetooth_hal::hci::HalPacketCallback notify_cb_;
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
