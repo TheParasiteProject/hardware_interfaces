@@ -93,6 +93,7 @@ filegroup {
 filegroup {
     name: "hal_bqr_srcs",
     srcs: [
+        "bqr/bqr_handler.cc",
         "bqr/bqr_event.cc",
         "bqr/bqr_link_quality_event.cc",
     ],
