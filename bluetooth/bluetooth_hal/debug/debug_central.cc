@@ -35,6 +35,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android-base/stringprintf.h"
+#include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
 #include "bluetooth_hal/debug/bluetooth_bqr.h"
@@ -345,6 +346,7 @@ namespace bluetooth_hal {
 namespace debug {
 
 using ::android::base::StringPrintf;
+using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
 using ::bluetooth_hal::debug::BqrQualityReportId;
 using ::bluetooth_hal::debug::BtActivitiesLogger;
 using ::bluetooth_hal::debug::BtBqrEnergyRecoder;
@@ -679,6 +681,32 @@ void DebugCentral::handle_bqr_event(const HalPacket& packet) {
     default: {
       break;
     }
+  }
+}
+
+void DebugCentral::HandleRootInflammationEvent(
+    const BqrRootInflammationEvent& event) {
+  if (!event.IsValid()) {
+    LOG(ERROR) << __func__ << ": Invalid root inflammation event! "
+               << event.ToString();
+  }
+
+  uint8_t error_code = event.GetErrorCode();
+  uint8_t vendor_error_code = event.GetVendorErrorCode();
+  LOG(ERROR) << __func__ << ": Received Root Inflammation event! (0x"
+             << std::hex << std::setw(2) << std::setfill('0')
+             << static_cast<int>(error_code) << std::setw(2)
+             << std::setfill('0') << static_cast<int>(vendor_error_code)
+             << ").";
+  // For some vendor error codes that we do not generate a crash dump.
+  if (report_ssr_crash(vendor_error_code)) {
+    start_crash_dump(
+        false, kDumpReasonControllerRootInflammed + " (" +
+                   StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
+                   ")" + " - " +
+                   get_error_code_string(
+                       static_cast<BqrErrorCode>(vendor_error_code)));
+    backup_logging_files_before_crash(crash_timestamp_);
   }
 }
 

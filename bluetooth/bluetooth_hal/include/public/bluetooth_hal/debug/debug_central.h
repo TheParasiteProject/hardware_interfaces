@@ -23,6 +23,8 @@
 #include <sstream>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/bqr/bqr_handler.h"
+#include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
@@ -288,6 +290,15 @@ class DebugCentral {
   }
 
   /**
+   * @brief Inform DebugCentral to handle Root Inflammation Event reported from
+   * the Bluetooth chip. It also generates a Bluetooth HAL coredump.
+   *
+   * @param packet The root inflammation event.
+   */
+  void HandleRootInflammationEvent(
+      const ::bluetooth_hal::bqr::BqrRootInflammationEvent& event);
+
+  /**
    * @brief Inform DebugCentral to handle Debug Info Event reported from the
    * Bluetooth chip. It also generates a Bluetooth HAL coredump.
    *
@@ -318,6 +329,7 @@ class DebugCentral {
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
   DebugMonitor debug_monitor_;
+  ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
 
   bool report_ssr_crash(uint8_t vendor_error_code);
   bool is_hw_stage_supported();

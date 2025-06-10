@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "bluetooth_hal/bqr/bqr_event.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/hci_monitor.h"
@@ -40,6 +41,9 @@ class BqrHandler : public ::bluetooth_hal::hci::HciRouterClient {
   void OnBluetoothChipClosed() override {};
   void OnBluetoothEnabled() override {};
   void OnBluetoothDisabled() override {};
+
+ private:
+  void HandleRootInflammationEvent(const BqrEvent& event);
 
   ::bluetooth_hal::hci::HciBqrEventMonitor bqr_event_monitor;
 };

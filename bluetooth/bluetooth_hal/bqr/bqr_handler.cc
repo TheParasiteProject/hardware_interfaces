@@ -22,6 +22,8 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
+#include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
+#include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/hci_monitor.h"
@@ -30,6 +32,7 @@
 namespace bluetooth_hal {
 namespace bqr {
 
+using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::MonitorMode;
 
@@ -46,8 +49,24 @@ void BqrHandler::OnMonitorPacketCallback([[maybe_unused]] MonitorMode mode,
                                          const HalPacket& packet) {
   BqrEvent bqr_event(packet);
   if (bqr_event.IsValid()) {
-    // TODO: b/417588634 - Handle BQR event here.
+    auto bqr_event_type = bqr_event.GetBqrEventType();
+    switch (bqr_event_type) {
+      case BqrEventType::kRootInflammation:
+        HandleRootInflammationEvent(bqr_event);
+        break;
+      default:
+        break;
+    }
   }
+}
+
+void BqrHandler::HandleRootInflammationEvent(const BqrEvent& bqr_event) {
+  BqrRootInflammationEvent root_inflammation(bqr_event);
+  if (!root_inflammation.IsValid()) {
+    return;
+  }
+  LOG(ERROR) << "Received a root inflammation event! " << bqr_event.ToString();
+  DebugCentral::Get().HandleRootInflammationEvent(root_inflammation);
 }
 
 }  //  namespace bqr
