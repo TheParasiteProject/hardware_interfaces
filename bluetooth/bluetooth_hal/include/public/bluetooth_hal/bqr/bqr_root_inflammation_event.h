@@ -35,8 +35,10 @@ class BqrRootInflammationEvent : public BqrEvent {
   uint8_t GetErrorCode() const;
   uint8_t GetVendorErrorCode() const;
   std::vector<uint8_t> GetVendorParameter() const;
+  std::string ToString() const;
 
- private:
+ protected:
+  std::string ToBqrString() const;
   bool is_valid_;
   uint8_t error_code_;
   uint8_t vendor_error_code_;

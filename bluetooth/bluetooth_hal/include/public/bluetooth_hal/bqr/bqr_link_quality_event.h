@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
@@ -89,8 +90,12 @@ class BqrLinkQualityEventBase : public BqrEvent {
   // Retrieves the buffer underflow count (in bytes).
   uint32_t GetBufferUnderflowBytes() const;
 
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   bool is_valid_;
   BqrVersion version_;
@@ -124,6 +129,12 @@ class BqrLinkQualityEventV3AndBackward : public BqrLinkQualityEventBase {
 
   // Checks if the BQR Link Quality Event V3 and backward is valid.
   bool IsValid() const override;
+
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
+ protected:
+  std::string ToBqrString() const;
 };
 
 // Represents BQR Link Quality event for version V4.
@@ -152,8 +163,12 @@ class BqrLinkQualityEventV4 : public BqrLinkQualityEventV3AndBackward {
   // received since the last event.
   uint32_t GetRxDuplicatePackets() const;
 
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   uint32_t tx_total_packets_;
   uint32_t tx_unacked_packets_;
@@ -187,8 +202,12 @@ class BqrLinkQualityEventV5 : public BqrLinkQualityEventV3AndBackward {
   uint32_t GetCrcErrorPackets() const;
   uint32_t GetRxDuplicatePackets() const;
 
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   ::bluetooth_hal::hci::BluetoothAddress remote_addr_;
   uint8_t call_failed_item_count_;
@@ -216,8 +235,12 @@ class BqrLinkQualityEventV6 : public BqrLinkQualityEventV5 {
   // Retrieves the coex activities information mask.
   uint16_t GetCoexInfoMask() const;
 
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   uint32_t rx_unreceived_packets_;
   uint16_t coex_info_mask_;

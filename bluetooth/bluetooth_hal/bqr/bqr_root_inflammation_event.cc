@@ -18,8 +18,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <sstream>
 #include <vector>
 
+#include "android-base/stringprintf.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -74,5 +76,24 @@ std::vector<uint8_t> BqrRootInflammationEvent::GetVendorParameter() const {
   return vendor_parameter;
 }
 
+std::string BqrRootInflammationEvent::ToString() const {
+  if (!is_valid_) {
+    return "BqrRootInflammationEvent(Invalid)";
+  }
+  return "BqrRootInflammationEvent: " + ToBqrString();
+}
+
+std::string BqrRootInflammationEvent::ToBqrString() const {
+  std::stringstream ss;
+  auto vendor_param_size = GetVendorParameter().size();
+
+  ss << BqrEvent::ToBqrString() << ", Error Code:0x" << std::hex << std::setw(2)
+     << std::setfill('0') << static_cast<int>(error_code_)
+     << ", Vendor Error Code:0x" << std::hex << std::setw(2)
+     << std::setfill('0') << static_cast<int>(vendor_error_code_)
+     << ", Vendor Parameter Size:" << std::dec << vendor_param_size;
+
+  return ss.str();
+}
 }  // namespace bqr
 }  // namespace bluetooth_hal

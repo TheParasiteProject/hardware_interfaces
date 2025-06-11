@@ -17,7 +17,10 @@
 #include "bluetooth_hal/bqr/bqr_link_quality_event.h"
 
 #include <cstdint>
+#include <iomanip>
+#include <sstream>
 
+#include "android-base/stringprintf.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -224,6 +227,38 @@ uint32_t BqrLinkQualityEventBase::GetBufferUnderflowBytes() const {
 
 BqrVersion BqrLinkQualityEventBase::GetVersion() const { return version_; }
 
+std::string BqrLinkQualityEventBase::ToString() const {
+  if (!is_valid_) {
+    return "BqrLinkQualityEvent(Invalid)";
+  }
+  return "BqrLinkQualityEvent: " + ToBqrString();
+}
+
+std::string BqrLinkQualityEventBase::ToBqrString() const {
+  std::stringstream ss;
+  ss << BqrEvent::ToBqrString() << ", Handle: 0x" << std::hex << std::setw(4)
+     << std::setfill('0') << connection_handle_ << ", "
+     << BqrPacketTypeToString(packet_types_)
+     << (connection_role_ ? ", Peripheral" : ", Central")
+     << ", PwLv: " << std::dec << static_cast<int>(tx_power_level_)
+     << ", RSSI: " << std::dec << static_cast<int>(rssi_)
+     << ", SNR: " << std::dec << static_cast<int>(snr_)
+     << ", UnusedCh: " << std::dec
+     << static_cast<int>(unused_afh_channel_count_)
+     << ", UnidealCh: " << std::dec
+     << static_cast<int>(afh_select_unideal_channel_count_)
+     << ", LSTO: " << std::dec << lsto_
+     << ", Connection Piconet Clock: " << std::dec << connection_piconet_clock_
+     << ", ReTx: " << std::dec << retransmission_count_
+     << ", NoRx: " << std::dec << no_rx_count_ << ", NAK: " << std::dec
+     << nak_count_ << ", LastTX: " << std::dec << last_tx_ack_timestamp_
+     << ", FlowOff: " << std::dec << flow_off_count_
+     << ", LastFlowOn: " << std::dec << last_flow_on_timestamp_
+     << ", Overflow: " << std::dec << buffer_overflow_bytes_
+     << ", Underflow: " << std::dec << buffer_underflow_bytes_;
+  return ss.str();
+}
+
 // BqrLinkQualityEventV3AndBackward
 BqrLinkQualityEventV3AndBackward::BqrLinkQualityEventV3AndBackward(
     const HalPacket& packet)
@@ -234,6 +269,17 @@ BqrLinkQualityEventV3AndBackward::BqrLinkQualityEventV3AndBackward(
 }
 
 bool BqrLinkQualityEventV3AndBackward::IsValid() const { return is_valid_; }
+
+std::string BqrLinkQualityEventV3AndBackward::ToString() const {
+  if (!is_valid_) {
+    return "BqrLinkQualityEventV3AndBackward(Invalid)";
+  }
+  return "BqrLinkQualityEventV3AndBackward: " + ToBqrString();
+}
+
+std::string BqrLinkQualityEventV3AndBackward::ToBqrString() const {
+  return BqrLinkQualityEventBase::ToBqrString();
+}
 
 // BqrLinkQualityEventV4
 BqrLinkQualityEventV4::BqrLinkQualityEventV4(const HalPacket& packet)
@@ -291,6 +337,25 @@ uint32_t BqrLinkQualityEventV4::GetCrcErrorPackets() const {
 
 uint32_t BqrLinkQualityEventV4::GetRxDuplicatePackets() const {
   return rx_duplicate_packets_;
+}
+
+std::string BqrLinkQualityEventV4::ToString() const {
+  if (!is_valid_) {
+    return "BqrLinkQualityEventV4(Invalid)";
+  }
+  return "BqrLinkQualityEventV4: " + ToBqrString();
+}
+
+std::string BqrLinkQualityEventV4::ToBqrString() const {
+  std::stringstream ss;
+  ss << BqrLinkQualityEventV3AndBackward::ToBqrString()
+     << ", TxTotal: " << std::dec << tx_total_packets_
+     << ", TxUnAcked: " << std::dec << tx_unacked_packets_
+     << ", TxFlushed: " << std::dec << tx_flushed_packets_
+     << ", TxLastSubEvent: " << std::dec << tx_last_subevent_packets_
+     << ", CRCError: " << std::dec << crc_error_packets_
+     << ", RxDuplicate: " << std::dec << rx_duplicate_packets_;
+  return ss.str();
 }
 
 // BqrLinkQualityEventV5
@@ -369,6 +434,28 @@ uint32_t BqrLinkQualityEventV5::GetRxDuplicatePackets() const {
   return v5_rx_duplicate_packets_;
 }
 
+std::string BqrLinkQualityEventV5::ToString() const {
+  if (!is_valid_) {
+    return "BqrLinkQualityEventV5(Invalid)";
+  }
+  return "BqrLinkQualityEventV5: " + ToBqrString();
+}
+
+std::string BqrLinkQualityEventV5::ToBqrString() const {
+  std::stringstream ss;
+  ss << BqrLinkQualityEventV3AndBackward::ToBqrString()
+     << ", Address: " << remote_addr_.ToString()
+     << ", FailedCount: " << std::dec
+     << static_cast<int>(call_failed_item_count_) << ", TxTotal: " << std::dec
+     << v5_tx_total_packets_ << ", TxUnAcked: " << std::dec
+     << v5_tx_unacked_packets_ << ", TxFlushed: " << std::dec
+     << v5_tx_flushed_packets_ << ", TxLastSubEvent: " << std::dec
+     << v5_tx_last_subevent_packets_ << ", CRCError: " << std::dec
+     << v5_crc_error_packets_ << ", RxDuplicate: " << std::dec
+     << v5_rx_duplicate_packets_;
+  return ss.str();
+}
+
 // BqrLinkQualityEventV6
 BqrLinkQualityEventV6::BqrLinkQualityEventV6(const HalPacket& packet)
     : BqrLinkQualityEventV5(packet),
@@ -398,5 +485,19 @@ uint16_t BqrLinkQualityEventV6::GetCoexInfoMask() const {
   return coex_info_mask_;
 }
 
+std::string BqrLinkQualityEventV6::ToString() const {
+  if (!is_valid_) {
+    return "BqrLinkQualityEventV6(Invalid)";
+  }
+  return "BqrLinkQualityEventV6: " + ToBqrString();
+}
+
+std::string BqrLinkQualityEventV6::ToBqrString() const {
+  std::stringstream ss;
+  ss << BqrLinkQualityEventV5::ToBqrString() << ", RxUnreceived: " << std::dec
+     << rx_unreceived_packets_ << ", CoexInfoMask: 0x" << std::hex
+     << std::setw(4) << std::setfill('0') << coex_info_mask_;
+  return ss.str();
+}
 }  // namespace bqr
 }  // namespace bluetooth_hal

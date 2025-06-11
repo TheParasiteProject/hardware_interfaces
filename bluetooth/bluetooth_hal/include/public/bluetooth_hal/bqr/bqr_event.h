@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
 
@@ -30,9 +32,11 @@ class BqrEvent : public ::bluetooth_hal::hci::HalPacket {
   virtual bool IsValid() const;
   BqrReportId GetBqrReportId() const;
   BqrEventType GetBqrEventType() const;
+  std::string ToString() const;
 
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   bool is_valid_;
   BqrReportId report_id_;
