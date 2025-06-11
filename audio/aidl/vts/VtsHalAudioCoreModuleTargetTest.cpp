@@ -1521,10 +1521,16 @@ class WithStream : public StreamWorkerMethods {
     WithStream& operator=(const WithStream&) = delete;
     ~WithStream() {
         if (mStream != nullptr) {
-            mContext.reset();
-            EXPECT_IS_OK(callClose(mStream)) << "port config id " << getPortId();
+            EXPECT_NO_FATAL_FAILURE(close());
         }
     }
+
+    void close() {
+        mContext.reset();
+        EXPECT_IS_OK(callClose(mStream)) << "port config id " << getPortId();
+        mStream = nullptr;
+    }
+
     void SetUpPortConfig(IModule* module) { ASSERT_NO_FATAL_FAILURE(mPortConfig.SetUp(module)); }
     ScopedAStatus SetUpNoChecks(IModule* module, long bufferSizeFrames) {
         return SetUpNoChecks(module, mPortConfig.get(), bufferSizeFrames);
@@ -3676,6 +3682,16 @@ class AudioStream : public AudioCoreModule {
                 << "getStreamCommon must return the same interface instance across invocations";
     }
 
+    void Close() {
+        const auto portConfig = moduleConfig->getSingleConfigForMixPort(IOTraits<Stream>::is_input);
+        if (!portConfig.has_value()) {
+            GTEST_SKIP() << "No mix port for attached devices";
+        }
+        WithStream<Stream> stream(portConfig.value());
+        ASSERT_NO_FATAL_FAILURE(stream.SetUp(module.get(), kDefaultLargeBufferSizeFrames));
+        ASSERT_NO_FATAL_FAILURE(stream.close());
+    }
+
     void CloseTwice() {
         std::shared_ptr<Stream> heldStream;
         {
@@ -4053,6 +4069,7 @@ using AudioStreamOut = AudioStream<IStreamOut>;
         ASSERT_NO_FATAL_FAILURE(method_name()); \
     }
 
+TEST_IN_AND_OUT_STREAM(Close);
 TEST_IN_AND_OUT_STREAM(CloseTwice);
 TEST_IN_AND_OUT_STREAM(PrepareToCloseTwice);
 TEST_IN_AND_OUT_STREAM(GetStreamCommon);
