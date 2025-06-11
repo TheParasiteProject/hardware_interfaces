@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include "bluetooth_hal/chip/chip_provisioner_interface.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 
 namespace bluetooth_hal {
@@ -26,6 +27,8 @@ class BluetoothHal {
   bool RegisterVendorTransport(
       std::unique_ptr<::bluetooth_hal::transport::TransportInterface>
           transport);
+  void RegisterVendorChipProvisioner(
+      ::bluetooth_hal::chip::ChipProvisionerInterface::FactoryFn factory);
   void Start();
 };
 
