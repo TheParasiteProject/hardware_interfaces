@@ -18,6 +18,8 @@
 
 #include <memory>
 
+#include "bluetooth_hal/chip/chip_provisioner.h"
+
 namespace bluetooth_hal {
 namespace chip {
 
@@ -28,7 +30,7 @@ std::unique_ptr<ChipProvisionerInterface> ChipProvisionerInterface::Create() {
   if (vendor_factory_) {
     return vendor_factory_();
   }
-  return nullptr;
+  return std::make_unique<ChipProvisioner>();
 }
 
 void ChipProvisionerInterface::RegisterVendorChipProvisioner(
