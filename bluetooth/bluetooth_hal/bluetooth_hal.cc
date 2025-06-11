@@ -25,6 +25,7 @@
 #include "android/binder_process.h"
 #include "android/binder_status.h"
 #include "bluetooth_hal/bluetooth_hci.h"
+#include "bluetooth_hal/chip/chip_provisioner_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder.h"
 #include "bluetooth_hal/transport/transport_interface.h"
@@ -32,6 +33,7 @@
 namespace bluetooth_hal {
 
 using ::bluetooth_hal::BluetoothHci;
+using ::bluetooth_hal::chip::ChipProvisionerInterface;
 using ::bluetooth_hal::extensions::cs::BluetoothChannelSounding;
 using ::bluetooth_hal::extensions::finder::BluetoothFinder;
 using ::bluetooth_hal::transport::TransportInterface;
@@ -46,6 +48,11 @@ BluetoothHal& BluetoothHal::GetHal() {
 bool BluetoothHal::RegisterVendorTransport(
     std::unique_ptr<::bluetooth_hal::transport::TransportInterface> transport) {
   return TransportInterface::RegisterVendorTransport(std::move(transport));
+}
+
+void BluetoothHal::RegisterVendorChipProvisioner(
+    ChipProvisionerInterface::FactoryFn factory) {
+  ChipProvisionerInterface::RegisterVendorChipProvisioner(std::move(factory));
 }
 
 void BluetoothHal::Start() {
