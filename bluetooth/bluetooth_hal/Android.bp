@@ -118,6 +118,7 @@ filegroup {
     name: "hal_hwinit_srcs",
     srcs: [
         "chip/chip_provisioner.cc",
+        "chip/chip_provisioner_interface.cc",
         "chip/async_chip_provisioner.cc",
     ],
 }

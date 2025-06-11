@@ -32,6 +32,7 @@
 #include <android/binder_auto_utils.h>
 #include <fmq/AidlMessageQueue.h>
 #include <gtest/gtest.h>
+#include <system/audio.h>
 #include <system/audio_aidl_utils.h>
 #include <system/audio_effects/aidl_effects_utils.h>
 #include <system/audio_effects/effect_uuid.h>
@@ -43,6 +44,8 @@
 using namespace android;
 using aidl::android::hardware::audio::effect::CommandId;
 using aidl::android::hardware::audio::effect::Descriptor;
+using aidl::android::hardware::audio::effect::Eraser;
+using aidl::android::hardware::audio::effect::getEffectTypeUuidEraser;
 using aidl::android::hardware::audio::effect::getEffectTypeUuidSpatializer;
 using aidl::android::hardware::audio::effect::getRange;
 using aidl::android::hardware::audio::effect::IEffect;
@@ -88,6 +91,12 @@ static constexpr float kMaxAudioSampleValue = 1;
 static constexpr int kNPointFFT = 16384;
 static constexpr int kSamplingFrequency = 44100;
 static constexpr int kDefaultChannelLayout = AudioChannelLayout::LAYOUT_STEREO;
+static const AudioChannelLayout kChannelLayout =
+        AudioChannelLayout::make<AudioChannelLayout::layoutMask>(kDefaultChannelLayout);
+static constexpr audio_session_t kSessionId = AUDIO_SESSION_NONE;
+static constexpr int kIoHandle = AUDIO_IO_HANDLE_NONE;
+static constexpr float kFrameCount = 0x100;
+
 static constexpr float kLn10Div20 = 0.11512925f;  // ln(10)/20
 
 class EffectHelper {
@@ -102,6 +111,7 @@ class EffectHelper {
             ASSERT_NO_FATAL_FAILURE(expectState(effect, State::INIT));
         }
         mIsSpatializer = id.type == getEffectTypeUuidSpatializer();
+        mIsEraser = id.type == getEffectTypeUuidEraser();
         mDescriptor = desc;
     }
 
@@ -262,27 +272,42 @@ class EffectHelper {
         EXPECT_TRUE(efState & kEventFlagDataMqUpdate);
     }
 
-    Parameter::Common createParamCommon(
-            int session = 0, int ioHandle = -1, int iSampleRate = 48000, int oSampleRate = 48000,
-            long iFrameCount = 0x100, long oFrameCount = 0x100,
-            AudioChannelLayout inputChannelLayout =
-                    AudioChannelLayout::make<AudioChannelLayout::layoutMask>(kDefaultChannelLayout),
-            AudioChannelLayout outputChannelLayout =
-                    AudioChannelLayout::make<AudioChannelLayout::layoutMask>(
-                            kDefaultChannelLayout)) {
+    Parameter::Common createParamCommon(int session = kSessionId, int iFrameCount = kFrameCount,
+                                        int oFrameCount = kFrameCount) {
+        // default Parameter::Common
+        int sampleRate = 48000;
+        AudioChannelLayout iChannelLayout = kChannelLayout, oChannelLayout = kChannelLayout;
+
         // query supported input layout and use it as the default parameter in common
-        if (mIsSpatializer && isRangeValid<Range::spatializer>(Spatializer::supportedChannelLayout,
-                                                               mDescriptor.capability)) {
-            const auto layoutRange = getRange<Range::spatializer, Range::SpatializerRange>(
-                    mDescriptor.capability, Spatializer::supportedChannelLayout);
-            if (std::vector<AudioChannelLayout> layouts;
-                layoutRange &&
-                0 != (layouts = layoutRange->min.get<Spatializer::supportedChannelLayout>())
-                                .size()) {
-                inputChannelLayout = layouts[0];
+        if (mIsSpatializer) {
+            if (isRangeValid<Range::spatializer>(Spatializer::supportedChannelLayout,
+                                                 mDescriptor.capability)) {
+                const auto layoutRange = getRange<Range::spatializer, Range::SpatializerRange>(
+                        mDescriptor.capability, Spatializer::supportedChannelLayout);
+                if (std::vector<AudioChannelLayout> layouts;
+                    layoutRange &&
+                    0 != (layouts = layoutRange->min.get<Spatializer::supportedChannelLayout>())
+                                    .size()) {
+                    iChannelLayout = layouts[0];
+                }
             }
+        } else if (mIsEraser) {
+            // TODO: b/418780826, hardcoded for now, update with capability range
+            sampleRate = 16000;
+            iChannelLayout = oChannelLayout =
+                    AudioChannelLayout::make<AudioChannelLayout::layoutMask>(
+                            AudioChannelLayout::LAYOUT_MONO);
         }
 
+        return createParamCommon(session, kIoHandle, sampleRate, sampleRate, iFrameCount,
+                                 oFrameCount, iChannelLayout, oChannelLayout);
+    }
+
+    Parameter::Common createParamCommon(int session, int ioHandle, int iSampleRate, int oSampleRate,
+                                        long iFrameCount = kFrameCount,
+                                        long oFrameCount = kFrameCount,
+                                        AudioChannelLayout inputChannelLayout = kChannelLayout,
+                                        AudioChannelLayout outputChannelLayout = kChannelLayout) {
         Parameter::Common common;
         common.session = session;
         common.ioHandle = ioHandle;
@@ -298,6 +323,32 @@ class EffectHelper {
         output.base.format = kDefaultFormatDescription;
         output.frameCount = oFrameCount;
         return common;
+    }
+
+    // TODO: b/418780826, update this to capability range based implementation
+    Parameter::Common getDefaultEraserCommonParam(std::shared_ptr<IEffect> effect) {
+        if (!effect) {
+            LOG(ERROR) << __func__ << " null effect pointer";
+            return Parameter::Common{};
+        }
+        static aidl::android::media::audio::eraser::Capability capability = [&]() {
+            Parameter param;
+            Eraser::Id eraserId = Eraser::Id::make<Eraser::Id::commonTag>(Eraser::capability);
+            Parameter::Id capId = Parameter::Id::make<Parameter::Id::eraserTag>(eraserId);
+            EXPECT_IS_OK(effect->getParameter(capId, &param));
+
+            const auto specific = param.get<Parameter::specific>();
+            const auto eraser = specific.get<Parameter::Specific::eraser>();
+            return eraser.get<Eraser::capability>();
+        }();
+
+        if (capability.sampleRates.size() == 0 || capability.channelLayouts.size() == 0) {
+            return createParamCommon(kSessionId);
+        }
+        const int sampleRate = capability.sampleRates[0];
+        const auto chLayout = capability.channelLayouts[0];
+        return createParamCommon(kSessionId /* session */, 1 /* ioHandle */, sampleRate, sampleRate,
+                                 mInputFrameSize, mOutputFrameSize, chLayout, chLayout);
     }
 
     typedef ::android::AidlMessageQueue<
@@ -607,7 +658,7 @@ class EffectHelper {
         return (effect && effect->getInterfaceVersion(&version).isOk()) ? version : 0;
     }
 
-    bool mIsSpatializer;
+    bool mIsSpatializer, mIsEraser;
     Descriptor mDescriptor;
     size_t mInputFrameSize, mOutputFrameSize;
     size_t mInputSamples, mOutputSamples;

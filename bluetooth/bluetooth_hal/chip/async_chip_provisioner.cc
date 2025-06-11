@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/chip/chip_provisioner_interface.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/worker.h"
 
@@ -119,8 +120,14 @@ void AsyncChipProvisioner::HandleInitialize(const InitializePayload& payload) {
   if (chip_provisioner_) {
     return;
   }
-  chip_provisioner_ = std::make_unique<ChipProvisioner>();
-  chip_provisioner_->Initialize(payload.on_hal_state_update);
+  chip_provisioner_ = ChipProvisionerInterface::Create();
+  if (chip_provisioner_) {
+    chip_provisioner_->Initialize(payload.on_hal_state_update);
+  } else {
+    LOG(ERROR) << __func__ << ": Failed to create ChipProvisioner instance.";
+    // Consider how to report this failure, e.g., by invoking
+    // on_hal_state_update with an error state.
+  }
 };
 
 void AsyncChipProvisioner::HandleDownloadFirmware() {

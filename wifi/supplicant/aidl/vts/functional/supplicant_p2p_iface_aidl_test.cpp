@@ -994,11 +994,15 @@ TEST_P(SupplicantP2pIfaceAidlTest, ManageNetworks) {
     EXPECT_TRUE(p2p_iface_->listNetworks(&networkList).isOk());
     ASSERT_FALSE(networkList.empty());
 
-    int networkId = networkList[0];
+    // Newly added network configuration is at the end of the list
+    int networkId = networkList.back();
     std::shared_ptr<ISupplicantP2pNetwork> network;
     EXPECT_TRUE(p2p_iface_->getNetwork(networkId, &network).isOk());
     ASSERT_NE(network, nullptr);
+    // Remove the network and update the configuration to
+    // disk(p2p_supplicant.conf)
     EXPECT_TRUE(p2p_iface_->removeNetwork(networkId).isOk());
+    EXPECT_TRUE(p2p_iface_->saveConfig().isOk());
 }
 
 /*
