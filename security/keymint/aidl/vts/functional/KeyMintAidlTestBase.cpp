@@ -29,7 +29,6 @@
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
 #include <android/content/pm/IPackageManagerNative.h>
-#include <android_security_keystore2.h>
 #include <cppbor_parse.h>
 #include <cutils/properties.h>
 #include <gmock/gmock.h>
@@ -392,20 +391,6 @@ void KeyMintAidlTestBase::InitializeKeyMint(std::shared_ptr<IKeyMintDevice> keyM
     os_version_ = getOsVersion();
     os_patch_level_ = getOsPatchlevel();
     vendor_patch_level_ = getVendorPatchlevel();
-
-    if (!::android::security::keystore2::attest_modules()) {
-        // Some tests (for v4+) require that the KeyMint instance has been
-        // provided with a module hash value.  If the keystore2 flag is off,
-        // this will not happen, so set a fake value here instead.
-        GTEST_LOG_(INFO) << "Setting MODULE_HASH to fake value as fallback when flag off";
-        vector<uint8_t> fakeModuleHash = {
-                0xf3, 0xf1, 0x1f, 0xe5, 0x13, 0x05, 0xfe, 0xfa, 0xe9, 0xc3, 0x53,
-                0xef, 0x69, 0xdf, 0x9f, 0xd7, 0x0c, 0x1e, 0xcc, 0x2c, 0x2c, 0x62,
-                0x1f, 0x5e, 0x2c, 0x1d, 0x19, 0xa1, 0xfd, 0xac, 0xa1, 0xb4,
-        };
-        vector<KeyParameter> info = {Authorization(TAG_MODULE_HASH, fakeModuleHash)};
-        keymint_->setAdditionalAttestationInfo(info);
-    }
 }
 
 int32_t KeyMintAidlTestBase::AidlVersion() const {
