@@ -219,3 +219,9 @@ cc_test {
     defaults: ["VtsHalAudioEffectTargetTestDefaults"],
     srcs: ["VtsHalSpatializerTargetTest.cpp"],
 }
+
+cc_test {
+    name: "VtsHalEraserTargetTest",
+    defaults: ["VtsHalAudioEffectTargetTestDefaults"],
+    srcs: ["VtsHalEraserTargetTest.cpp"],
+}
