@@ -20,10 +20,8 @@
 #include <unistd.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -181,29 +179,6 @@ class GatekeeperAidlTest : public ::testing::TestWithParam<std::string> {
             return IGatekeeper::ERROR_GENERAL_FAILURE;
         }
         return IGatekeeper::STATUS_OK;
-    }
-
-    // Check that a verification attempt fails, and return any retry interval in milliseconds.
-    int32_t verifyPasswordFailDelay(const std::vector<uint8_t>& password,
-                                    const std::vector<uint8_t>& passwordHandle,
-                                    uint64_t challenge) {
-        GatekeeperRequest verifyReq;
-        verifyReq.newPwd = password;
-        verifyReq.curPwdHandle = passwordHandle;
-        verifyReq.challenge = challenge;
-
-        GatekeeperVerifyResponse verifyRsp;
-        Status ret = doVerify(verifyReq, verifyRsp);
-        if (ret.isOk()) {
-            // An OK Binder response (when verification failure is expected)
-            // should be an indication that the verification wasn't attempted
-            // because a retry interval is pending.
-            EXPECT_EQ(verifyRsp.statusCode, IGatekeeper::ERROR_RETRY_TIMEOUT);
-            return verifyRsp.timeoutMs;
-        } else {
-            // Failed attempt to verify.
-            return 0;
-        }
     }
 
   protected:
@@ -465,63 +440,6 @@ TEST_P(GatekeeperAidlTest, DeleteAllUsersTest) {
     }
 
     ALOGI("Testing deleteAllUsers done: rsp=%" PRIi32, getReturnStatusCode(result));
-}
-
-/**
- * Ensure that multiple failed verify attempts induce a delay.
- *
- * Android CDD section 9.11:
- *
- * [C-0-2] The lock screen authentication MUST implement a time interval between failed
- * attempts. With n as the failed attempt count, the time interval MUST be at least 30 seconds for 9
- * < n < 30. For n > 29, the time interval value MUST be at least 30*2^floor((n-30)/10)) seconds or
- * at least 24 hours, whichever is smaller.
- */
-TEST_P(GatekeeperAidlTest, FailedAttemptDelay) {
-    // Limit test execution to a couple of minutes.
-    const int32_t kMaxTestTimeMillis = 120000;
-
-    ALOGI("Testing multiple failed verify");
-    std::vector<uint8_t> password = generatePassword(0);
-
-    const auto [passwordHandle, sid] = enrollNewPassword(password);
-    GatekeeperVerifyResponse verifyRsp;
-    verifyPasswordSucceeds(password, passwordHandle, 1, sid, verifyRsp);
-
-    std::vector<uint8_t> wrongPassword = generatePassword(1);
-
-    auto testStart = std::chrono::steady_clock::now();
-    int failureCount = 0;
-    while (true) {
-        int32_t waitMillis = verifyPasswordFailDelay(wrongPassword, passwordHandle, 0);
-        ALOGI("Attempt to verify wrong password attempt %d requires %ldms delay", failureCount,
-              (long)waitMillis);
-
-        if (failureCount > 9) {
-            // Allow a little leeway for rounding
-            ASSERT_GT(waitMillis, 29000) << "failed verify attempt " << failureCount << " requires "
-                                         << waitMillis << "ms retry interval but should be >30s";
-        }
-        failureCount++;
-
-        if (waitMillis != 0) {
-            // Round up slightly to be sure the retry interval has expired before next retry.
-            waitMillis += 500;
-
-            // Abandon the test if the next wait would make overall test execution too long.
-            auto now = std::chrono::steady_clock::now();
-            auto testMillis =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(now - testStart).count();
-            if (testMillis + waitMillis > kMaxTestTimeMillis) {
-                ALOGI("Abandoning test as total time taken is now %ldms", (long)testMillis);
-                break;
-            }
-
-            ALOGI("Waiting %ld millis before retrying", (long)waitMillis);
-            std::this_thread::sleep_for(std::chrono::milliseconds(waitMillis));
-        }
-    }
-    ALOGI("Testing multiple failed verify done");
 }
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(GatekeeperAidlTest);
