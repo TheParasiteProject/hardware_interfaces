@@ -38,12 +38,15 @@ class BqrLinkQualityEventBase : public BqrEvent {
  public:
   explicit BqrLinkQualityEventBase(
       const ::bluetooth_hal::hci::HalPacket& packet);
-  ~BqrLinkQualityEventBase() = default;
+  virtual ~BqrLinkQualityEventBase() = default;
 
   // Checks if the BQR Link Quality Event is valid.
   // Overrides the base BqrEvent::IsValid to include Link Quality specific
   // checks.
   bool IsValid() const override;
+
+  // Returns the supported version of the BQR event.
+  virtual BqrVersion GetVersion() const;
 
   // Retrieves the Packet Type of the connection.
   uint8_t GetPacketTypes() const;
@@ -90,6 +93,7 @@ class BqrLinkQualityEventBase : public BqrEvent {
   void ParseData();
 
   bool is_valid_;
+  BqrVersion version_;
   uint8_t packet_types_;
   uint16_t connection_handle_;
   uint8_t connection_role_;

@@ -196,6 +196,7 @@ void VerifyV5(const BqrLinkQualityEventV5& packet) {
 void VerifyDefaultV3AndBackward(
     const BqrLinkQualityEventV3AndBackward& packet) {
   ASSERT_FALSE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kNone);
   ASSERT_EQ(packet.GetPacketTypes(), 0);
   ASSERT_EQ(packet.GetConnectionHandle(), 0);
   ASSERT_EQ(packet.GetConnectionRole(), 0);
@@ -221,6 +222,7 @@ void VerifyDefaultV4(const BqrLinkQualityEventV4& packet) {
 
   // Assertions for V4 specific fields
   ASSERT_FALSE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kNone);
   ASSERT_EQ(packet.GetTxTotalPackets(), 0);
   ASSERT_EQ(packet.GetTxUnackedPackets(), 0);
   ASSERT_EQ(packet.GetTxFlushedPackets(), 0);
@@ -234,6 +236,7 @@ void VerifyDefaultV5(const BqrLinkQualityEventV5& packet) {
 
   // Assertions for V5 specific fields
   ASSERT_FALSE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kNone);
   BluetoothAddress expected_remote_addr = {};
   ASSERT_EQ(packet.GetRemoteAddress(), expected_remote_addr);
   ASSERT_EQ(packet.GetCallFailedItemCount(), 0);
@@ -248,6 +251,7 @@ void VerifyDefaultV5(const BqrLinkQualityEventV5& packet) {
 void VerifyDefaultV6(const BqrLinkQualityEventV6& packet) {
   VerifyDefaultV5(packet);
   ASSERT_FALSE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kNone);
   ASSERT_EQ(packet.GetRxUnreceivedPackets(), 0);
   ASSERT_EQ(packet.GetCoexInfoMask(), 0);
 }
@@ -256,6 +260,7 @@ TEST(BqrLinkQualityEventTest, ValidV3PacketParsing) {
   auto packet =
       BqrLinkQualityEventV3AndBackward(CreateBqrLinkQualityEventV6V5V3());
   ASSERT_TRUE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kV1ToV3);
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
@@ -265,6 +270,7 @@ TEST(BqrLinkQualityEventTest, ValidV3PacketParsing) {
 TEST(BqrLinkQualityEventTest, ValidV4PacketParsing) {
   auto packet = BqrLinkQualityEventV4(CreateBqrLinkQualityEventV4());
   ASSERT_TRUE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kV4);
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
@@ -275,6 +281,7 @@ TEST(BqrLinkQualityEventTest, ValidV4PacketParsing) {
 TEST(BqrLinkQualityEventTest, ValidV5PacketParsing) {
   auto packet = BqrLinkQualityEventV5(CreateBqrLinkQualityEventV6V5V3());
   ASSERT_TRUE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kV5);
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
@@ -285,6 +292,7 @@ TEST(BqrLinkQualityEventTest, ValidV5PacketParsing) {
 TEST(BqrLinkQualityEventTest, ValidV6PacketParsing) {
   auto packet = BqrLinkQualityEventV6(CreateBqrLinkQualityEventV6V5V3());
   ASSERT_TRUE(packet.IsValid());
+  ASSERT_EQ(packet.GetVersion(), BqrVersion::kV6);
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 

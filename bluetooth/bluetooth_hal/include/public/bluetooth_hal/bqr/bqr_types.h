@@ -25,6 +25,7 @@ namespace bluetooth_hal {
 namespace bqr {
 
 enum class BqrVersion : uint8_t {
+  kNone = 0,
   kV1ToV3 = 3,
   kV4,
   kV5,

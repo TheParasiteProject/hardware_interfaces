@@ -222,10 +222,16 @@ uint32_t BqrLinkQualityEventBase::GetBufferUnderflowBytes() const {
   return buffer_underflow_bytes_;
 }
 
+BqrVersion BqrLinkQualityEventBase::GetVersion() const { return version_; }
+
 // BqrLinkQualityEventV3AndBackward
 BqrLinkQualityEventV3AndBackward::BqrLinkQualityEventV3AndBackward(
     const HalPacket& packet)
-    : BqrLinkQualityEventBase(packet) {}
+    : BqrLinkQualityEventBase(packet) {
+  if (is_valid_) {
+    version_ = BqrVersion::kV1ToV3;
+  }
+}
 
 bool BqrLinkQualityEventV3AndBackward::IsValid() const { return is_valid_; }
 
@@ -245,6 +251,7 @@ BqrLinkQualityEventV4::BqrLinkQualityEventV4(const HalPacket& packet)
 
 void BqrLinkQualityEventV4::ParseData() {
   if (is_valid_) {
+    version_ = BqrVersion::kV4;
     tx_total_packets_ =
         AtUint32LittleEndian(LinkQualityOffsetV4::kTxTotalPackets);
     tx_unacked_packets_ =
@@ -304,6 +311,7 @@ BqrLinkQualityEventV5::BqrLinkQualityEventV5(const HalPacket& packet)
 
 void BqrLinkQualityEventV5::ParseData() {
   if (is_valid_) {
+    version_ = BqrVersion::kV5;
     // Read each of the 6 bytes directly from the packet, little-endian.
     std::reverse_copy(
         begin() + static_cast<uint8_t>(LinkQualityOffsetV5::kRemoteAddr),
@@ -373,6 +381,7 @@ BqrLinkQualityEventV6::BqrLinkQualityEventV6(const HalPacket& packet)
 
 void BqrLinkQualityEventV6::ParseData() {
   if (is_valid_) {
+    version_ = BqrVersion::kV6;
     rx_unreceived_packets_ =
         AtUint32LittleEndian(LinkQualityOffsetV6::kRxUnreceivedPackets);
     coex_info_mask_ = AtUint16LittleEndian(LinkQualityOffsetV6::kCoexInfoMask);
