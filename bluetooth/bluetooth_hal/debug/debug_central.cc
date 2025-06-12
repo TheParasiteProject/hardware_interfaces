@@ -689,6 +689,7 @@ void DebugCentral::HandleRootInflammationEvent(
   if (!event.IsValid()) {
     LOG(ERROR) << __func__ << ": Invalid root inflammation event! "
                << event.ToString();
+    return;
   }
 
   uint8_t error_code = event.GetErrorCode();
