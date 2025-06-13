@@ -26,6 +26,10 @@
 #include "android-base/logging.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
 #include "bluetooth_hal/bqr/bqr_link_quality_event.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v1_to_v3.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v4.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v5.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v6.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -121,7 +125,7 @@ void BqrHandler::HandleRootInflammationEvent(const BqrEvent& bqr_event) {
 void BqrHandler::HandleLinkQualityEvent(const BqrEvent& bqr_event) {
   switch (local_supported_bqr_version_) {
     case BqrVersion::kV1ToV3: {
-      BqrLinkQualityEventV3AndBackward link_quality_event(bqr_event);
+      BqrLinkQualityEventV1ToV3 link_quality_event(bqr_event);
       LOG(INFO) << link_quality_event.ToString();
     } break;
     case BqrVersion::kV4: {
