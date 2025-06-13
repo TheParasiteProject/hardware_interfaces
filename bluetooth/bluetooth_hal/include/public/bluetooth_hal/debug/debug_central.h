@@ -18,6 +18,7 @@
 
 #include <signal.h>
 
+#include <cstdint>
 #include <list>
 #include <map>
 #include <sstream>
@@ -317,15 +318,10 @@ class DebugCentral {
   DebugMonitor debug_monitor_;
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
 
-  bool report_ssr_crash(uint8_t vendor_error_code);
-  bool is_hw_stage_supported();
-  void dump_hal_log(int fd);
-  void handle_bqr_fw_debug_data_dump(
-      const ::bluetooth_hal::hci::HalPacket& packet);
-  void handle_bqr_chre_debug_data_dump(
-      const ::bluetooth_hal::hci::HalPacket& packet);
-  void handle_bqr_event(const ::bluetooth_hal::hci::HalPacket& packet);
-  void start_crash_dump(bool slient_report, const std::string& reason);
+  void DumpBluetoothHalLog(int fd);
+  void GenerateCrashDump(bool slient_report, const std::string& reason);
+  bool OkToGenerateCrashDump(uint8_t error_code);
+  bool IsHardwareStageSupported();
 };
 
 class LogHelper {

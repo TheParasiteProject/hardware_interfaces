@@ -112,7 +112,7 @@ constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 constexpr uint8_t kReservedCoredumpFileCount = 2;
 
-std::string crash_file_create_timestamp() {
+std::string GetTimestampString() {
   time_t rawtime;
   time(&rawtime);
   struct tm* timeinfo = localtime(&rawtime);
@@ -128,7 +128,7 @@ std::string crash_file_create_timestamp() {
   return ss.str();
 }
 
-void copy_file(const std::string& SrcDir, const std::string& DestDir) {
+void CopyFile(const std::string& SrcDir, const std::string& DestDir) {
   std::ifstream src(SrcDir, std::ios::binary);
   std::ofstream dst(DestDir, std::ios::binary);
 
@@ -158,18 +158,18 @@ void copy_file(const std::string& SrcDir, const std::string& DestDir) {
   }
 }
 
-void backup_logging_files_before_crash(std::string crash_timestamp) {
+void BackupLogFiles(std::string crash_timestamp) {
   LOG(INFO) << __func__;
   if (crash_timestamp.empty()) {
-    crash_timestamp = crash_file_create_timestamp();
+    crash_timestamp = GetTimestampString();
   }
-  copy_file(kVendorSnoopLastFilePath,
-            kBackupVendorSnoopLastFilePath + "_" + crash_timestamp);
-  copy_file(kVendorSnoopFilePath,
-            kBackupVendorSnoopFilePath + "_" + crash_timestamp);
+  CopyFile(kVendorSnoopLastFilePath,
+           kBackupVendorSnoopLastFilePath + "_" + crash_timestamp);
+  CopyFile(kVendorSnoopFilePath,
+           kBackupVendorSnoopFilePath + "_" + crash_timestamp);
 }
 
-void dump_debugfs_to_fd(int fd, const std::string& debugfs) {
+void DumpDebugfs(int fd, const std::string& debugfs) {
   std::stringstream ss;
   std::ifstream file;
 
@@ -201,8 +201,8 @@ void read_as_hex(std::ifstream& file, std::stringstream& content) {
   }
 }
 
-void collect_sscd_logs(int fd, const std::string& prefix,
-                       const std::string& dir) {
+void GetStringLogFromStorage(int fd, const std::string& prefix,
+                             const std::string& dir) {
   std::unique_ptr<DIR, decltype(&closedir)> dir_dump(opendir(dir.c_str()),
                                                      closedir);
 
@@ -260,7 +260,7 @@ void collect_sscd_logs(int fd, const std::string& prefix,
   write(fd, content.str().c_str(), content.str().length());
 }
 
-int open_firmware_dump_file(const std::string& crash_timestamp) {
+int OpenFileWithTimestamp(const std::string& crash_timestamp) {
   std::stringstream fname;
   fname << kSocdumpFilePath << crash_timestamp << ".bin";
   int socdump_fd;
@@ -278,25 +278,7 @@ int open_firmware_dump_file(const std::string& crash_timestamp) {
   return socdump_fd;
 }
 
-int open_lpp_chre_dump_file(const std::string& crash_timestamp) {
-  std::stringstream fname;
-  fname << kChredumpFilePath << crash_timestamp << ".bin";
-  int chredump_fd;
-  if ((chredump_fd =
-           open(fname.str().c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
-                S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
-    LOG(ERROR) << __func__ << ": Failed to open chredump file: " << fname.str()
-               << ", failed: " << strerror(errno) << " (" << errno << ")";
-  }
-  // Change the file's permissions to OWNER Read/Write, GROUP Read, OTHER Read
-  if (chmod(fname.str().c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
-    LOG(ERROR) << __func__ << ": Unable to change file permissions "
-               << fname.str() << ".";
-  }
-  return chredump_fd;
-}
-
-bool is_coredump_file(const std::string& filename) {
+bool IsCoredumpFile(const std::string& filename) {
   return filename.find("coredump_bt_") == 0 &&
          filename.find(".bin") == filename.size() - 4;
 }
@@ -306,17 +288,17 @@ struct CoredumpFile {
   time_t timestamp;
 };
 
-bool compare_file_create_time(const CoredumpFile& a, const CoredumpFile& b) {
+bool CompareFileCreatedTime(const CoredumpFile& a, const CoredumpFile& b) {
   return a.timestamp < b.timestamp;
 }
 
-void delete_coredump_files(const std::string& dir) {
+void DeleteCoredumpFiles(const std::string& dir) {
   std::vector<CoredumpFile> coredumpfiles;
   DIR* dir_ptr = opendir(dir.c_str());
   if (dir_ptr != nullptr) {
     struct dirent* entry;
     while ((entry = readdir(dir_ptr)) != nullptr) {
-      if (is_coredump_file(entry->d_name)) {
+      if (IsCoredumpFile(entry->d_name)) {
         struct stat statbuf;
         stat((dir + "/" + entry->d_name).c_str(), &statbuf);
         coredumpfiles.push_back({entry->d_name, statbuf.st_mtime});
@@ -325,7 +307,7 @@ void delete_coredump_files(const std::string& dir) {
     closedir(dir_ptr);
   }
 
-  sort(coredumpfiles.begin(), coredumpfiles.end(), compare_file_create_time);
+  sort(coredumpfiles.begin(), coredumpfiles.end(), CompareFileCreatedTime);
   LOG(INFO) << __func__ << ": Coredump files count: " << coredumpfiles.size()
             << ".";
   if (coredumpfiles.size() > kReservedCoredumpFileCount) {
@@ -440,22 +422,22 @@ DebugCentral& DebugCentral::Get() {
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
-  dump_hal_log(fd);
+  DumpBluetoothHalLog(fd);
   if (TransportInterface::GetTransportType() == TransportType::kUartH4) {
     // Dump Kernel driver debugfs log
-    dump_debugfs_to_fd(fd, serial_debug_port_);
-    dump_debugfs_to_fd(fd, kDebugNodeBtLpm);
+    DumpDebugfs(fd, serial_debug_port_);
+    DumpDebugfs(fd, kDebugNodeBtLpm);
   }
   // Dump all crashinfo_bt files in ssrdump folder
-  collect_sscd_logs(fd, kCrashInfoFilePrefix, kCrashInfoFilePath);
+  GetStringLogFromStorage(fd, kCrashInfoFilePrefix, kCrashInfoFilePath);
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  collect_sscd_logs(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
+  GetStringLogFromStorage(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
   // Dump Controller BT Activities Statistics
   BtActivitiesLogger::GetInstacne()->ForceUpdating();
   BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
-  delete_coredump_files(kSsrdumpFilePath);
+  DeleteCoredumpFiles(kSsrdumpFilePath);
 }
 
 void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
@@ -496,13 +478,13 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   // report bqr root inflamed event to Stack
   HciRouter::GetRouter().SendPacketToStack(bqr_event);
 
-  if (report_ssr_crash(static_cast<uint8_t>(error))) {
-    start_crash_dump(false,
-                     kDumpReasonControllerRootInflammed + " (" +
-                         StringPrintf("error_code: 0x%02hhX",
-                                      static_cast<unsigned char>(error)) +
-                         ")" + " - " + get_error_code_string(error));
-    backup_logging_files_before_crash(crash_timestamp_);
+  if (OkToGenerateCrashDump(static_cast<uint8_t>(error))) {
+    GenerateCrashDump(false,
+                      kDumpReasonControllerRootInflammed + " (" +
+                          StringPrintf("error_code: 0x%02hhX",
+                                       static_cast<unsigned char>(error)) +
+                          ")" + " - " + get_error_code_string(error));
+    BackupLogFiles(crash_timestamp_);
     LogFatal(error, extra_info);
   } else {
     LOG(ERROR) << __func__ << ": Silent recover!";
@@ -521,13 +503,13 @@ void DebugCentral::HandleDebugInfoCommand() {
           LOG(ERROR) << __func__
                      << ": Force a coredump to be generated if it has not been "
                         "generated for 1 second.";
-          start_crash_dump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
+          GenerateCrashDump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
         }
       },
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
 
-bool DebugCentral::is_hw_stage_supported() {
+bool DebugCentral::IsHardwareStageSupported() {
   std::string cur_hw_stage = ::android::base::GetProperty(kHwStage, "default");
   std::vector<std::string> not_supported_hw_stages =
       HalConfigLoader::GetLoader().GetFwUnsupportedHwStages();
@@ -538,16 +520,16 @@ bool DebugCentral::is_hw_stage_supported() {
                       }) == not_supported_hw_stages.end();
 }
 
-bool DebugCentral::report_ssr_crash(uint8_t vendor_error_code) {
+bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   // Report scenario:
   // 1) report ssr crash when bt is on
   // 2) report ssr crash when bt is off, thread is enabled, and supports
   // accelerated bt on
 
-  bool is_major_fault = (static_cast<BqrErrorCode>(vendor_error_code) ==
+  bool is_major_fault = (static_cast<BqrErrorCode>(error_code) ==
                          BqrErrorCode::FIRMWARE_MISCELLANEOUS_MAJOR_FAULT);
 
-  if (is_major_fault || !is_hw_stage_supported()) {
+  if (is_major_fault || !IsHardwareStageSupported()) {
     return false;
   }
 
@@ -558,7 +540,7 @@ bool DebugCentral::report_ssr_crash(uint8_t vendor_error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-void DebugCentral::dump_hal_log(int fd) {
+void DebugCentral::DumpBluetoothHalLog(int fd) {
   std::stringstream ss;
 
   ss << "=============================================" << std::endl;
@@ -602,14 +584,14 @@ void DebugCentral::HandleRootInflammationEvent(
              << std::setfill('0') << static_cast<int>(vendor_error_code)
              << ").";
   // For some vendor error codes that we do not generate a crash dump.
-  if (report_ssr_crash(vendor_error_code)) {
-    start_crash_dump(
+  if (OkToGenerateCrashDump(vendor_error_code)) {
+    GenerateCrashDump(
         false, kDumpReasonControllerRootInflammed + " (" +
                    StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
                    ")" + " - " +
                    get_error_code_string(
                        static_cast<BqrErrorCode>(vendor_error_code)));
-    backup_logging_files_before_crash(crash_timestamp_);
+    BackupLogFiles(crash_timestamp_);
   }
 }
 
@@ -621,19 +603,19 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 
   if (crash_timestamp_.empty()) {
-    start_crash_dump(is_hw_stage_supported() ? false : true,
-                     kDumpReasonControllerDebugInfo + " (BtFw)");
+    GenerateCrashDump(IsHardwareStageSupported() ? false : true,
+                      kDumpReasonControllerDebugInfo + " (BtFw)");
   }
 
   // the Last soc dump debug info packet has been received
   if (packet[kDebugInfoLastBlockOffset]) {
     LOG(INFO) << __func__ << ": Last soc dump fragment has been received.";
-    backup_logging_files_before_crash(crash_timestamp_);
+    BackupLogFiles(crash_timestamp_);
     last_soc_dump_packet = true;
   }
 
   int socdump_fd;
-  if ((socdump_fd = open_firmware_dump_file(crash_timestamp_)) < 0) {
+  if ((socdump_fd = OpenFileWithTimestamp(crash_timestamp_)) < 0) {
     return;
   }
 
@@ -653,101 +635,8 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 }
 
-void DebugCentral::handle_bqr_fw_debug_data_dump(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__
-                 << ": Invalid length of bqr debug firmware dump event!";
-    return;
-  }
-
-  if (crash_timestamp_.empty()) {
-    LOG(ERROR) << __func__
-               << ": Did not receive Root Inflammation event before FW Dump!";
-    start_crash_dump(
-        is_hw_stage_supported() ? false : true,
-        kDumpReasonControllerDebugDumpWithoutRootInflammed + " (BtFw)");
-  }
-
-  int socdump_fd;
-  if ((socdump_fd = open_firmware_dump_file(crash_timestamp_)) < 0) {
-    return;
-  }
-
-  size_t ret = 0;
-  if ((ret = TEMP_FAILURE_RETRY(
-           write(socdump_fd, packet.data(), packet.size()))) < 0) {
-    LOG(ERROR) << __func__ << ": Error writing to dest file: " << ret << " ("
-               << strerror(errno) << ").";
-  }
-
-  close(socdump_fd);
-}
-
-void DebugCentral::handle_bqr_chre_debug_data_dump(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__
-                 << ": Invalid length of bqr chre debug dump event!";
-    return;
-  }
-
-  if (crash_timestamp_.empty()) {
-    LOG(ERROR) << __func__
-               << ": Did not receive Root Inflammation event before CHRE Dump!";
-    start_crash_dump(false, kDumpReasonControllerDebugDumpWithoutRootInflammed +
-                                " (BtChre)");
-  }
-
-  std::vector<uint8_t> payload(packet.size());
-  memcpy(payload.data(), packet.data(), packet.size());
-  chredump_.push(payload);
-
-  // Cache Chre dump in DEBUG_INFO event, dump to file if last fragment.
-  uint16_t last_block;
-  last_block =
-      packet[kChreDebugDumpLastBlockOffsetSecondByte] +
-      ((packet[kChreDebugDumpLastBlockOffsetFisrtByte] << 8u) & 0xFF00);
-
-  if (last_block != 0x5A00) {
-    return;
-  }
-  LOG(INFO) << __func__ << ": Last Chre dump packet has been received.";
-
-  int chredump_fd;
-  if ((chredump_fd = open_lpp_chre_dump_file(crash_timestamp_)) < 0) {
-    return;
-  }
-
-  size_t bytes_written = 0;
-  size_t ret = 0;
-  while (!chredump_.empty()) {
-    std::vector<uint8_t>& segment = chredump_.front();
-    if ((ret = TEMP_FAILURE_RETRY(
-             write(chredump_fd, segment.data(), segment.size()))) < 0) {
-      LOG(ERROR) << __func__ << ": Error writing to dest file: " << ret << " ("
-                 << strerror(errno) << ").";
-      break;
-    }
-    if (ret != segment.size()) {
-      LOG(ERROR) << __func__ << ": Actual write (" << ret
-                 << " bytes) is not the same with expected write "
-                 << "(" << segment.size() << " bytes) size.";
-    }
-    bytes_written += ret;
-    chredump_.pop();
-  }
-  LOG(INFO) << __func__ << ": Total written " << bytes_written << " bytes.";
-
-  if (!chredump_.empty()) {
-    LOG(WARNING) << __func__ << ": There are " << chredump_.size()
-                 << " segments not be saved.";
-    chredump_ = {};
-  }
-
-  close(chredump_fd);
-}
-
-void DebugCentral::start_crash_dump(bool slient_report,
-                                    const std::string& reason) {
+void DebugCentral::GenerateCrashDump(bool silent_report,
+                                     const std::string& reason) {
   if (!crash_timestamp_.empty()) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
@@ -755,8 +644,8 @@ void DebugCentral::start_crash_dump(bool slient_report,
   }
 
   LOG(ERROR) << __func__ << ": Reason: " << reason.c_str()
-             << ", slient_report:" << slient_report << ".";
-  crash_timestamp_ = crash_file_create_timestamp();
+             << ", silent_report:" << silent_report << ".";
+  crash_timestamp_ = GetTimestampString();
   std::stringstream coredump_fname;
   coredump_fname << kSsrdumpFilePath << kSsrdumpFilePrefix << crash_timestamp_
                  << ".bin";
@@ -779,12 +668,12 @@ void DebugCentral::start_crash_dump(bool slient_report,
      << crash_timestamp_ << std::endl;
   write(coredump_fd, ss.str().c_str(), ss.str().length());
 
-  dump_hal_log(coredump_fd);
+  DumpBluetoothHalLog(coredump_fd);
   LOG(INFO) << __func__ << ": Request to get Transport Layer Debug Dump.";
   // TODO: b/373786258 - Need to dump debug info.
   close(coredump_fd);
 
-  if (slient_report) {
+  if (silent_report) {
     return;
   }
   // generate crashinfo file
