@@ -237,18 +237,6 @@ class DebugCentral {
    */
   static DebugCentral& Get();
 
-#if 0
-  /*
-   * Start to monitor error event
-   */
-  void StartMonitor(hci::HciFlowControl* handle);
-
-  /*
-   * Stop to monitor error event
-   */
-  void StopMonitor();
-#endif
-
   /*
    * Invokes when bugreport is triggered, dump all information to the debug fd.
    */
@@ -316,7 +304,6 @@ class DebugCentral {
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
-  bool hijack_event_ = false;
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;

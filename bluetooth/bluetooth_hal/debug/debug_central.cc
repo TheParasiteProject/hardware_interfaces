@@ -38,7 +38,6 @@
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
-#include "bluetooth_hal/debug/bluetooth_bqr.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hci_router.h"
@@ -347,14 +346,6 @@ namespace debug {
 
 using ::android::base::StringPrintf;
 using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
-using ::bluetooth_hal::debug::BqrQualityReportId;
-using ::bluetooth_hal::debug::BtActivitiesLogger;
-using ::bluetooth_hal::debug::BtBqrEnergyRecoder;
-using ::bluetooth_hal::debug::ParseAdvanceRFStatsEvt;
-using ::bluetooth_hal::debug::ParseLinkQualityRelatedEvt;
-using ::bluetooth_hal::debug::ParseVendorSpecificQualityEvt;
-using ::bluetooth_hal::debug::ParseVendorSpecificTraceEvt;
-using ::bluetooth_hal::debug::updateControllerCapability;
 
 void LogFatal(BqrErrorCode error, std::string extra_info);
 const std::string get_error_code_string(BqrErrorCode error_code);
@@ -595,95 +586,6 @@ void DebugCentral::dump_hal_log(int fd) {
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
-void DebugCentral::handle_bqr_event(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__ << ": Invalid length of BQR event!";
-    return;
-  }
-  auto quality_report_id =
-      static_cast<BqrQualityReportId>(packet[kBqrReportIdOffset]);
-  switch (quality_report_id) {
-    case BqrQualityReportId::kMonitorMode:
-      [[fallthrough]];
-    case BqrQualityReportId::kApproachLsto:
-      [[fallthrough]];
-    case BqrQualityReportId::kA2dpAudioChoppy:
-      [[fallthrough]];
-    case BqrQualityReportId::kScoVoiceChoppy:
-      [[fallthrough]];
-    case BqrQualityReportId::kLeAudioChoppy:
-      ParseLinkQualityRelatedEvt(packet);
-      break;
-
-    case BqrQualityReportId::kRootInflammation: {
-      uint8_t error_code = packet[kBqrInflamedErrorCode];
-      uint8_t vendor_error_code = packet[kBqrInflamedVendorErrCode];
-      LOG(ERROR) << __func__ << ": Received Root Inflammation event! (0x"
-                 << std::hex << std::setw(2) << std::setfill('0')
-                 << static_cast<int>(error_code) << std::setw(2)
-                 << std::setfill('0') << static_cast<int>(vendor_error_code)
-                 << ").";
-      // for some vendor error code event that we do not report root inflamed
-      // event
-      if (report_ssr_crash(vendor_error_code)) {
-        start_crash_dump(
-            false,
-            kDumpReasonControllerRootInflammed + " (" +
-                StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
-                ")" + " - " +
-                get_error_code_string(
-                    static_cast<BqrErrorCode>(vendor_error_code)));
-        backup_logging_files_before_crash(crash_timestamp_);
-        hijack_event_ = false;
-      } else {
-        hijack_event_ = true;
-      }
-      break;
-    }
-
-    // Just logs to vnd snoop and skips reporting to stack
-    case BqrQualityReportId::kEnergyMonitoring:
-      BtBqrEnergyRecoder::GetInstacne()->ParseBqrEnergyMonitorEvt(packet);
-      hijack_event_ = true;
-      break;
-
-    case BqrQualityReportId::kControllerDbgInfo: {
-      handle_bqr_fw_debug_data_dump(packet);
-      hijack_event_ = true;
-      break;
-    }
-
-    case BqrQualityReportId::kAdvanceRfStats:
-      [[fallthrough]];
-    case BqrQualityReportId::kAdvanceRfStatsPeriodic:
-      ParseAdvanceRFStatsEvt(packet);
-      hijack_event_ = true;
-      break;
-    case BqrQualityReportId::kControllerHealthMonitor:
-      [[fallthrough]];
-    case BqrQualityReportId::kControllerHealthMonitorPeriodic:
-      ParseControllerHealthMonitorEvt(packet);
-      hijack_event_ = true;
-      break;
-    case BqrQualityReportId::kChreDbgInfo: {
-      handle_bqr_chre_debug_data_dump(packet);
-      hijack_event_ = true;
-      break;
-    }
-    case BqrQualityReportId::kVendorSpecificTrace: {
-      ParseVendorSpecificTraceEvt(packet);
-      break;
-    }
-    case BqrQualityReportId::kVendorSpecificQuality: {
-      ParseVendorSpecificQualityEvt(packet);
-      break;
-    }
-    default: {
-      break;
-    }
-  }
-}
-
 void DebugCentral::HandleRootInflammationEvent(
     const BqrRootInflammationEvent& event) {
   if (!event.IsValid()) {
@@ -842,7 +744,6 @@ void DebugCentral::handle_bqr_chre_debug_data_dump(const HalPacket& packet) {
   }
 
   close(chredump_fd);
-  hijack_event_ = true;
 }
 
 void DebugCentral::start_crash_dump(bool slient_report,
