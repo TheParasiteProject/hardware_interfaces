@@ -465,13 +465,15 @@ void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
     history_record_.pop_front();
   }
   history_record_.push_back(log_entry);
-  lasttime_record_[type] = log_entry;
+  if (type != AnchorType::BT_LOG) {
+    lasttime_record_[type] = log_entry;
+  }
 }
 
 void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   HalPacket bqr_event({0xff, 0x04, 0x58, 0x05, 0x00, (uint8_t)error});
   // collect debug dump and popup ssrdump notification UI
-  ONE_TIME_LOGGER(AnchorType::BQR_ERR_MSG, "%s", extra_info.c_str());
+  BT_LOG(ERROR) << extra_info;
   LOG(ERROR) << __func__ << ": Root inflamed event with error_code: ("
              << static_cast<uint8_t>(error) << "), error_info: " << extra_info
              << ".";

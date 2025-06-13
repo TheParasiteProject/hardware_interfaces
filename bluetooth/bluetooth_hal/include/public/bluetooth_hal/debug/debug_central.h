@@ -128,19 +128,8 @@ enum class AnchorType : uint8_t {
   HW_ERR_EVT,
   DEBUG_INFO,
   BTHAL_EXT_INJECT,
+  BT_LOG = 255,
 };
-
-/*
- * ONE_TIME_LOGGER is used to record HAL log messages in any places in codes and
- * send to DebugCentral.
- * @deprecated
- */
-#define ONE_TIME_LOGGER(type, fmt, ...)                \
-  do {                                                 \
-    char log[128] = {0};                               \
-    std::snprintf(log, sizeof(log), fmt, __VA_ARGS__); \
-    DebugCentral::Get().UpdateRecord(type, log);       \
-  } while (0)
 
 /*
  * DURATION_TRACKER is used to log the Enter and Exit of a HAL function and
@@ -158,21 +147,40 @@ enum class AnchorType : uint8_t {
  * ANCHOR_LOG* is used to log a message with a specific severity level
  * and send it to DebugCentral. It takes an anchor type as input.
  */
-#define ANCHOR_LOG(type)                            \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::VERBOSE))
-#define ANCHOR_LOG_DEBUG(type)                      \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::DEBUG))
+#define ANCHOR_LOG(type)                                                \
+  ([](auto&& logger) -> auto&& { return logger; })(                     \
+      ::bluetooth_hal::debug::LogHelper(type, ::android::base::VERBOSE, \
+                                        LOG_TAG))
+#define ANCHOR_LOG_DEBUG(type)   \
+  ([](auto&& logger) -> auto&& { \
+    return logger;               \
+  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::DEBUG, LOG_TAG))
 #define ANCHOR_LOG_INFO(type)                       \
   ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::INFO))
-#define ANCHOR_LOG_WARNING(type)                    \
+      ::bluetooth_hal::debug::LogHelper(type, ::android::base::INFO, LOG_TAG))
+#define ANCHOR_LOG_WARNING(type)                                        \
+  ([](auto&& logger) -> auto&& { return logger; })(                     \
+      ::bluetooth_hal::debug::LogHelper(type, ::android::base::WARNING, \
+                                        LOG_TAG))
+#define ANCHOR_LOG_ERROR(type)   \
+  ([](auto&& logger) -> auto&& { \
+    return logger;               \
+  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::ERROR, LOG_TAG))
+
+/*
+ * BT_LOG pinrts system log, as well as stores it in the DebugCentral for Dump()
+ */
+#define BT_LOG(severity)                            \
   ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::WARNING))
-#define ANCHOR_LOG_ERROR(type)                      \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::ERROR))
+      ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
+
+/*
+ * Helper mecro for LogHelper to print system log with a specific tag.
+ */
+#define LOG_WITH_TAG(severity, tag)                                          \
+  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
+                              tag, -1)                                       \
+      .stream()
 
 namespace bluetooth_hal {
 namespace debug {
@@ -326,8 +334,12 @@ class DebugCentral {
 
 class LogHelper {
  public:
-  LogHelper(AnchorType type, ::android::base::LogSeverity severity)
-      : type_(type), severity_(severity) {}
+  LogHelper(AnchorType type, ::android::base::LogSeverity severity,
+            const char* tag)
+      : type_(type), severity_(severity), tag_(tag) {}
+
+  LogHelper(::android::base::LogSeverity severity, const char* tag)
+      : type_(AnchorType::BT_LOG), severity_(severity), tag_(tag) {}
 
   template <typename T>
   LogHelper& operator<<(const T& value) {
@@ -343,7 +355,7 @@ class LogHelper {
 #else
       DebugCentral::Get().UpdateRecord(type_, log_message);
 #endif
-      LOG(severity_) << log_message;
+      LOG_WITH_TAG(severity_, tag_) << log_message;
     }
   }
 
@@ -351,6 +363,7 @@ class LogHelper {
   AnchorType type_;
   ::android::base::LogSeverity severity_;
   std::ostringstream oss_;
+  const char* tag_;
 };
 
 }  // namespace debug
