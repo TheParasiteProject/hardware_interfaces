@@ -95,6 +95,32 @@ class HalPacket : public std::vector<uint8_t> {
   }
 
   /**
+   * @brief Support getting four bytes starting at an offset in little endian.
+   *
+   * @param offset Template of the offset, can be enum or other numeric types.
+   * @return the two bytes starting at the offset in little endian uint32_t.
+   *
+   */
+  template <typename T>
+  uint32_t AtUint32LittleEndian(T offset) const {
+    size_t start_index = static_cast<size_t>(offset);
+    constexpr int kNumOfBytes = sizeof(uint32_t);  // This will be 4
+
+    // Check if we have enough bytes remaining from the offset
+    if (start_index + (kNumOfBytes - 1) >= size()) {
+      return 0;  // Or handle error appropriately, e.g., throw an exception
+    }
+
+    uint32_t result = 0;
+    for (int i = 0; i < kNumOfBytes; ++i) {
+      uint8_t byte = at(start_index + i);
+      result |= (static_cast<uint32_t>(byte) << (i * 8));
+    }
+
+    return result;
+  }
+
+  /**
    * @brief Support getting eight bytes starting at an offset in little endian.
    *
    * @param offset Template of the offset, can be enum or other numeric types.

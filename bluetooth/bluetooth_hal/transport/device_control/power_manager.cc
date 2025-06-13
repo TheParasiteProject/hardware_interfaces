@@ -108,8 +108,8 @@ bool PowerManager::PowerControl(bool is_enabled) {
     LOG(ERROR) << __func__ << ": Unable to open rfkill state {" << state_path
                << "}: " << strerror(errno) << " (" << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get()->ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
-                                        "Unable to open rfkill state");
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+                                       "Unable to open rfkill state");
 #endif
     return false;
   }
@@ -127,8 +127,8 @@ bool PowerManager::PowerControl(bool is_enabled) {
                << ": Failed to change rfkill state: " << strerror(errno) << " ("
                << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get()->ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
-                                        "Cannot write power control data");
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+                                       "Cannot write power control data");
 #endif
     return false;
   }

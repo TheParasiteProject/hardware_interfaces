@@ -264,7 +264,7 @@ ScopedAStatus BluetoothHci::close() {
 binder_status_t BluetoothHci::dump(int fd, const char**, uint32_t) {
   LOG(INFO) << __func__ << ": Dump debug log";
 #ifndef UNIT_TEST
-  DebugCentral::Get()->Dump(fd);
+  DebugCentral::Get().Dump(fd);
 #endif
   fsync(fd);
   return STATUS_OK;

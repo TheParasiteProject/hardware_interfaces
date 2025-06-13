@@ -203,6 +203,14 @@ class TxHandler {
 
     VndSnoopLogger::GetLogger().Capture(packet,
                                         VndSnoopLogger::Direction::kOutgoing);
+    if (HciRouterClientAgent::GetAgent().DispatchPacketToClients(packet) ==
+        MonitorMode::kIntercept) {
+      // TODO: b/417582927 - Should force the client to provide an event if a
+      // command is intercepted.
+      LOG(INFO) << __func__ << ": packet intercepted by a client, "
+                << packet.ToString();
+      return true;
+    }
 
     return TransportInterface::GetTransport().Send(packet);
   }
@@ -409,6 +417,13 @@ bool HciRouterImpl::Send(const HalPacket& packet) {
 
 bool HciRouterImpl::SendCommand(const HalPacket& packet,
                                 const HalPacketCallback& callback) {
+  if (packet.GetCommandOpcode() ==
+      static_cast<uint16_t>(CommandOpCode::kGoogleDebugInfo)) {
+    // Skip HCI queue for Google Debug Info command, as it is designed to ignore
+    // the HCI command credit.
+    SendCommandNoAck(packet);
+    return true;
+  }
   tx_handler_->Post(TxTask::SendOrQueueCommand(
       packet, std::make_shared<HalPacketCallback>(callback)));
   return true;

@@ -88,7 +88,7 @@ bool UartManager::Open() {
       HalConfigLoader::GetLoader().GetBtUartDevicePort();
 
 #ifndef UNIT_TEST
-  DebugCentral::Get()->SetBtUartDebugPort(bt_uart_port);
+  DebugCentral::Get().SetBtUartDebugPort(bt_uart_port);
 #endif
 
   ANCHOR_LOG(AnchorType::USERIAL_TTY_OPEN)
@@ -98,8 +98,8 @@ bool UartManager::Open() {
       SystemCallWrapper::GetWrapper().Open(bt_uart_port.c_str(), O_RDWR));
   if (!uart_fd_.ok()) {
 #ifndef UNIT_TEST
-    DebugCentral::Get()->ReportBqrError(BqrErrorCode::HOST_OPEN_USERIAL,
-                                        "Host Open Port Error");
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_OPEN_USERIAL,
+                                       "Host Open Port Error");
 #endif
     return false;
   }
