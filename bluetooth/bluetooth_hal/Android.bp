@@ -420,10 +420,42 @@ cc_test {
         "config/hal_config_loader_test.cc",
         ":test_mock_transport_srcs",
         ":test_mock_util_srcs",
+    ],
+    static_libs: [
+        "libgmock",
+        "hal_proto_lib",
+    ],
+    shared_libs: [
+        "libbase",
+        "libprotobuf-cpp-full",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_cs_config_loader_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
         "config/cs_config_loader.cc",
         "config/cs_config_loader_test.cc",
+        ":test_mock_util_srcs",
+    ],
+    static_libs: [
+        "libgmock",
+        "hal_proto_lib",
+    ],
+    shared_libs: [
+        "libbase",
+        "libprotobuf-cpp-full",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_firmware_config_loader_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
         "config/firmware_config_loader.cc",
         "config/firmware_config_loader_test.cc",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",
