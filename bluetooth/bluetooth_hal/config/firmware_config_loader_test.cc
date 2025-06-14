@@ -24,6 +24,7 @@
 
 #include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/test/common/test_helper.h"
 #include "bluetooth_hal/test/mock/mock_android_base_wrapper.h"
 #include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
 #include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
@@ -46,6 +47,7 @@ using ::testing::WithParamInterface;
 using ::bluetooth_hal::config::MockHalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::transport::TransportType;
+using ::bluetooth_hal::util::MatcherFactory;
 using ::bluetooth_hal::util::MockAndroidBaseWrapper;
 using ::bluetooth_hal::util::MockSystemCallWrapper;
 
@@ -243,6 +245,111 @@ TEST_F(FirmwareConfigLoaderTestBase, DumpConfigToString) {
   dump = FirmwareConfigLoader::GetLoader().DumpConfigToString();
   EXPECT_NE(dump.find("Active Configuration for Transport Type: 100"),
             std::string::npos);
+}
+
+TEST_F(FirmwareConfigLoaderTestBase, LoadMultiTransportConfigAndSelect) {
+  std::vector<TransportType> priority_list = {
+      TransportType::kUartH4,
+      static_cast<TransportType>(TransportType::kVendorStart)};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kMultiTransportValidContent));
+
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(), 51);
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLaunchRamDelayMs(), 251);
+  auto reset_cmd = FirmwareConfigLoader::GetLoader().GetSetupCommandPacket(
+      SetupCommandType::kReset);
+  EXPECT_TRUE(reset_cmd.has_value());
+  EXPECT_EQ(reset_cmd.value().get().GetPayload(),
+            std::vector<uint8_t>({0x01, 0x03, 0x0c, 0x00}));
+
+  // Select the vendor transport (type 100).
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().SelectFirmwareConfiguration(
+      static_cast<TransportType>(TransportType::kVendorStart)));
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(), 71);
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLaunchRamDelayMs(), 301);
+  auto baud_rate_cmd = FirmwareConfigLoader::GetLoader().GetSetupCommandPacket(
+      SetupCommandType::kUpdateChipBaudRate);
+  EXPECT_TRUE(baud_rate_cmd.has_value());
+  EXPECT_EQ(baud_rate_cmd.value().get().GetPayload(),
+            std::vector<uint8_t>(
+                {0x01, 0x18, 0xfc, 0x06, 0x00, 0x00, 0x00, 0x09, 0x3d, 0x00}));
+
+  auto non_existent_cmd =
+      FirmwareConfigLoader::GetLoader().GetSetupCommandPacket(
+          SetupCommandType::kReset);
+  EXPECT_FALSE(non_existent_cmd.has_value());
+}
+
+TEST_F(FirmwareConfigLoaderTestBase, SelectNonExistentTransport) {
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kMultiTransportValidContent));
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(),
+            51);  // kUartH4 selected.
+
+  EXPECT_FALSE(FirmwareConfigLoader::GetLoader().SelectFirmwareConfiguration(
+      static_cast<TransportType>(200)));
+
+  // Active config is reset.
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(),
+            cfg_consts::kDefaultLoadMiniDrvDelayMs);
+}
+
+TEST_F(FirmwareConfigLoaderTestBase, LoadConfigWithEmptyFirmwareConfigs) {
+  constexpr std::string_view kEmptyFirmwareConfigs =
+      R"({"firmware_configs": []})";
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kEmptyFirmwareConfigs));
+
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(),
+            cfg_consts::kDefaultLoadMiniDrvDelayMs);
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLaunchRamDelayMs(),
+            cfg_consts::kDefaultLaunchRamDelayMs);
+  auto cmd = FirmwareConfigLoader::GetLoader().GetSetupCommandPacket(
+      SetupCommandType::kReset);
+  EXPECT_FALSE(cmd.has_value());
+}
+
+TEST_F(FirmwareConfigLoaderTestBase,
+       ResetFirmwareDataLoadingStateWithActiveConfig) {
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kMultiTransportValidContent));
+
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/uart/fw/uart_fw.bin"), _))
+      .WillOnce(Return(123));
+
+  EXPECT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+}
+
+TEST_F(FirmwareConfigLoaderTestBase,
+       ResetFirmwareDataLoadingStateNoActiveConfig) {
+  constexpr std::string_view kEmptyFirmwareConfigs =
+      R"({"firmware_configs": []})";
+  std::vector<TransportType> priority_list = {};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kEmptyFirmwareConfigs));
+  EXPECT_CALL(mock_system_call_wrapper_, Open(_, _)).Times(0);
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
 }
 
 TEST(FirmwarePacketTest, HandleDifferentFirmwarePacketType) {
