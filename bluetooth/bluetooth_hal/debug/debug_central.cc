@@ -39,6 +39,7 @@
 #include "bluetooth_hal/debug/bluetooth_bqr.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hci_router.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/util/logging.h"
 
@@ -46,6 +47,7 @@ namespace {
 
 using ::bluetooth_hal::config::HalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
+using ::bluetooth_hal::hci::HciRouter;
 using ::bluetooth_hal::thread::ThreadHandler;
 using ::bluetooth_hal::transport::TransportInterface;
 using ::bluetooth_hal::transport::TransportType;
@@ -421,12 +423,11 @@ const std::map<BqrErrorCode, std::string> error_code_string = {
      "Arbitrator Detected Invalid Packet Size (BtChre)"},
 };
 
-DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor,
-                         DebugCentral& debugcentral)
-    : debugcentral_(&debugcentral), anchor_(anchor), type_(type) {
+DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
+    : anchor_(anchor), type_(type) {
   std::stringstream ss;
   ss << anchor << " [ IN]";
-  debugcentral_->UpdateRecord(type_, ss.str());
+  DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
 DebugAnchor::~DebugAnchor() {
@@ -435,54 +436,15 @@ DebugAnchor::~DebugAnchor() {
   }
   std::stringstream ss;
   ss << anchor_ << " [OUT]";
-  debugcentral_->UpdateRecord(
+  DebugCentral::Get().UpdateRecord(
       static_cast<AnchorType>(static_cast<uint8_t>(type_) + 1), ss.str());
   anchor_.clear();
 }
 
-// Keep this section for future refactory from HciFlowControl to
-// HciRouterClient.
-#if 0
-namespace {
-
-using WatcherCallback = std::function<bool(const HalPacket&)>;
-
-class DebugEventWatcher : public hci::HciEventWatcher {
- public:
-  DebugEventWatcher(const char* tag, hci::HciFlowControl* handle,
-                    uint16_t event_code, uint16_t command_opcode,
-                    WatcherCallback callback)
-      : HciEventWatcher(tag, event_code, command_opcode, false, true),
-        callback_(callback),
-        hci_handle_(handle) {
-    hci_handle_->RegisterEventWatcher(this);
-  }
-
-  ~DebugEventWatcher() { hci_handle_->UnregisterEventWatcher(this); }
-
-  bool OnEventReceive(const hci::HalPacket& event) {
-    bool hijack_event = false;
-    if (callback_ != nullptr) {
-      hijack_event = callback_(event);
-    }
-    return hijack_event;
-  }
-  bool OnEventPost(const hci::HalPacket& event) {
-    (void)event;
-    return true;
-  }
-
- private:
-  WatcherCallback callback_;
-  hci::HciFlowControl* hci_handle_;
-};
-
-}  // namespace
-#endif
-
-DebugCentral DebugCentral::instance_;
-
-DebugCentral* DebugCentral::Get() { return &instance_; }
+DebugCentral& DebugCentral::Get() {
+  static DebugCentral debug_central;
+  return debug_central;
+}
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
@@ -504,11 +466,6 @@ void DebugCentral::Dump(int fd) {
   delete_coredump_files(kSsrdumpFilePath);
 }
 
-void DebugCentral::HasClientConnectWith(bool has_client) {
-  has_client_ = has_client;
-  LOG(INFO) << __func__ << ": has_client: " << has_client_ << ".";
-}
-
 void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
   if (uart_port.empty()) {
     LOG(ERROR) << __func__ << ": UART port is empty!";
@@ -524,81 +481,6 @@ void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
   }
   LOG(ERROR) << __func__ << ": Cannot found uart port!";
 }
-
-#if 0
-void DebugCentral::StartMonitor(hci::HciFlowControl* handle) {
-  std::unique_lock<std::recursive_mutex> lock(mutex_);
-  if (handle == nullptr) {
-    LOG(ERROR) << __func__ << ": Invalid handle!";
-    return;
-  }
-
-  event_watchers_.emplace_back(std::make_unique<DebugEventWatcher>(
-      "debug_HwError", handle, kEventHardwareError,
-      hci::HciEventWatcher::kCommandUnspecifiedOpcode,
-      [](const HalPacket& packet) {
-        LOG(ERROR) << __func__ << ": Received Hardware error event!";
-        ONE_TIME_LOGGER(AnchorType::HW_ERR_EVT,
-                        "%s: Received Hardware error event!", __func__);
-        if (packet.size() > kHwCodeOffset) {
-          LOG(ERROR) << __func__ << ": Error code=" << std::hex
-                     << static_cast<int>(packet.data()[kHwCodeOffset]) << ".";
-        }
-        // TODO: b/373786258 - Need to start_crash_dump with first hci reset
-        // flag for silent report.
-
-        // Do not hijack event.
-        return false;
-      }));
-  event_watchers_.emplace_back(std::make_unique<DebugEventWatcher>(
-      "debug_VendorEvent", handle, kEventVendorSpecific,
-      hci::HciEventWatcher::kCommandUnspecifiedOpcode,
-      [this](const HalPacket& packet) {
-        handle_vendor_specific_event(packet);
-        if (hijack_event_) {
-          hijack_event_ = false;
-          // hijack this vse
-          return true;
-        }
-        // do not hijack this vse
-        return false;
-      }));
-  event_watchers_.emplace_back(std::make_unique<DebugEventWatcher>(
-      "vendorCapabilityEvent", handle,
-      hci::HciEventWatcher::kCommandCompleteEventCode,
-      hci::HciEventWatcher::kCommandVendorCapabilityOpcode,
-      [this](const HalPacket& packet) {
-        std::unique_lock<std::recursive_mutex> lock(mutex_);
-        updateControllerCapability(packet);
-        return false;
-      }));
-  // TODO(b/263604600): debugging message will be removed after issue clarified
-  event_watchers_.emplace_back(std::make_unique<DebugEventWatcher>(
-      "LeSetExtentedScanEnableEvent", handle,
-      hci::HciEventWatcher::kCommandCompleteEventCode,
-      hci::HciEventWatcher::kCommandLeScanEnableOpcode,
-      [this](const HalPacket& packet) {
-        std::unique_lock<std::recursive_mutex> lock(mutex_);
-        uint16_t opcode = packet[3] + ((packet[4] << 8u) & 0xFF00);
-        LOG(INFO) << __func__
-                  << ": Command Complete Event of LE_SET_EXTENDED_SCAN_ENABLE, "
-                  << "opcode:" << std::hex << opcode << ".";
-        return false;
-      }));
-}
-
-void DebugCentral::StopMonitor() {
-  LOG(INFO) << __func__;
-  std::unique_lock<std::recursive_mutex> lock(mutex_);
-  event_watchers_.clear();
-  crash_timestamp_.clear();
-  // reset Soc MemDump Cache
-  if (!socdump_.empty()) {
-    std::queue<std::vector<uint8_t>> empty_queue;
-    std::swap(socdump_, empty_queue);
-  }
-}
-#endif
 
 void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
@@ -620,10 +502,7 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
              << static_cast<uint8_t>(error) << "), error_info: " << extra_info
              << ".";
   // report bqr root inflamed event to Stack
-  if (notify_cb_ != nullptr) {
-    LOG(WARNING) << __func__ << ": notify_cb_(bqr_event).";
-    notify_cb_(bqr_event);
-  }
+  HciRouter::GetRouter().SendPacketToStack(bqr_event);
 
   if (report_ssr_crash(static_cast<uint8_t>(error))) {
     start_crash_dump(false,
@@ -660,45 +539,6 @@ void DebugCentral::ForceGetCoredumpTimeout(union sigval sig) {
     timer_delete(force_coredump_timer);
     force_coredump_timer_created = false;
   }
-}
-
-bool DebugCentral::IsControllerDebugDumpOpcode(const HalPacket& data) {
-  if (data.size() < 2) {
-    return false;
-  }
-
-  if (data[0] == 0x5b && data[1] == 0xfd) {
-    LOG(WARNING) << __func__ << ": Sending Controller Debug Info Command.";
-    ONE_TIME_LOGGER(AnchorType::DEBUG_INFO,
-                    "%s: Sending Controller Debug Info command!", __func__);
-    int ret;
-    itimerspec dump_ts{};
-    sigevent force_coredump_se{};
-    force_coredump_se.sigev_notify = SIGEV_THREAD;
-    force_coredump_se.sigev_value.sival_ptr = this;
-    force_coredump_se.sigev_notify_function =
-        (void (*)(sigval))ForceGetCoredumpTimeout;
-    force_coredump_se.sigev_notify_attributes = NULL;
-    ret = timer_create(CLOCK_MONOTONIC, &force_coredump_se,
-                       &force_coredump_timer);
-    if (ret < 0) {
-      LOG(ERROR) << __func__ << ": Cannot create force_coredump_timer!";
-    } else {
-      force_coredump_timer_created = true;
-    }
-
-    // update force_coredump_timer
-    dump_ts.it_value.tv_sec = kForceCoredumpTimerExpiredSec;
-    dump_ts.it_value.tv_nsec = kForceCoredumpTimerExpiredNs;
-    if (force_coredump_timer_created == true) {
-      ret = timer_settime(force_coredump_timer, 0, &dump_ts, NULL);
-      if (ret < 0) {
-        LOG(ERROR) << __func__ << ": Cannot arm force_coredump_timer!";
-      }
-    }
-    return true;
-  }
-  return false;
 }
 
 bool DebugCentral::is_hw_stage_supported() {
