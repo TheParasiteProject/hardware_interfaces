@@ -394,6 +394,123 @@ TEST(DataPacketTest, HandleDifferentDataPacketTypes) {
   }
 }
 
+class FirmwareDataPacketByPacketTest : public FirmwareConfigLoaderTestBase {
+ protected:
+  void SetUp() override {
+    FirmwareConfigLoaderTestBase::SetUp();
+
+    std::vector<TransportType> priority_list = {TransportType::kUartH4};
+    EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+        .WillRepeatedly(ReturnRef(priority_list));
+    EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+        kConfigPacketByPacket));
+  }
+
+  static constexpr std::string_view kConfigPacketByPacket = R"({
+  "firmware_configs": [
+    {
+      "transport_type": 1,
+      "firmware_folder_name": "/test/fw/",
+      "firmware_file_name": "test_fw_packet.bin",
+      "firmware_data_loading_type": "PACKET_BY_PACKET"
+    }
+  ]
+})";
+};
+
+TEST_F(FirmwareDataPacketByPacketTest,
+       GetNextFirmwareDataPacketByPacketReturnReadHeaderFailError) {
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/test/fw/test_fw_packet.bin"),
+           _))
+      .WillOnce(Return(1));
+
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 3))
+      .WillOnce(Return(-1));  // Error when reading header
+
+  auto data_packet = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  EXPECT_FALSE(data_packet.has_value());
+}
+
+TEST_F(FirmwareDataPacketByPacketTest,
+       GetNextFirmwareDataPacketByPacketReturnReadPayloadFailError) {
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/test/fw/test_fw_packet.bin"),
+           _))
+      .WillOnce(Return(1));
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+  std::vector<uint8_t> fw_data_packet1_header = {0x01, 0xFC, 0x02};
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_packet1_header.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 2))
+      .WillOnce(Return(-1));  // Error.
+  auto data_packet = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  EXPECT_FALSE(data_packet.has_value());
+}
+
+TEST_F(FirmwareDataPacketByPacketTest,
+       GetNextFirmwareDataPacketByPacketSuccess) {
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/test/fw/test_fw_packet.bin"),
+           _))
+      .WillOnce(Return(1));
+
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> fw_data_packet1_header = {0x01, 0xFC, 0x02};
+  std::vector<uint8_t> fw_data_packet1_payload = {0xAA, 0xBB};
+  std::vector<uint8_t> fw_data_packet2_header = {0x4E, 0xFC, 0x01};
+  std::vector<uint8_t> fw_data_packet2_payload = {0xCC};
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_packet1_header.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 2))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_packet1_payload.data(), 2);
+                      }),
+                      Return(2)));
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet1->GetPayload(),
+            HalPacket({0x01, 0x01, 0xFC, 0x02, 0xAA, 0xBB}));
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_packet2_header.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_packet2_payload.data(), 1);
+                      }),
+                      Return(1)));
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataEnd);
+  EXPECT_EQ(data_packet2->GetPayload(),
+            HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xCC}));
+
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
