@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
 #include "firmware_config.pb.h"
@@ -53,15 +54,10 @@ using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
 using ::google::protobuf::util::Status;
 
-constexpr std::string_view kFirmwareConfigFile =
-    "/vendor/etc/bluetooth/firmware_config.json";
-
-constexpr int kDefaultLoadMiniDrvDelayMs = 50;
-constexpr int kDefaultLaunchRamDelayMs = 250;
+namespace cfg_consts = ::bluetooth_hal::config::constants;
 
 // Used for downloading firmware data.
 constexpr uint16_t kHciVscLaunchRamOpcode = 0xfc4e;
-constexpr int kBufferSize = 32 * 1024;
 
 enum class DataLoadingType : int {
   kByPacket = 0,
@@ -136,8 +132,8 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   std::string firmware_folder_;
   std::string firmware_file_;
   int chip_id_;
-  int load_mini_drv_delay_ms_{kDefaultLoadMiniDrvDelayMs};
-  int launch_ram_delay_ms_{kDefaultLaunchRamDelayMs};
+  int load_mini_drv_delay_ms_{cfg_consts::kDefaultLoadMiniDrvDelayMs};
+  int launch_ram_delay_ms_{cfg_consts::kDefaultLaunchRamDelayMs};
   DataLoadingType data_loading_type_{DataLoadingType::kByPacket};
 
   std::mutex firmware_data_mutex_;
@@ -228,7 +224,7 @@ FirmwareConfigLoaderImpl::FirmwareConfigLoaderImpl() {
 }
 
 bool FirmwareConfigLoaderImpl::LoadConfig() {
-  return LoadConfigFromFile(kFirmwareConfigFile);
+  return LoadConfigFromFile(cfg_consts::kFirmwareConfigFile);
 }
 
 bool FirmwareConfigLoaderImpl::LoadConfigFromFile(std::string_view path) {
@@ -383,6 +379,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
   }
 
   std::vector<uint8_t> buffer;
+  constexpr int kBufferSize = 32 * 1024;
   buffer.reserve(kBufferSize);
 
   bool is_end = false;

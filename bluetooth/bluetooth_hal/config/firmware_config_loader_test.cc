@@ -17,9 +17,9 @@
 #include "bluetooth_hal/config/firmware_config_loader.h"
 
 #include <cstddef>
-#include <string_view>
 #include <vector>
 
+#include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/test/mock/mock_android_base_wrapper.h"
 #include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
@@ -41,8 +41,7 @@ using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::util::MockAndroidBaseWrapper;
 using ::bluetooth_hal::util::MockSystemCallWrapper;
 
-constexpr int kDefaultLoadMiniDrvDelayMs = 50;
-constexpr int kDefaultLaunchRamDelayMs = 250;
+namespace cfg_consts = ::bluetooth_hal::config::constants;
 
 constexpr int kLoadMiniDrvDelayMs = 100;
 constexpr int kLaunchRamDelayMs = 100;
@@ -100,12 +99,12 @@ TEST_F(FirmwareConfigLoaderTestBase, GetNextFirmwareDataOnInit) {
 
 TEST_F(FirmwareConfigLoaderTestBase, GetLoadMiniDrvDelayMsOnInit) {
   EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLoadMiniDrvDelayMs(),
-            kDefaultLoadMiniDrvDelayMs);
+            cfg_consts::kDefaultLoadMiniDrvDelayMs);
 }
 
 TEST_F(FirmwareConfigLoaderTestBase, GetLaunchRamDelayMsOnInit) {
   EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetLaunchRamDelayMs(),
-            kDefaultLaunchRamDelayMs);
+            cfg_consts::kDefaultLaunchRamDelayMs);
 }
 
 struct SetupCommandValueTestParam {
