@@ -471,6 +471,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
       if (bytes_read <= 0) {
         // End of stream or error.
         firmware_file_fd_ = -1;
+        buffer.clear();
         break;
       }
     }
@@ -501,6 +502,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
     if (bytes_read != static_cast<ssize_t>(payload_size)) {
       // Incomplete packet or error.
       firmware_file_fd_ = -1;
+      buffer.clear();
       break;
     }
     buffer.insert(buffer.end(), payload.begin(), payload.end());
