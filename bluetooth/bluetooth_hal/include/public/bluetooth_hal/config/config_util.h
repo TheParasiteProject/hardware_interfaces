@@ -17,7 +17,6 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/android_base_wrapper.h"
