@@ -649,6 +649,134 @@ TEST_F(FirmwareAccumulatedBufferTest, GetNextFirmwareDataAccumulatedBuffer) {
       FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
+TEST_F(FirmwareAccumulatedBufferTest,
+       GetNextFirmwareDataAccumulatedBufferExceedsInternalBuffer) {
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/test/fw/test_fw_accum.bin"),
+           _))
+      .WillOnce(Return(3));
+
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  // kBufferSize is 32 * 1024 = 32768.
+
+  // Packet 1: total size in buffer = 1 (type) + 3 (hdr) + 255 (pld) = 259
+  // Here we have 126 packet 1.
+  std::vector<uint8_t> p1_hdr = {0x01, 0xFC, 0xff};
+  std::vector<uint8_t> p1_pld(255, 0xAA);
+
+  // Packet 2: total size in buffer = 1 (type) + 3 (hdr) + 62 (pld) = 66
+  std::vector<uint8_t> p2_hdr = {0x01, 0xFC, 0x3e};
+  std::vector<uint8_t> p2_pld(62, 0xAA);
+
+  // Packet 3: total size in buffer = 1 (type) + 3 (hdr) + 100 (pld) = 104.
+  // P1*126 (32634) + P2 (66) + P2 (104) = 32804 > 32768. So P1*126 + P2 will be
+  // returned first.
+  std::vector<uint8_t> p3_hdr = {0x02, 0xFC, 0x64};
+  std::vector<uint8_t> p3_pld(100, 0xBB);
+
+  // Packet 3 (Launch RAM): total size in buffer = 1 (type) + 3 (hdr) + 1 (pld)
+  // = 5.
+  std::vector<uint8_t> p4_hdr = {0x4E, 0xFC, 0x01};  // kHciVscLaunchRamOpcode.
+  std::vector<uint8_t> p4_pld = {0xCC};
+
+  {
+    InSequence s;
+
+    for (int i = 0; i < 126; ++i) {
+      EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, 3))
+          .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                            memcpy(buf, p1_hdr.data(), 3);
+                          }),
+                          Return(3)));
+      EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, p1_pld.size()))
+          .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                            memcpy(buf, p1_pld.data(), p1_pld.size());
+                          }),
+                          Return(p1_pld.size())));
+    }
+
+    EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, 3))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, p2_hdr.data(), 3);
+                        }),
+                        Return(3)));
+    EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, p2_pld.size()))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, p2_pld.data(), p2_pld.size());
+                        }),
+                        Return(p2_pld.size())));
+    EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, 3))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, p3_hdr.data(), 3);
+                        }),
+                        Return(3)));
+  }
+
+  // First call: 126 * P1 + P2 should be returned as it fills the buffer.
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+  HalPacket expected_p1;
+  for (int i = 0; i < 126; ++i) {
+    expected_p1.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+    expected_p1.insert(expected_p1.end(), p1_hdr.begin(), p1_hdr.end());
+    expected_p1.insert(expected_p1.end(), p1_pld.begin(), p1_pld.end());
+  }
+  expected_p1.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+  expected_p1.insert(expected_p1.end(), p2_hdr.begin(), p2_hdr.end());
+  expected_p1.insert(expected_p1.end(), p2_pld.begin(), p2_pld.end());
+  EXPECT_EQ(data_packet1->GetPayload(), expected_p1);
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, p3_pld.size()))  // P3 Pld.
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, p3_pld.data(), p3_pld.size());
+                      }),
+                      Return(p3_pld.size())));
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {  // P4 Hdr.
+                        memcpy(buf, p4_hdr.data(), 3);
+                      }),
+                      Return(3)));
+
+  // Second call: P3 should be returned.
+  auto data_packet3 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet3.has_value());
+  EXPECT_EQ(data_packet3->GetDataType(), DataType::kDataFragment);
+  HalPacket expected_p3;
+  expected_p3.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+  expected_p3.insert(expected_p3.end(), p3_hdr.begin(), p3_hdr.end());
+  expected_p3.insert(expected_p3.end(), p3_pld.begin(), p3_pld.end());
+  EXPECT_EQ(data_packet3->GetPayload(), expected_p3);
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(3, _, p4_pld.size()))  // P3 Pld.
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, p4_pld.data(), p4_pld.size());
+                      }),
+                      Return(p4_pld.size())));
+
+  // Third call: P4 (Launch RAM) should be returned as kDataEnd.
+  auto data_packet4 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet4.has_value());
+  EXPECT_EQ(data_packet4->GetDataType(), DataType::kDataEnd);
+  HalPacket expected_p4;
+  expected_p4.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+  expected_p4.insert(expected_p4.end(), p4_hdr.begin(), p4_hdr.end());
+  expected_p4.insert(expected_p4.end(), p4_pld.begin(), p4_pld.end());
+  EXPECT_EQ(data_packet4->GetPayload(), expected_p4);
+
+  // Fourth call: No more data.
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
