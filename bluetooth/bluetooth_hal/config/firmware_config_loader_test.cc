@@ -24,6 +24,7 @@
 
 #include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/test/common/test_helper.h"
 #include "bluetooth_hal/test/mock/mock_android_base_wrapper.h"
 #include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
@@ -36,7 +37,9 @@ namespace {
 
 using ::testing::_;
 using ::testing::DoAll;
+using ::testing::InSequence;
 using ::testing::Invoke;
+using ::testing::Mock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::StrictMock;
@@ -46,6 +49,7 @@ using ::testing::WithParamInterface;
 
 using ::bluetooth_hal::config::MockHalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
+using ::bluetooth_hal::hci::HciPacketType;
 using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::MatcherFactory;
 using ::bluetooth_hal::util::MockAndroidBaseWrapper;
@@ -57,34 +61,34 @@ constexpr int kLoadMiniDrvDelayMs = 100;
 constexpr int kLaunchRamDelayMs = 100;
 
 const std::string_view kMultiTransportValidContent = R"({
-  "firmware_configs": [
-    {
-      "transport_type": 1,
-      "firmware_folder_name": "/uart/fw/",
-      "firmware_file_name": "uart_fw.bin",
-      "chip_id": 101,
-      "load_mini_drv_delay_ms": 51,
-      "launch_ram_delay_ms": 251,
-      "firmware_data_loading_type": "PACKET_BY_PACKET",
-      "setup_commands": {
-        "hci_reset": [1,3,12,0],
-        "hci_read_chip_id": [1,121,252,0]
-      }
-    },
-    {
-      "transport_type": 100,
-      "firmware_folder_name": "/vendor/fw/",
-      "firmware_file_name": "vendor_fw.bin",
-      "chip_id": 102,
-      "load_mini_drv_delay_ms": 71,
-      "launch_ram_delay_ms": 301,
-      "firmware_data_loading_type": "ACCUMULATED_BUFFER",
-      "setup_commands": {
-        "hci_update_chip_baud_rate": [1,24,252,6,0,0,0,9,61,0]
-      }
-    }
-  ]
-})";
+   "firmware_configs": [
+     {
+       "transport_type": 1,
+       "firmware_folder_name": "/uart/fw/",
+       "firmware_file_name": "uart_fw.bin",
+       "chip_id": 101,
+       "load_mini_drv_delay_ms": 51,
+       "launch_ram_delay_ms": 251,
+       "firmware_data_loading_type": "PACKET_BY_PACKET",
+       "setup_commands": {
+         "hci_reset": [1,3,12,0],
+         "hci_read_chip_id": [1,121,252,0]
+       }
+     },
+     {
+       "transport_type": 100,
+       "firmware_folder_name": "/vendor/fw/",
+       "firmware_file_name": "vendor_fw.bin",
+       "chip_id": 102,
+       "load_mini_drv_delay_ms": 71,
+       "launch_ram_delay_ms": 301,
+       "firmware_data_loading_type": "ACCUMULATED_BUFFER",
+       "setup_commands": {
+         "hci_update_chip_baud_rate": [1,24,252,6,0,0,0,9,61,0]
+       }
+     }
+   ]
+ })";
 
 TEST(FirmwareConfigLoaderTest, IsSameSingleton) {
   MockSystemCallWrapper mock_system_call_wrapper;
@@ -407,15 +411,15 @@ class FirmwareDataPacketByPacketTest : public FirmwareConfigLoaderTestBase {
   }
 
   static constexpr std::string_view kConfigPacketByPacket = R"({
-  "firmware_configs": [
-    {
-      "transport_type": 1,
-      "firmware_folder_name": "/test/fw/",
-      "firmware_file_name": "test_fw_packet.bin",
-      "firmware_data_loading_type": "PACKET_BY_PACKET"
-    }
-  ]
-})";
+   "firmware_configs": [
+     {
+       "transport_type": 1,
+       "firmware_folder_name": "/test/fw/",
+       "firmware_file_name": "test_fw_packet.bin",
+       "firmware_data_loading_type": "PACKET_BY_PACKET"
+     }
+   ]
+ })";
 };
 
 TEST_F(FirmwareDataPacketByPacketTest,
@@ -524,15 +528,15 @@ class FirmwareAccumulatedBufferTest : public FirmwareConfigLoaderTestBase {
   }
 
   static constexpr std::string_view kConfigAccumulated = R"({
-     "firmware_configs": [
-       {
-         "transport_type": 1,
-         "firmware_folder_name": "/test/fw/",
-         "firmware_file_name": "test_fw_accum.bin",
-         "firmware_data_loading_type": "ACCUMULATED_BUFFER"
-       }
-     ]
-   })";
+      "firmware_configs": [
+        {
+          "transport_type": 1,
+          "firmware_folder_name": "/test/fw/",
+          "firmware_file_name": "test_fw_accum.bin",
+          "firmware_data_loading_type": "ACCUMULATED_BUFFER"
+        }
+      ]
+    })";
 };
 
 TEST_F(FirmwareAccumulatedBufferTest,
@@ -570,6 +574,79 @@ TEST_F(FirmwareAccumulatedBufferTest,
   EXPECT_CALL(mock_system_call_wrapper_, Read(1, _, 5)).WillOnce(Return(-1));
   auto data_packet = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   EXPECT_FALSE(data_packet.has_value());
+}
+
+TEST_F(FirmwareAccumulatedBufferTest, GetNextFirmwareDataAccumulatedBuffer) {
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kConfigAccumulated));
+
+  EXPECT_CALL(
+      mock_system_call_wrapper_,
+      Open(MatcherFactory::CreateStringMatcher("/test/fw/test_fw_accum.bin"),
+           _))
+      .WillOnce(Return(2));
+
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> fw_data_p1_hdr = {0x01, 0xFC, 0x02};
+  std::vector<uint8_t> fw_data_p1_pld = {0xAA, 0xBB};
+  std::vector<uint8_t> fw_data_p2_hdr = {0x02, 0xFC, 0x01};
+  std::vector<uint8_t> fw_data_p2_pld = {0xDD};
+  std::vector<uint8_t> fw_data_p3_hdr = {0x4E, 0xFC, 0x01};
+  std::vector<uint8_t> fw_data_p3_pld = {0xEE};
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(2, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p1_hdr.data(), 3);
+                      }),
+                      Return(3)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p2_hdr.data(), 3);
+                      }),
+                      Return(3)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p3_hdr.data(), 3);
+                      }),
+                      Return(3)));
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(2, _, 2))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p1_pld.data(), 2);
+                      }),
+                      Return(2)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(2, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p2_pld.data(), 1);
+                      }),
+                      Return(1)));
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+  HalPacket expected_accumulated_p1_p2(
+      {0x01, 0x01, 0xFC, 0x02, 0xAA, 0xBB, 0x01, 0x02, 0xFC, 0x01, 0xDD});
+  EXPECT_EQ(data_packet1->GetPayload(), expected_accumulated_p1_p2);
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(2, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p3_pld.data(), 1);
+                      }),
+                      Return(1)));
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataEnd);
+  EXPECT_EQ(data_packet2->GetPayload(),
+            HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xEE}));
+
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
 }  // namespace
