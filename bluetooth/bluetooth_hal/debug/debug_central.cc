@@ -44,8 +44,14 @@
 #include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/util/logging.h"
 
+namespace bluetooth_hal {
+namespace debug {
 namespace {
 
+using ::android::base::StringPrintf;
+using ::bluetooth_hal::bqr::BqrErrorCode;
+using ::bluetooth_hal::bqr::BqrErrorToStringView;
+using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
 using ::bluetooth_hal::config::HalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::HciRouter;
@@ -54,60 +60,37 @@ using ::bluetooth_hal::transport::TransportInterface;
 using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::Logger;
 
-static constexpr int kVseSubEventCodeOffset = 2;
-static constexpr int kBqrReportIdOffset = 3;
-static constexpr int kBqrInflamedErrorCode = 4;
-static constexpr int kBqrInflamedVendorErrCode = 5;
-static constexpr int kDebugInfoPayloadOffset = 8;
-static constexpr int kChreDebugDumpLastBlockOffsetFisrtByte = 4;
-static constexpr int kChreDebugDumpLastBlockOffsetSecondByte = 5;
-static constexpr int kDebugInfoLastBlockOffset = 5;
-static constexpr int kHwCodeOffset = 2;
+constexpr int kVseSubEventCodeOffset = 2;
+constexpr int kBqrReportIdOffset = 3;
+constexpr int kBqrInflamedErrorCode = 4;
+constexpr int kBqrInflamedVendorErrCode = 5;
+constexpr int kDebugInfoPayloadOffset = 8;
+constexpr int kChreDebugDumpLastBlockOffsetFisrtByte = 4;
+constexpr int kChreDebugDumpLastBlockOffsetSecondByte = 5;
+constexpr int kDebugInfoLastBlockOffset = 5;
+constexpr int kHwCodeOffset = 2;
 
-static constexpr uint8_t kEventVendorSpecific =
-    0xFF;  // Event code: Vendor specific event
-static constexpr uint8_t kEventHardwareError =
-    0x10;  // Event code: Hardware error
-static constexpr uint8_t kVseSubEventDebugInfo =
-    0x57;  // Vendor specific sub event: Debug info
-static constexpr uint8_t kVseSubEventBqr =
-    0x58;  // Vendor specific sub event: Bluetooth quality report
-static constexpr uint8_t kVseSubEventDebug1 =
-    0x6A;  // Vendor specific sub event:  Debug logging
-static constexpr uint8_t kVseSubEventDebug2 =
-    0x1B;  // Vendor specific sub event:  Debug logging
-
-timer_t force_coredump_timer;
 constexpr int kHandleDebugInfoCommandMs = 1000;
-static const std::string kDumpReasonForceCollectCoredump =
-    "Force Collect Coredump";
-static const std::string kDumpReasonControllerHwError = "ControllerHwError";
-static const std::string kDumpReasonControllerRootInflammed =
+const std::string kDumpReasonForceCollectCoredump = "Force Collect Coredump";
+const std::string kDumpReasonControllerHwError = "ControllerHwError";
+const std::string kDumpReasonControllerRootInflammed =
     "ControllerRootInflammed";
-static const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
+const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
     "ControllerDebugInfoDataDumpWithoutRootInflammed";
-static const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
+const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
 
-static const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
-static const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
-static const std::string kCrashInfoFilePrefix = "crashinfo_bt_";
-static const std::string kSsrdumpFilePrefix = "coredump_bt_";
-static const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
-static const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
-static const std::string kSocdumpFilePath =
+const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
+const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
+const std::string kCrashInfoFilePrefix = "crashinfo_bt_";
+const std::string kSsrdumpFilePrefix = "coredump_bt_";
+const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
+const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
+const std::string kSocdumpFilePath =
     "/data/vendor/ssrdump/coredump/coredump_bt_socdump_";
-static const std::string kChredumpFilePath =
+const std::string kChredumpFilePath =
     "/data/vendor/ssrdump/coredump/coredump_bt_chredump_";
-static const std::string kVendorSnoopFilePath =
-    "/data/vendor/bluetooth/btsnoop_hci_vnd.log";
-static const std::string kBackupVendorSnoopFilePath =
-    "/data/vendor/bluetooth/backup_btsnoop_hci_vnd.log";
-static const std::string kVendorSnoopLastFilePath =
-    "/data/vendor/bluetooth/btsnoop_hci_vnd.log.last";
-static const std::string kBackupVendorSnoopLastFilePath =
-    "/data/vendor/bluetooth/backup_btsnoop_hci_vnd.log.last";
 
-static const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
+const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 constexpr uint8_t kReservedCoredumpFileCount = 2;
@@ -126,47 +109,6 @@ std::string GetTimestampString() {
      << std::setfill('0') << std::to_string(timeinfo->tm_min) << "-"
      << std::setw(2) << std::setfill('0') << std::to_string(timeinfo->tm_sec);
   return ss.str();
-}
-
-void CopyFile(const std::string& SrcDir, const std::string& DestDir) {
-  std::ifstream src(SrcDir, std::ios::binary);
-  std::ofstream dst(DestDir, std::ios::binary);
-
-  if (!src.is_open()) {
-    LOG(ERROR) << __func__ << ": Error opening source file.";
-    return;
-  }
-
-  if (!dst.is_open()) {
-    LOG(ERROR) << __func__ << ": Error opening destination file.";
-    return;
-  }
-
-  dst << src.rdbuf();
-
-  // Get source file permissions
-  struct stat src_stat;
-  if (stat(SrcDir.c_str(), &src_stat) != 0) {
-    LOG(ERROR) << __func__ << ": Error getting source file permissions.";
-    return;
-  }
-
-  // Apply permissions to destination file
-  if (chmod(DestDir.c_str(), src_stat.st_mode) != 0) {
-    LOG(ERROR) << __func__ << ": Error setting destination file permissions.";
-    return;
-  }
-}
-
-void BackupLogFiles(std::string crash_timestamp) {
-  LOG(INFO) << __func__;
-  if (crash_timestamp.empty()) {
-    crash_timestamp = GetTimestampString();
-  }
-  CopyFile(kVendorSnoopLastFilePath,
-           kBackupVendorSnoopLastFilePath + "_" + crash_timestamp);
-  CopyFile(kVendorSnoopFilePath,
-           kBackupVendorSnoopFilePath + "_" + crash_timestamp);
 }
 
 void DumpDebugfs(int fd, const std::string& debugfs) {
@@ -323,14 +265,6 @@ void DeleteCoredumpFiles(const std::string& dir) {
 
 }  // namespace
 
-namespace bluetooth_hal {
-namespace debug {
-
-using ::android::base::StringPrintf;
-using ::bluetooth_hal::bqr::BqrErrorCode;
-using ::bluetooth_hal::bqr::BqrErrorToStringView;
-using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
-
 void LogFatal(BqrErrorCode error, std::string extra_info);
 
 DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
@@ -422,7 +356,6 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
                    StringPrintf("error_code: 0x%02hhX",
                                 static_cast<unsigned char>(error)) +
                    ")" + " - " + std::string(BqrErrorToStringView(error)));
-    BackupLogFiles(crash_timestamp_);
     LogFatal(error, extra_info);
   } else {
     LOG(ERROR) << __func__ << ": Silent recover!";
@@ -529,7 +462,6 @@ void DebugCentral::HandleRootInflammationEvent(
                    ")" + " - " +
                    std::string(BqrErrorToStringView(
                        static_cast<BqrErrorCode>(vendor_error_code))));
-    BackupLogFiles(crash_timestamp_);
   }
 }
 
@@ -548,7 +480,6 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   // the Last soc dump debug info packet has been received
   if (packet[kDebugInfoLastBlockOffset]) {
     LOG(INFO) << __func__ << ": Last soc dump fragment has been received.";
-    BackupLogFiles(crash_timestamp_);
     last_soc_dump_packet = true;
   }
 
