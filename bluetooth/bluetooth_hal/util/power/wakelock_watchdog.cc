@@ -133,7 +133,7 @@ void WakelockWatchdogImpl::WatchdogTimerExpired() {
 }
 
 void WakelockWatchdogImpl::Bark(WakeSource source, int remain_time) {
-  ANCHOR_LOG_WARNING(AnchorType::WATCHDOG)
+  ANCHOR_LOG_WARNING(AnchorType::kWatchdog)
       << ": Watchdog BARK! WakeSource = "
       << WakelockUtil::WakeSourceToString(source)
       << ", remain time = " << remain_time << "ms.";
@@ -154,7 +154,7 @@ void WakelockWatchdogImpl::Bite(WakeSource source) {
     case WakeSource::kTransport:
       // Long Transport wakelock can happen in heavy BT traffic, print log here
       // as a nice-to-have battery information instead of crash.
-      ANCHOR_LOG(AnchorType::WATCHDOG) << "Long transport wakelock detected.";
+      ANCHOR_LOG(AnchorType::kWatchdog) << "Long transport wakelock detected.";
       Start(source);
       break;
     case WakeSource::kInitialize:

@@ -69,12 +69,11 @@ size_t DataProcessor::Send(std::span<const uint8_t> packet) {
       if (errno == EAGAIN) {
         continue;
       }
-      ANCHOR_LOG_ERROR(AnchorType::H4_TX_ERR)
-          << __func__ << ": Error writing to UART (" << strerror(errno) << ").";
+      HAL_LOG(ERROR) << __func__ << ": Error writing to UART ("
+                     << strerror(errno) << ").";
       break;
     } else if (ret == 0) {
-      ANCHOR_LOG_ERROR(AnchorType::H4_TX_ERR)
-          << __func__ << ": Zero bytes written.";
+      HAL_LOG(ERROR) << __func__ << ": Zero bytes written.";
       break;
     } else if (static_cast<size_t>(ret) == remaining_bytes) {
       bytes_written += ret;
@@ -83,9 +82,8 @@ size_t DataProcessor::Send(std::span<const uint8_t> packet) {
 
     bytes_written += ret;
     remaining_bytes -= ret;
-    ANCHOR_LOG_WARNING(AnchorType::H4_TX_ERR)
-        << __func__ << ": " << bytes_written << " bytes written, "
-        << remaining_bytes << " bytes remaining.";
+    HAL_LOG(WARNING) << __func__ << ": " << bytes_written << " bytes written, "
+                     << remaining_bytes << " bytes remaining.";
 
     // Adjust iov to skip the written data.
     iov.iov_base = static_cast<uint8_t*>(iov.iov_base) + ret;
@@ -104,8 +102,7 @@ void DataProcessor::Recv(int fd) {
       SystemCallWrapper::GetWrapper().Read(fd, buffer, max_len));
   if (bytes_read == 0) {
     // This is only expected if the UART got closed when shutting down.
-    ANCHOR_LOG_WARNING(AnchorType::H4_RX_ERR)
-        << __func__ << ": Unexpected EOF reading the packet type!";
+    HAL_LOG(WARNING) << __func__ << ": Unexpected EOF reading the packet type!";
     return;
   } else if (bytes_read < 0) {
     LOG(FATAL) << __func__ << ": Read packet type error: " << strerror(errno)

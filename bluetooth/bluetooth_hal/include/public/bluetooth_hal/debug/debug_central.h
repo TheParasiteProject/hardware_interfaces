@@ -31,88 +31,44 @@
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
 
-// Code Enter Point
 enum class AnchorType : uint8_t {
-  // For DURATION_TRACKER.
-  BTHAL_INIT = 0,
-  BTHAL_PERFORM_INIT,
-  SEND_HCI_CMD,
-  SEND_ACL_DAT,
-  SEND_SCO_DAT,
-  SEND_ISO_DAT,
-  THREAD_SEND_DAT_UPLINK,
-  THREAD_SEND_DAT_DOWNLINK,
-  THREAD_START_DAEMON,
-  THREAD_STOP_DAEMON,
-  THREAD_ACCEPT_CLIENT,
-  THREAD_DADEMON_CLOSED,
-  THREAD_SOCKET_FILE_DELETED,
-  THREAD_CLIENT_ERROR,
-  THREAD_CLIENT_CONNECT,
-  THREAD_HARDWARE_RESET,
-  CALLBACK_HCI_EVT,
-  CALLBACK_HCI_ACL,
-  CALLBACK_HCI_SCO,
-  CALLBACK_HCI_ISO,
-  USERIAL_OPEN,
-  USERIAL_CLOSE,
-  POWER_CTRL,
-  HCI_RESET,
-  CHANGE_BAUDRATE,
-  FW_DOWNLOAD,
-  READ_LOCAL_NAME,
-  // For ONE_TIME_LOGGER.
-  SERVICE_DIED = 46,
-  BTHAL_THD_INIT,
-  BTHAL_THD_REINIT,
-  BTHAL_CLOSE,
-  BTHAL_PERFORM_CLOSE,
-  BIG_HAMMER,
-  ACTIVITY_WATCHER_ERR,
-  BT_REDARY,
-  BTHAL_INIT_ERR,
-  BT_PREPARE,
-  BT_INIT,
-  USERIAL_INFO,
-  USERIAL_OPEN_ERR,
-  USERIAL_TTY_OPEN,
-  USERIAL_READY,
-  HCI_SOCKET,
-  POWER_STATE,
-  BAUDRATE_ERR,
-  LOCAL_NAME_ERR,
-  FW_FAST_DNLD,
-  FW_DNLD_ERR,
-  FW_DNLD_SELECT,
-  FW_DNLD_DONE,
-  BT_CHIP_ID,
-  BT_CMD_ERR,
-  WAKELOCK_ERR,
-  WAKELOCK_DUP,
-  WAKELOCK_ACQUIRE,
-  WAKELOCK_RELEASE,
-  WAKELOCK_VOTE,
-  WAKELOCK_UNVOTE,
-  WATCHDOG,
-  LPM_WAKEUP_ERR,
-  LPM_WAKEUP,
-  LPM_SUSPEND,
-  LPM_WAKEUP_TIMEOUT,
-  LPM_SETUP_ERR,
-  LPM_ENABLE,
-  LPM_DISABLE,
-  LPM_CLOSE_ERR,
-  BT_SHUTDOWN,
-  BTHAL_USERIAL_TYPE_SELECT,
-  H4_TX_ERR,
-  H4_RX_ERR,
-  H4_TX_CMD,
-  H4_RX_EVT,
-  BQR_ERR_MSG,
-  HW_ERR_EVT,
-  DEBUG_INFO,
-  BTHAL_EXT_INJECT,
-  BT_LOG = 255,
+  kNone = 0,
+
+  // BluetoothHci
+  kInitialize,
+  kClose,
+  kServiceDied,
+  kSendHciCommand,
+  kSendAclData,
+  kSendScoData,
+  kSendIsoData,
+  kCallbackHciEvent,
+  kCallbackAclData,
+  kCallbackScoData,
+  kCallbackIsoData,
+
+  // HciRouter
+  kRouterInitialize,
+
+  // Thread
+  kThreadAcceptClient,
+  kThreadDaemonClosed,
+  kThreadSocketFileDeleted,
+  kThreadClientError,
+  kThreadClientConnect,
+  kThreadHardwareReset,
+
+  // H4 UART
+  kUserialOpen,
+  kUserialClose,
+  kUserialTtyOpen,
+
+  // PowerManager
+  kPowerControl,
+  kLowPowerMode,
+
+  // WakelockWatchdog
+  kWatchdog,
 };
 
 /*
@@ -151,9 +107,10 @@ enum class AnchorType : uint8_t {
   })(::bluetooth_hal::debug::LogHelper(type, ::android::base::ERROR, LOG_TAG))
 
 /*
- * BT_LOG pinrts system log, as well as stores it in the DebugCentral for Dump()
+ * HAL_LOG pinrts system log, as well as stores it in the DebugCentral for
+ * Dump()
  */
-#define BT_LOG(severity)                            \
+#define HAL_LOG(severity)                           \
   ([](auto&& logger) -> auto&& { return logger; })( \
       ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
 
@@ -262,7 +219,7 @@ class LogHelper {
       : type_(type), severity_(severity), tag_(tag) {}
 
   LogHelper(::android::base::LogSeverity severity, const char* tag)
-      : type_(AnchorType::BT_LOG), severity_(severity), tag_(tag) {}
+      : type_(AnchorType::kNone), severity_(severity), tag_(tag) {}
 
   template <typename T>
   LogHelper& operator<<(const T& value) {

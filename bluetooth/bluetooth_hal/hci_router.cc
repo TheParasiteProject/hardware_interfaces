@@ -320,7 +320,7 @@ HciRouterImpl::HciRouterImpl() {
 
 bool HciRouterImpl::Initialize(
     const std::shared_ptr<HciRouterCallback>& callback) {
-  DURATION_TRACKER(AnchorType::BTHAL_PERFORM_INIT, __func__);
+  DURATION_TRACKER(AnchorType::kRouterInitialize, __func__);
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   LOG(INFO) << "Initializing Bluetooth HCI Router.";
   hci_callback_ = callback;
