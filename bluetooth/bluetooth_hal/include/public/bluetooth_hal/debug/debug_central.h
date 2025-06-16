@@ -26,6 +26,7 @@
 #include "android-base/logging.h"
 #include "bluetooth_hal/bqr/bqr_handler.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
@@ -199,46 +200,6 @@ class DebugAnchor {
   AnchorType type_;
 };
 
-// BQR root inflammation vendor error codes
-enum class BqrErrorCode : uint8_t {
-  UART_PARSING = 0x01,
-  UART_INCOMPLETE_PACKET = 0x02,
-  FIRMWARE_CHECKSUM = 0x03,
-  FIRMWARE_HARD_FAULT = 0x10,
-  FIRMWARE_MEM_MANAGE_FAULT = 0x11,
-  FIRMWARE_BUS_FAULT = 0x12,
-  FIRMWARE_USAGE_FAULT = 0x13,
-  FIRMWARE_WATCHDOG_TIMEOUT = 0x14,
-  FIRMWARE_ASSERTION_FAILURE = 0x15,
-  FIRMWARE_MISCELLANEOUS = 0x16,
-  FIRMWARE_HOST_REQUEST_DUMP = 0x17,
-  FIRMWARE_MISCELLANEOUS_MAJOR_FAULT = 0x20,
-  FIRMWARE_MISCELLANEOUS_CRITICAL_FAULT = 0x21,
-  FIRMWARE_THREAD_GENERIC_ERROR = 0x40,
-  FIRMWARE_THREAD_INVALID_FRAME = 0x41,
-  FIRMWARE_THREAD_INVALID_PARAM = 0x42,
-  FIRMWARE_THREAD_UNSUPPORTED_FRAME = 0x43,
-  SOC_BIG_HAMMER_FAULT = 0x7F,
-  HOST_RX_THREAD_STUCK = 0x80,
-  HOST_HCI_COMMAND_TIMEOUT = 0x81,
-  HOST_INVALID_HCI_EVENT = 0x82,
-  HOST_UNIMPLEMENTED_PACKET_TYPE = 0x83,
-  HOST_HCI_H4_TX_ERROR = 0x84,
-  HOST_OPEN_USERIAL = 0x90,
-  HOST_POWER_UP_CONTROLLER = 0x91,
-  HOST_CHANGE_BAUDRATE = 0x92,
-  HOST_RESET_BEFORE_FW = 0x93,
-  HOST_DOWNLOAD_FW = 0x94,
-  HOST_RESET_AFTER_FW = 0x95,
-  HOST_BDADDR_FAULT = 0x96,
-  HOST_OPEN_COEX_DEVICE_ERROR = 0x97,
-  HOST_ACCEL_BT_INIT_FAILED = 0x98,
-  HOST_ACCEL_BT_SHUTDOWN_FAILED = 0x99,
-  CHRE_ARBITRATOR_ERR_BASE = 0xE0,
-  CHRE_ARBITRATOR_UNIMPLEMENTED_PACKET = 0xE0,
-  CHRE_ARBITRATOR_INVALID_PACKET_SIZE = 0xE1,
-};
-
 class DebugCentral {
  public:
   /*
@@ -265,7 +226,8 @@ class DebugCentral {
    * Notify BtHal have detected error, we will collect debug log first then and
    * report eror code to stack via BQR root inflammation event
    */
-  void ReportBqrError(BqrErrorCode error, std::string extra_info);
+  void ReportBqrError(::bluetooth_hal::bqr::BqrErrorCode error,
+                      std::string extra_info);
 
   /*
    * Two kinds of debug anchor are supported to collect log messages.

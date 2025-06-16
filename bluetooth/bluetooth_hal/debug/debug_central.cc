@@ -27,7 +27,6 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
-#include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -36,6 +35,7 @@
 #include "android-base/properties.h"
 #include "android-base/stringprintf.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
@@ -327,75 +327,11 @@ namespace bluetooth_hal {
 namespace debug {
 
 using ::android::base::StringPrintf;
+using ::bluetooth_hal::bqr::BqrErrorCode;
+using ::bluetooth_hal::bqr::BqrErrorToStringView;
 using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
 
 void LogFatal(BqrErrorCode error, std::string extra_info);
-const std::string get_error_code_string(BqrErrorCode error_code);
-
-const std::map<BqrErrorCode, std::string> error_code_string = {
-    // SOC FW Report Error Code
-    {BqrErrorCode::UART_PARSING, "UART Parsing error (BtFw)"},
-    {BqrErrorCode::UART_INCOMPLETE_PACKET, "UART Incomplete Packet (BtFw)"},
-    {BqrErrorCode::FIRMWARE_CHECKSUM, "Patch Firmware checksum failure (BtFw)"},
-    {BqrErrorCode::FIRMWARE_HARD_FAULT,
-     "Firmware Crash due to Hard Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MEM_MANAGE_FAULT,
-     "Firmware Crash due to Mem manage Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_BUS_FAULT,
-     "Firmware Crash due to Bus Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_USAGE_FAULT,
-     "Firmware Crash due to Usage fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_WATCHDOG_TIMEOUT,
-     "Firmware Crash due to Watchdog timeout (BtFw)"},
-    {BqrErrorCode::FIRMWARE_ASSERTION_FAILURE,
-     "Firmware Crash due to Assertion failure (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS,
-     "Firmware Crash Miscallaneuous (BtFw)"},
-    {BqrErrorCode::FIRMWARE_HOST_REQUEST_DUMP, "HCI Command Timeout (BtCmd)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS_MAJOR_FAULT,
-     "Firmware Miscellaneous error - Major (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS_CRITICAL_FAULT,
-     "Firmware Miscellaneous error - Critical (BtFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_GENERIC_ERROR,
-     "Firmware crash due to 15.4 Thread error (ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_INVALID_FRAME,
-     "Firmware crash due to detecting malformed frame from host (ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_INVALID_PARAM,
-     "Firmware crash due to receiving invalid frame meta-data/parameters "
-     "(ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_UNSUPPORTED_FRAME,
-     "Firmware crash due to receiving frames from host with unsupported "
-     "command ID (ThreadFw)"},
-    {BqrErrorCode::SOC_BIG_HAMMER_FAULT, "Soc Big Hammer Error (BtWifi)"},
-    // BT HAL Report Error Code
-    {BqrErrorCode::HOST_RX_THREAD_STUCK, "Host RX Thread Stuck (BtHal)"},
-    {BqrErrorCode::HOST_HCI_COMMAND_TIMEOUT,
-     "Host HCI Command Timeout (BtHal)"},
-    {BqrErrorCode::HOST_INVALID_HCI_EVENT,
-     "Invalid / un-reassembled HCI event (BtHal)"},
-    {BqrErrorCode::HOST_UNIMPLEMENTED_PACKET_TYPE,
-     "Host Received Unimplemented Packet Type (BtHal)"},
-    {BqrErrorCode::HOST_HCI_H4_TX_ERROR, "Host HCI H4 TX Error (BtHal)"},
-    {BqrErrorCode::HOST_OPEN_USERIAL, "Host Open Userial Error (BtHal)"},
-    {BqrErrorCode::HOST_POWER_UP_CONTROLLER,
-     "Host Can't Power Up Controller (BtHal)"},
-    {BqrErrorCode::HOST_CHANGE_BAUDRATE, "Host Change Baudrate Error (BtHal)"},
-    {BqrErrorCode::HOST_RESET_BEFORE_FW,
-     "Host HCI Reset Error Before FW Download (BtHal)"},
-    {BqrErrorCode::HOST_DOWNLOAD_FW, "Host Firmware Download Error (BtHal)"},
-    {BqrErrorCode::HOST_RESET_AFTER_FW,
-     "Host HCI Reset Error After FW Download (BtHal)"},
-    {BqrErrorCode::HOST_BDADDR_FAULT,
-     "Host Can't fetch the provisioning BDA (BtHal)"},
-    {BqrErrorCode::HOST_ACCEL_BT_INIT_FAILED,
-     "Host Accelerated Init Failed (BtHal)"},
-    {BqrErrorCode::HOST_ACCEL_BT_SHUTDOWN_FAILED,
-     "Host Accelerated ShutDown Failed (BtHal)"},
-    {BqrErrorCode::CHRE_ARBITRATOR_UNIMPLEMENTED_PACKET,
-     "Arbitrator Detected Unimplemented Packet Type Error (BtChre)"},
-    {BqrErrorCode::CHRE_ARBITRATOR_INVALID_PACKET_SIZE,
-     "Arbitrator Detected Invalid Packet Size (BtChre)"},
-};
 
 DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
     : anchor_(anchor), type_(type) {
@@ -481,11 +417,11 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   HciRouter::GetRouter().SendPacketToStack(bqr_event);
 
   if (OkToGenerateCrashDump(static_cast<uint8_t>(error))) {
-    GenerateCrashDump(false,
-                      kDumpReasonControllerRootInflammed + " (" +
-                          StringPrintf("error_code: 0x%02hhX",
-                                       static_cast<unsigned char>(error)) +
-                          ")" + " - " + get_error_code_string(error));
+    GenerateCrashDump(
+        false, kDumpReasonControllerRootInflammed + " (" +
+                   StringPrintf("error_code: 0x%02hhX",
+                                static_cast<unsigned char>(error)) +
+                   ")" + " - " + std::string(BqrErrorToStringView(error)));
     BackupLogFiles(crash_timestamp_);
     LogFatal(error, extra_info);
   } else {
@@ -529,7 +465,7 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   // accelerated bt on
 
   bool is_major_fault = (static_cast<BqrErrorCode>(error_code) ==
-                         BqrErrorCode::FIRMWARE_MISCELLANEOUS_MAJOR_FAULT);
+                         BqrErrorCode::kFirmwareMiscellaneousMajorFault);
 
   if (is_major_fault || !IsHardwareStageSupported()) {
     return false;
@@ -591,8 +527,8 @@ void DebugCentral::HandleRootInflammationEvent(
         false, kDumpReasonControllerRootInflammed + " (" +
                    StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
                    ")" + " - " +
-                   get_error_code_string(
-                       static_cast<BqrErrorCode>(vendor_error_code)));
+                   std::string(BqrErrorToStringView(
+                       static_cast<BqrErrorCode>(vendor_error_code))));
     BackupLogFiles(crash_timestamp_);
   }
 }
@@ -702,12 +638,6 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
   crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
   write(crashinfo_fd, crashinfo_ss.str().c_str(), crashinfo_ss.str().length());
   close(crashinfo_fd);
-}
-
-const std::string get_error_code_string(BqrErrorCode error_code) {
-  return error_code_string.find(error_code) != error_code_string.end()
-             ? error_code_string.at(error_code)
-             : "Undefined error code";
 }
 
 }  // namespace debug

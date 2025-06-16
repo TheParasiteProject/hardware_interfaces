@@ -27,6 +27,7 @@
 #include <thread>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
@@ -36,8 +37,8 @@ namespace transport {
 namespace {
 
 using ::android::base::unique_fd;
+using ::bluetooth_hal::bqr::BqrErrorCode;
 using ::bluetooth_hal::config::HalConfigLoader;
-using ::bluetooth_hal::debug::BqrErrorCode;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::util::SystemCallWrapper;
 
@@ -108,7 +109,7 @@ bool PowerManager::PowerControl(bool is_enabled) {
     LOG(ERROR) << __func__ << ": Unable to open rfkill state {" << state_path
                << "}: " << strerror(errno) << " (" << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::kHostPowerUpController,
                                        "Unable to open rfkill state");
 #endif
     return false;
@@ -127,7 +128,7 @@ bool PowerManager::PowerControl(bool is_enabled) {
                << ": Failed to change rfkill state: " << strerror(errno) << " ("
                << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::kHostPowerUpController,
                                        "Cannot write power control data");
 #endif
     return false;

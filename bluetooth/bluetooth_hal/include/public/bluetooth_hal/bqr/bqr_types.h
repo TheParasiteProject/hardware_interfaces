@@ -99,7 +99,7 @@ inline BqrEventType GetBqrEventTypeFromReportId(BqrReportId id) {
   }
 }
 
-inline std::string BqrReportIdToString(BqrReportId id) {
+inline constexpr std::string BqrReportIdToString(BqrReportId id) {
   switch (id) {
     case BqrReportId::kMonitorMode:
       return "Monitoring";
@@ -127,6 +127,124 @@ inline std::string BqrReportIdToString(BqrReportId id) {
       return "Controller Health Monitor Periodic";
     default:
       return "Unknown BQR Report ID";
+  }
+}
+
+// BQR root inflammation vendor error codes
+enum class BqrErrorCode : uint8_t {
+  kUartParsing = 0x01,
+  kUartIncompletePacket = 0x02,
+  kFirmwareChecksum = 0x03,
+  kFirmwareHardFault = 0x10,
+  kFirmwareMemManageFault = 0x11,
+  kFirmwareBusFault = 0x12,
+  kFirmwareUsageFault = 0x13,
+  kFirmwareWatchdogTimeout = 0x14,
+  kFirmwareAssertionFailure = 0x15,
+  kFirmwareMiscellaneous = 0x16,
+  kFirmwareHostRequestDump = 0x17,
+  kFirmwareMiscellaneousMajorFault = 0x20,
+  kFirmwareMiscellaneousCriticalFault = 0x21,
+  kFirmwareThreadGenericError = 0x40,
+  kFirmwareThreadInvalidFrame = 0x41,
+  kFirmwareThreadInvalidParam = 0x42,
+  kFirmwareThreadUnsupportedFrame = 0x43,
+  kSocBigHammerFault = 0x7F,
+  kHostRxThreadStuck = 0x80,
+  kHostHciCommandTimeout = 0x81,
+  kHostInvalidHciEvent = 0x82,
+  kHostUnimplementedPacketType = 0x83,
+  kHostHciH4TxError = 0x84,
+  kHostOpenUserial = 0x90,
+  kHostPowerUpController = 0x91,
+  kHostChangeBaudrate = 0x92,
+  kHostResetBeforeFw = 0x93,
+  kHostDownloadFw = 0x94,
+  kHostResetAfterFw = 0x95,
+  kHostBdaddrFault = 0x96,
+  kHostOpenCoexDeviceError = 0x97,
+  kHostAccelBtInitFailed = 0x98,
+  kHostAccelBtShutdownFailed = 0x99,
+  kChreArbitratorErrBase = 0xE0,
+  kChreArbitratorUnimplementedPacket = 0xE0,
+  kChreArbitratorInvalidPacketSize = 0xE1,
+};
+
+inline std::string_view BqrErrorToStringView(BqrErrorCode error_code) {
+  switch (error_code) {
+    case BqrErrorCode::kUartParsing:
+      return "UART Parsing error (BtFw)";
+    case BqrErrorCode::kUartIncompletePacket:
+      return "UART Incomplete Packet (BtFw)";
+    case BqrErrorCode::kFirmwareChecksum:
+      return "Patch Firmware checksum failure (BtFw)";
+    case BqrErrorCode::kFirmwareHardFault:
+      return "Firmware Crash due to Hard Fault (BtFw)";
+    case BqrErrorCode::kFirmwareMemManageFault:
+      return "Firmware Crash due to Mem manage Fault (BtFw)";
+    case BqrErrorCode::kFirmwareBusFault:
+      return "Firmware Crash due to Bus Fault (BtFw)";
+    case BqrErrorCode::kFirmwareUsageFault:
+      return "Firmware Crash due to Usage fault (BtFw)";
+    case BqrErrorCode::kFirmwareWatchdogTimeout:
+      return "Firmware Crash due to Watchdog timeout (BtFw)";
+    case BqrErrorCode::kFirmwareAssertionFailure:
+      return "Firmware Crash due to Assertion failure (BtFw)";
+    case BqrErrorCode::kFirmwareMiscellaneous:
+      return "Firmware Crash Miscallaneuous (BtFw)";
+    case BqrErrorCode::kFirmwareHostRequestDump:
+      return "HCI Command Timeout (BtCmd)";
+    case BqrErrorCode::kFirmwareMiscellaneousMajorFault:
+      return "Firmware Miscellaneous error - Major (BtFw)";
+    case BqrErrorCode::kFirmwareMiscellaneousCriticalFault:
+      return "Firmware Miscellaneous error - Critical (BtFw)";
+    case BqrErrorCode::kFirmwareThreadGenericError:
+      return "Firmware crash due to 15.4 Thread error (ThreadFw)";
+    case BqrErrorCode::kFirmwareThreadInvalidFrame:
+      return "Firmware crash due to detecting malformed frame from host "
+             "(ThreadFw)";
+    case BqrErrorCode::kFirmwareThreadInvalidParam:
+      return "Firmware crash due to receiving invalid frame "
+             "meta-data/parameters (ThreadFw)";
+    case BqrErrorCode::kFirmwareThreadUnsupportedFrame:
+      return "Firmware crash due to receiving frames from host with "
+             "unsupported command ID (ThreadFw)";
+    case BqrErrorCode::kSocBigHammerFault:
+      return "Soc Big Hammer Error (BtWifi)";
+    case BqrErrorCode::kHostRxThreadStuck:
+      return "Host RX Thread Stuck (BtHal)";
+    case BqrErrorCode::kHostHciCommandTimeout:
+      return "Host HCI Command Timeout (BtHal)";
+    case BqrErrorCode::kHostInvalidHciEvent:
+      return "Invalid / un-reassembled HCI event (BtHal)";
+    case BqrErrorCode::kHostUnimplementedPacketType:
+      return "Host Received Unimplemented Packet Type (BtHal)";
+    case BqrErrorCode::kHostHciH4TxError:
+      return "Host HCI H4 TX Error (BtHal)";
+    case BqrErrorCode::kHostOpenUserial:
+      return "Host Open Userial Error (BtHal)";
+    case BqrErrorCode::kHostPowerUpController:
+      return "Host Can't Power Up Controller (BtHal)";
+    case BqrErrorCode::kHostChangeBaudrate:
+      return "Host Change Baudrate Error (BtHal)";
+    case BqrErrorCode::kHostResetBeforeFw:
+      return "Host HCI Reset Error Before FW Download (BtHal)";
+    case BqrErrorCode::kHostDownloadFw:
+      return "Host Firmware Download Error (BtHal)";
+    case BqrErrorCode::kHostResetAfterFw:
+      return "Host HCI Reset Error After FW Download (BtHal)";
+    case BqrErrorCode::kHostBdaddrFault:
+      return "Host Can't fetch the provisioning BDA (BtHal)";
+    case BqrErrorCode::kHostAccelBtInitFailed:
+      return "Host Accelerated Init Failed (BtHal)";
+    case BqrErrorCode::kHostAccelBtShutdownFailed:
+      return "Host Accelerated ShutDown Failed (BtHal)";
+    case BqrErrorCode::kChreArbitratorUnimplementedPacket:
+      return "Arbitrator Detected Unimplemented Packet Type Error (BtChre)";
+    case BqrErrorCode::kChreArbitratorInvalidPacketSize:
+      return "Arbitrator Detected Invalid Packet Size (BtChre)";
+    default:
+      return "Undefined error code";
   }
 }
 
