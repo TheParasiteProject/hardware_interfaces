@@ -41,7 +41,7 @@ message FirmwareConfigForTransport {
   int32 transport_type = 1;
 
   optional string firmware_folder_name = 2;
-  optional string firmware_file_name = 3;
+  repeated string firmware_file_name = 3;
   optional uint32 chip_id = 4;
   optional uint32 load_mini_drv_delay_ms = 5;
   optional uint32 launch_ram_delay_ms = 6;

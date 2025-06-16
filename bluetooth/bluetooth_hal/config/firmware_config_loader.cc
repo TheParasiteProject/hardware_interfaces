@@ -106,6 +106,8 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
       std::unordered_map<SetupCommandType, std::unique_ptr<SetupCommandPacket>>&
           target_map);
 
+  bool OpenNextFirmwareFile();
+
   std::optional<DataPacket> GetNextFirmwareDataByPacket();
   std::optional<DataPacket> GetNextFirmwareDataByAccumulation();
 
@@ -116,10 +118,9 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   std::unordered_map<SetupCommandType, std::unique_ptr<SetupCommandPacket>>
       active_setup_commands_;
 
-  std::string firmware_folder_;
-  std::string firmware_file_;
-
   std::mutex firmware_data_mutex_;
+  std::vector<std::string> current_firmware_filenames_;
+  int current_firmware_file_index_;
 
   std::optional<std::vector<uint8_t>> previous_header_;
   int firmware_file_fd_{-1};
@@ -127,52 +128,81 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
 
 bool FirmwareConfigLoaderImpl::ResetFirmwareDataLoadingState() {
   if (!active_config_ || !active_config_->get().has_firmware_folder_name() ||
-      !active_config_->get().has_firmware_file_name()) {
+      current_firmware_filenames_.empty()) {
     LOG(ERROR) << __func__
-               << ": No active config or firmware path/file not set.";
+               << ": No active config, firmware folder not set, or firmware "
+                  "file list is empty.";
     return false;
   }
 
+  std::scoped_lock lock(firmware_data_mutex_);
+  if (firmware_file_fd_ != -1) {
+    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+    firmware_file_fd_ = -1;
+  }
+
+  current_firmware_file_index_ = -1;
+  return OpenNextFirmwareFile();  // Attempt to open the first file.
+}
+
+bool FirmwareConfigLoaderImpl::OpenNextFirmwareFile() {
+  if (firmware_file_fd_ != -1) {
+    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+    firmware_file_fd_ = -1;
+  }
+  previous_header_.reset();  // Reset for accumulation mode for the new file.
+
+  current_firmware_file_index_++;
+  if (static_cast<size_t>(current_firmware_file_index_) >=
+      current_firmware_filenames_.size()) {
+    LOG(INFO) << __func__ << ": All firmware files processed.";
+    return false;  // No more files
+  }
+
+  const std::string& current_file_name =
+      current_firmware_filenames_[current_firmware_file_index_];
   const std::string firmware_path =
-      active_config_->get().firmware_folder_name() +
-      active_config_->get().firmware_file_name();
+      active_config_->get().firmware_folder_name() + current_file_name;
+
+  LOG(INFO) << __func__
+            << ": Attempting to open firmware file: " << firmware_path;
   firmware_file_fd_ =
       SystemCallWrapper::GetWrapper().Open(firmware_path.c_str(), O_RDONLY);
   if (firmware_file_fd_ < 0) {
     LOG(ERROR) << __func__ << ": Cannot open firmware file: " << firmware_path
-               << ".";
+               << ". Error: " << strerror(errno);
     return false;
   }
-
+  LOG(INFO) << __func__
+            << ": Successfully opened firmware file: " << firmware_path;
   return true;
 }
 
 std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextFirmwareData() {
-  if (firmware_file_fd_ == -1) {
+  std::scoped_lock lock(firmware_data_mutex_);
+  // If no file is currently open (or previous one ended), try opening the
+  // next one.
+  if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
     return std::nullopt;
   }
 
-  {
-    std::scoped_lock lock(firmware_data_mutex_);
-    if (!active_config_ ||
-        !active_config_->get().has_firmware_data_loading_type()) {
-      LOG(WARNING) << __func__
-                   << ": No active config or data loading type not set, "
-                      "defaulting to PACKET_BY_PACKET.";
+  if (!active_config_ ||
+      !active_config_->get().has_firmware_data_loading_type()) {
+    LOG(WARNING)
+        << __func__
+        << ": Data loading type not set, defaulting to PACKET_BY_PACKET.";
+    return GetNextFirmwareDataByPacket();
+  }
+
+  DataLoadingType data_loading_type = static_cast<DataLoadingType>(
+      active_config_->get().firmware_data_loading_type());
+
+  switch (data_loading_type) {
+    case DataLoadingType::kByAccumulation:
+      return GetNextFirmwareDataByAccumulation();
+    case DataLoadingType::kByPacket:
+    default:
       return GetNextFirmwareDataByPacket();
-    }
-
-    DataLoadingType data_loading_type_ = static_cast<DataLoadingType>(
-        active_config_->get().firmware_data_loading_type());
-
-    switch (data_loading_type_) {
-      case DataLoadingType::kByAccumulation:
-        return GetNextFirmwareDataByAccumulation();
-      case DataLoadingType::kByPacket:
-      default:
-        return GetNextFirmwareDataByPacket();
-        break;
-    }
   }
 }
 
@@ -223,7 +253,14 @@ std::string FirmwareConfigLoaderImpl::DumpConfigToString() const {
   for (const auto& [transport_type, config] : transport_specific_configs_) {
     ss << "  Transport Type: " << static_cast<int>(transport_type) << "\n";
     ss << "    Firmware Folder: \"" << config.firmware_folder_name() << "\"\n";
-    ss << "    Firmware File: \"" << config.firmware_file_name() << "\"\n";
+    ss << "    Firmware Files:\n";
+    if (config.firmware_file_name_size() > 0) {
+      for (const std::string& fname : config.firmware_file_name()) {
+        ss << "      - \"" << fname << "\"\n";
+      }
+    } else {
+      ss << "      (None)\n";
+    }
     ss << "    Chip ID: " << config.chip_id() << "\n";
     ss << "    Load MiniDrv Delay (ms): " << config.load_mini_drv_delay_ms()
        << "\n";
@@ -326,6 +363,13 @@ bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
             << ": Selected firmware configuration for transport type "
             << static_cast<int>(transport_type);
 
+  current_firmware_filenames_.clear();
+  const auto& config = active_config_->get();
+  for (const std::string& fname : config.firmware_file_name()) {
+    current_firmware_filenames_.push_back(fname);
+  }
+  current_firmware_file_index_ = -1;
+
   active_setup_commands_.clear();
   if (active_config_->get().has_setup_commands()) {
     LoadSetupCommandsFromConfig(active_config_->get(), active_setup_commands_);
@@ -382,55 +426,77 @@ void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
 
 std::optional<DataPacket>
 FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
-  if (firmware_file_fd_ == -1) {
-    return std::nullopt;
+  while (true) {
+    if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
+      return std::nullopt;  // No more files or error opening.
+    }
+
+    // Read packet header (opcode and length).
+    std::vector<uint8_t> header(3);
+    ssize_t bytes_read =
+        TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
+            firmware_file_fd_, header.data(), header.size()));
+
+    if (bytes_read <= 0) {
+      // End of current file or error.
+      LOG(ERROR) << __func__ << ": Failed to read full header for packet in "
+                 << current_firmware_filenames_[current_firmware_file_index_];
+      SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+      firmware_file_fd_ = -1;
+      // Attempt to open the next file.
+      continue;
+    }
+
+    // Read remaining packet data.
+    const size_t payload_size = header[2];
+    std::vector<uint8_t> packet_payload(1 + header.size() + payload_size);
+    packet_payload[0] = static_cast<uint8_t>(HciPacketType::kCommand);
+    std::copy(header.begin(), header.end(), packet_payload.begin() + 1);
+
+    ssize_t payload_bytes_read =
+        TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
+            firmware_file_fd_, packet_payload.data() + 1 + header.size(),
+            payload_size));
+
+    if (payload_bytes_read != static_cast<ssize_t>(payload_size)) {
+      // Incomplete packet or error.
+      LOG(ERROR) << __func__ << ": Failed to read full payload for packet in "
+                 << current_firmware_filenames_[current_firmware_file_index_];
+      SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+      firmware_file_fd_ = -1;
+      // Attempt to open the next file.
+      continue;
+    }
+
+    bool is_launch_ram =
+        (GetOpcode(std::span(header)) == kHciVscLaunchRamOpcode);
+    bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
+                         current_firmware_filenames_.size() - 1);
+
+    DataType packet_data_type = DataType::kDataFragment;
+    if (is_launch_ram) {
+      LOG(INFO) << __func__ << ": Launch RAM command found in file "
+                << current_firmware_filenames_[current_firmware_file_index_];
+      // This launch_ram packet is the end of the current file.
+      // Close fd now, so next call to GetNextFirmwareData will try
+      // OpenNextFirmwareFile.
+      SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+      firmware_file_fd_ = -1;
+      if (is_last_file) {
+        LOG(INFO) << __func__ << " This is the last firmware file.";
+        packet_data_type = DataType::kDataEnd;
+      }
+    }
+    return DataPacket(packet_data_type, packet_payload);
   }
-
-  // Read packet header (opcode and length).
-  std::vector<uint8_t> header(3);
-  ssize_t bytes_read = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-      firmware_file_fd_, header.data(), header.size()));
-  if (bytes_read <= 0) {
-    // End of stream or error.
-    firmware_file_fd_ = -1;
-    return std::nullopt;
-  }
-
-  // Read remaining packet data.
-  const size_t payload_size = header[2];
-  std::vector<uint8_t> packet(1 + header.size() + payload_size);
-  packet[0] = static_cast<uint8_t>(HciPacketType::kCommand);
-  std::copy(header.begin(), header.end(), packet.begin() + 1);
-
-  bytes_read = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-      firmware_file_fd_, packet.data() + 1 + header.size(), payload_size));
-  if (bytes_read != static_cast<ssize_t>(payload_size)) {
-    // Incomplete packet or error.
-    firmware_file_fd_ = -1;
-    return std::nullopt;
-  }
-
-  // Check for target opcode after reading the whole packet.
-  if (GetOpcode(std::span(header)) == kHciVscLaunchRamOpcode) {
-    LOG(INFO) << __func__ << " Firmware data download is completed.";
-    firmware_file_fd_ = -1;
-    return DataPacket(DataType::kDataEnd, packet);
-  }
-
-  return DataPacket(DataType::kDataFragment, packet);
 }
 
 std::optional<DataPacket>
 FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
-  if (firmware_file_fd_ == -1) {
-    return std::nullopt;
-  }
-
   std::vector<uint8_t> buffer;
   constexpr int kBufferSize = 32 * 1024;
   buffer.reserve(kBufferSize);
-
-  bool is_end = false;
+  bool is_final_packet_of_all_files = false;
 
   while (true) {
     std::vector<uint8_t> header;
@@ -439,66 +505,81 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
       header = std::move(previous_header_.value());
       previous_header_.reset();
     } else {
-      // Read packet header (opcode and length).
-      header.resize(3);
-      ssize_t bytes_read =
-          TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-              firmware_file_fd_, header.data(), header.size()));
-      if (bytes_read <= 0) {
-        // End of stream or error.
-        firmware_file_fd_ = -1;
-        buffer.clear();
+      if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
+        // No more files or error opening. If buffer has data, return it.
         break;
       }
     }
-
-    // Calculate total packet size.
-    const size_t payload_size = header[2];
-    const size_t packet_size = 1 + header.size() + payload_size;
-
-    // Check if the current packet fits in the buffer.
-    if (buffer.size() + packet_size > kBufferSize) {
-      previous_header_ = std::move(header);
-      return DataPacket(DataType::kDataFragment, std::move(buffer));
-    }
-
-    if (GetOpcode(header) == kHciVscLaunchRamOpcode && !buffer.empty()) {
-      previous_header_ = std::move(header);
-      return DataPacket(DataType::kDataFragment, std::move(buffer));
-    }
-
-    // Read remaining packet data and append to buffer.
-    buffer.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
-    buffer.insert(buffer.end(), header.begin(), header.end());
-
-    std::vector<uint8_t> payload(payload_size);
+    // Read packet header (opcode and length).
+    header.resize(3);
     ssize_t bytes_read =
         TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-            firmware_file_fd_, payload.data(), payload_size));
-    if (bytes_read != static_cast<ssize_t>(payload_size)) {
-      // Incomplete packet or error.
+            firmware_file_fd_, header.data(), header.size()));
+    if (bytes_read <= 0) {
+      SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
       firmware_file_fd_ = -1;
-      buffer.clear();
-      break;
-    }
-    buffer.insert(buffer.end(), payload.begin(), payload.end());
-
-    // Check for target opcode after reading the whole packet.
-    if (GetOpcode(header) == kHciVscLaunchRamOpcode) {
-      LOG(INFO) << __func__ << " Firmware data download is completed.";
-      firmware_file_fd_ = -1;
-      is_end = true;
-      break;
+      if (!buffer.empty()) {
+        // Return current buffer if it has content.
+        break;
+      }
+      continue;  // Try opening next file.
     }
   }
 
-  // Return accumulated data.
-  if (!buffer.empty()) {
-    return DataPacket(is_end ? DataType::kDataEnd : DataType::kDataFragment,
-                      std::move(buffer));
+  // Calculate total packet size.
+  const size_t payload_size = header[2];
+  const size_t packet_size = 1 + header.size() + payload_size;
+
+  bool is_launch_ram = (GetOpcode(header) == kHciVscLaunchRamOpcode);
+  bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
+                       current_firmware_filenames_.size() - 1);
+
+  // Check if the current packet fits in the buffer.
+  if ((is_launch_ram && !buffer.empty()) ||
+      (!is_launch_ram && buffer.size() + packet_size > kBufferSize)) {
+    previous_header_ = std::move(header);
+    return DataPacket(DataType::kDataFragment, std::move(buffer));
   }
 
-  return std::nullopt;
+  // At this point, the packet (even if it's launch_ram) will be added to
+  // the buffer.
+
+  // Read remaining packet data and append to buffer.
+  buffer.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+  buffer.insert(buffer.end(), header.begin(), header.end());
+
+  std::vector<uint8_t> payload(payload_size);
+  ssize_t bytes_read = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
+      firmware_file_fd_, payload.data(), payload_size));
+  if (bytes_read != static_cast<ssize_t>(payload_size)) {
+    // Incomplete packet or error.
+    LOG(ERROR) << __func__ << ": Failed to read full payload for packet in "
+               << current_firmware_filenames_[current_firmware_file_index_];
+    firmware_file_fd_ = -1;
+    buffer.clear();
+    continue;  // Try next file or fail.
+  }
+  buffer.insert(buffer.end(), payload.begin(), payload.end());
+
+  // Check for target opcode after reading the whole packet.
+  if (is_launch_ram) {
+    LOG(INFO) << __func__ << " Launch RAM command found in file "
+              << current_firmware_filenames_[current_firmware_file_index_];
+    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+    firmware_file_fd_ = -1;
+    if (is_last_file) {
+      is_final_packet_of_all_files = true;
+    }
+    break;
+  }
+}
+
+if (!buffer.empty()) {
+  return DataPacket(is_final_packet_of_all_files ? DataType::kDataEnd
+                                                 : DataType::kDataFragment,
+                    std::move(buffer));
+}
+return std::nullopt;
 }
 
 std::mutex FirmwareConfigLoader::loader_mutex_;
