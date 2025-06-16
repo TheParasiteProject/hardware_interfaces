@@ -3025,6 +3025,7 @@ TEST_P(AudioCoreTelephony, SwitchAudioMode) {
                       telephony->switchAudioMode(mode))
                 << toString(mode);
     }
+    EXPECT_IS_OK(telephony->switchAudioMode(AudioMode::NORMAL)) << toString(AudioMode::NORMAL);
 }
 
 TEST_P(AudioCoreTelephony, TelecomConfig) {
