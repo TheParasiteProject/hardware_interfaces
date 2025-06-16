@@ -267,22 +267,20 @@ void DeleteCoredumpFiles(const std::string& dir) {
 
 void LogFatal(BqrErrorCode error, std::string extra_info);
 
-DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
-    : anchor_(anchor), type_(type) {
+DurationTracker::DurationTracker(AnchorType type, const std::string& log)
+    : log_(log), type_(type) {
   std::stringstream ss;
-  ss << anchor << " [ IN]";
+  ss << "[ IN] " << log_;
   DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
-DebugAnchor::~DebugAnchor() {
-  if (anchor_.empty()) {
+DurationTracker::~DurationTracker() {
+  if (log_.empty()) {
     return;
   }
   std::stringstream ss;
-  ss << anchor_ << " [OUT]";
-  DebugCentral::Get().UpdateRecord(
-      static_cast<AnchorType>(static_cast<uint8_t>(type_) + 1), ss.str());
-  anchor_.clear();
+  ss << "[OUT] " << log_;
+  DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
 DebugCentral& DebugCentral::Get() {

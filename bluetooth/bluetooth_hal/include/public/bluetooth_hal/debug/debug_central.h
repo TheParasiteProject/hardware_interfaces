@@ -35,17 +35,11 @@
 enum class AnchorType : uint8_t {
   // For DURATION_TRACKER.
   BTHAL_INIT = 0,
-  BTHAL_INIT_OUT,
   BTHAL_PERFORM_INIT,
-  BTHAL_PERFORM_INIT_OUT,
   SEND_HCI_CMD,
-  SEND_HCI_CMD_OUT,
   SEND_ACL_DAT,
-  SEND_ACL_DAT_OUT,
   SEND_SCO_DAT,
-  SEND_SCO_DAT_OUT,
   SEND_ISO_DAT,
-  SEND_ISO_DAT_OUT,
   THREAD_SEND_DAT_UPLINK,
   THREAD_SEND_DAT_DOWNLINK,
   THREAD_START_DAEMON,
@@ -57,27 +51,16 @@ enum class AnchorType : uint8_t {
   THREAD_CLIENT_CONNECT,
   THREAD_HARDWARE_RESET,
   CALLBACK_HCI_EVT,
-  CALLBACK_HCI_EVT_OUT,
   CALLBACK_HCI_ACL,
-  CALLBACK_HCI_ACL_OUT,
   CALLBACK_HCI_SCO,
-  CALLBACK_HCI_SCO_OUT,
   CALLBACK_HCI_ISO,
-  CALLBACK_HCI_ISO_OUT,
   USERIAL_OPEN,
-  USERIAL_OPEN_OUT,
   USERIAL_CLOSE,
-  USERIAL_CLOSE_OUT,
   POWER_CTRL,
-  POWER_CTRL_OUT,
   HCI_RESET,
-  HCI_RESET_OUT,
   CHANGE_BAUDRATE,
-  CHANGE_BAUDRATE_OUT,
   FW_DOWNLOAD,
-  FW_DOWNLOAD_OUT,
   READ_LOCAL_NAME,
-  READ_LOCAL_NAME_OUT,
   // For ONE_TIME_LOGGER.
   SERVICE_DIED = 46,
   BTHAL_THD_INIT,
@@ -137,11 +120,10 @@ enum class AnchorType : uint8_t {
  * send to DebugCentral.
  */
 #ifdef UNIT_TEST
-#define DURATION_TRACKER(type, anchor)
+#define DURATION_TRACKER(type, log)
 #else
-#define DURATION_TRACKER(type, anchor)    \
-  ::bluetooth_hal::debug::DebugAnchor a = \
-      ::bluetooth_hal::debug::DebugCentral::Get().SetAnchor(type, anchor);
+#define DURATION_TRACKER(type, log) \
+  ::bluetooth_hal::debug::DurationTracker duration_##__COUNTER__(type, log);
 #endif
 
 /*
@@ -186,17 +168,15 @@ enum class AnchorType : uint8_t {
 namespace bluetooth_hal {
 namespace debug {
 
-class DebugCentral;
-
-class DebugAnchor {
+class DurationTracker {
  public:
-  DebugAnchor(AnchorType type, const std::string& anchor);
+  DurationTracker(AnchorType type, const std::string& log);
 
   // Manually release the auto debug anchor.
-  ~DebugAnchor();
+  ~DurationTracker();
 
  private:
-  std::string anchor_;
+  std::string log_;
   AnchorType type_;
 };
 
@@ -228,25 +208,6 @@ class DebugCentral {
    */
   void ReportBqrError(::bluetooth_hal::bqr::BqrErrorCode error,
                       std::string extra_info);
-
-  /*
-   * Two kinds of debug anchor are supported to collect log messages.
-   * is_lifetime : true - we handle the debug anchor's life cycle,
-   * add [ Set] message in the constructor and [Free] message in the destructor
-   * to record the enter and exit timestamp of an invoked function.
-   * Usually, we put this kind debug anchor in begin of function, the purpose
-   * of this debug anchor usage is record time-consuming of a function.
-   * [Example]: initialize_impl [ Set]: 13:36:15:133
-   *            initialize_impl [Free]: 13:36:17:072
-   * is_lifetime : false - we record the timestamp that debug anchor appeared in
-   * code. Usually, we put this kind debug anchor at the exception occurred
-   * place or record informative messages in a function. [Example]: Received
-   * Hardware error event: 19:56:49:036 [Example]: firmware_download Done:
-   * 13:36:17:024
-   */
-  DebugAnchor SetAnchor(AnchorType type, const std::string& anchor) {
-    return DebugAnchor(type, anchor);
-  }
 
   /**
    * @brief Inform DebugCentral to handle Root Inflammation Event reported from
