@@ -23,6 +23,7 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
+#include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/transport/device_control/power_manager.h"
@@ -160,15 +161,15 @@ void TransportUartH4::RefreshLpmTimer() {
 
 bool TransportUartH4::ResumeFromLowPowerMode() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
-  LOG(DEBUG) << __func__ << ": Attempting to resume from low power mode.";
+  HAL_LOG(DEBUG) << __func__ << ": Attempting to resume from low power mode.";
 
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported() ||
       !IsLowPowerModeSetupCompleted() || is_lpm_resumed_) {
-    LOG(DEBUG) << __func__ << ": LPM not supported ("
-               << HalConfigLoader::GetLoader().IsLowPowerModeSupported()
-               << "), or not setup (" << IsLowPowerModeSetupCompleted()
-               << "), or already resumed (" << is_lpm_resumed_
-               << "). Skipping resume.";
+    LOG(VERBOSE) << __func__ << ": LPM not supported ("
+                 << HalConfigLoader::GetLoader().IsLowPowerModeSupported()
+                 << "), or not setup (" << IsLowPowerModeSetupCompleted()
+                 << "), or already resumed (" << is_lpm_resumed_
+                 << "). Skipping resume.";
     return true;
   }
 
@@ -183,20 +184,21 @@ bool TransportUartH4::ResumeFromLowPowerMode() {
   }
 
   is_lpm_resumed_ = true;
-  LOG(INFO) << __func__ << ": Successfully resumed from low power mode.";
+  HAL_LOG(DEBUG) << __func__ << ": Successfully resumed from low power mode.";
 
   return true;
 }
 
 bool TransportUartH4::SuspendToLowPowerMode() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
-  LOG(DEBUG) << __func__ << ": Attempting to suspend to low power mode.";
+  HAL_LOG(DEBUG) << __func__ << ": Attempting to suspend to low power mode.";
 
   if (!HalConfigLoader::GetLoader().IsLowPowerModeSupported() ||
       !IsLowPowerModeSetupCompleted() || !is_lpm_resumed_) {
-    LOG(DEBUG) << __func__
-               << ": LPM not supported, or not setup, or not resumed. Skipping "
-                  "suspend.";
+    LOG(VERBOSE)
+        << __func__
+        << ": LPM not supported, or not setup, or not resumed. Skipping "
+           "suspend.";
     return true;
   }
 
@@ -211,7 +213,7 @@ bool TransportUartH4::SuspendToLowPowerMode() {
   }
 
   is_lpm_resumed_ = false;
-  LOG(INFO) << __func__ << ": Successfully suspend to low power mode.";
+  HAL_LOG(DEBUG) << __func__ << ": Successfully suspend to low power mode.";
 
   return true;
 }
