@@ -370,6 +370,7 @@ typedef struct {
 #define NAN_SCHEDULE_UPDATE_CHANNEL_MASK  0x02
 
 /* NAN pairing bootstrapping method */
+#define NAN_PAIRING_BOOTSTRAPPING_NONE_MASK                0x00
 #define NAN_PAIRING_BOOTSTRAPPING_OPPORTUNISTIC_MASK       0x01
 #define NAN_PAIRING_BOOTSTRAPPING_PIN_CODE_DISPLAY_MASK    0x02
 #define NAN_PAIRING_BOOTSTRAPPING_PASSPHRASE_DISPLAY_MASK  0x04
@@ -2975,7 +2976,7 @@ typedef struct {
 
 } NanBootstrappingRequest;
 /*
- NAN pairing bootstrapping response from responder to a initate request
+ NAN pairing bootstrapping response from responder to a initiate request
 */
 typedef struct {
     /* Publish or Subscribe Id of local Publish/Subscribe */
@@ -3012,6 +3013,9 @@ typedef struct {
 
     /* Response Code indicating ACCEPT/REJECT */
     NanBootstrappingResponseCode rsp_code;
+
+    /* Response bootstrapping method */
+    u16 response_bootstrapping_method;
 
     /* The delay of bootstrapping in seconds */
     u32 come_back_delay;
