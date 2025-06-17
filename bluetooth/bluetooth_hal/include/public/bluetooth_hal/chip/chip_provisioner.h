@@ -68,9 +68,10 @@ class ChipProvisioner : public ChipProvisionerInterface,
    */
   bool ResetFirmware() override;
 
- private:
+ protected:
   // HciRouterClient overrides.
-  void OnCommandCallback(const ::bluetooth_hal::hci::HalPacket& callback_event);
+  void OnCommandCallback(
+      const ::bluetooth_hal::hci::HalPacket& callback_event) override;
   void OnBluetoothEnabled() override {};
   void OnBluetoothDisabled() override {};
   void OnBluetoothChipReady() override {};
@@ -88,7 +89,8 @@ class ChipProvisioner : public ChipProvisionerInterface,
   bool SendCommandAndWait(const hci::HalPacket& packet);
   bool ProvisionBluetoothAddress();
   std::optional<hci::HalPacket> PrepareWriteBdAddressPacket();
-  bool WriteFwPatchramPacket();
+
+  virtual bool WriteFwPatchramPacket();
 
   std::optional<std::function<void(::bluetooth_hal::HalState)>>
       on_hal_state_update_;
