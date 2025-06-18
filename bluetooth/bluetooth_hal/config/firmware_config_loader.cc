@@ -509,77 +509,78 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
         // No more files or error opening. If buffer has data, return it.
         break;
       }
+      // Read packet header (opcode and length).
+      header.resize(3);
+      ssize_t bytes_read =
+          TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
+              firmware_file_fd_, header.data(), header.size()));
+      if (bytes_read <= 0) {
+        SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+        firmware_file_fd_ = -1;
+        if (!buffer.empty()) {
+          // Return current buffer if it has content.
+          break;
+        }
+        // Attempt to open the next file.
+        continue;
+      }
     }
-    // Read packet header (opcode and length).
-    header.resize(3);
+
+    // Calculate total packet size.
+    const size_t payload_size = header[2];
+    const size_t packet_size = 1 + header.size() + payload_size;
+
+    bool is_launch_ram = (GetOpcode(header) == kHciVscLaunchRamOpcode);
+    bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
+                         current_firmware_filenames_.size() - 1);
+
+    // Check if the current packet fits in the buffer.
+    if ((is_launch_ram && !buffer.empty()) ||
+        (!is_launch_ram && buffer.size() + packet_size > kBufferSize)) {
+      previous_header_ = std::move(header);
+      return DataPacket(DataType::kDataFragment, std::move(buffer));
+    }
+
+    // At this point, the packet (even if it's launch_ram) will be added to
+    // the buffer.
+
+    // Read remaining packet data and append to buffer.
+    buffer.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
+    buffer.insert(buffer.end(), header.begin(), header.end());
+
+    std::vector<uint8_t> payload(payload_size);
     ssize_t bytes_read =
         TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-            firmware_file_fd_, header.data(), header.size()));
-    if (bytes_read <= 0) {
+            firmware_file_fd_, payload.data(), payload_size));
+    if (bytes_read != static_cast<ssize_t>(payload_size)) {
+      // Incomplete packet or error.
+      LOG(ERROR) << __func__ << ": Failed to read full payload for packet in "
+                 << current_firmware_filenames_[current_firmware_file_index_];
+      firmware_file_fd_ = -1;
+      buffer.clear();
+      continue;  // Try next file or fail.
+    }
+    buffer.insert(buffer.end(), payload.begin(), payload.end());
+
+    // Check for target opcode after reading the whole packet.
+    if (is_launch_ram) {
+      LOG(INFO) << __func__ << " Launch RAM command found in file "
+                << current_firmware_filenames_[current_firmware_file_index_];
       SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
       firmware_file_fd_ = -1;
-      if (!buffer.empty()) {
-        // Return current buffer if it has content.
-        break;
+      if (is_last_file) {
+        is_final_packet_of_all_files = true;
       }
-      continue;  // Try opening next file.
+      break;
     }
   }
 
-  // Calculate total packet size.
-  const size_t payload_size = header[2];
-  const size_t packet_size = 1 + header.size() + payload_size;
-
-  bool is_launch_ram = (GetOpcode(header) == kHciVscLaunchRamOpcode);
-  bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
-                       current_firmware_filenames_.size() - 1);
-
-  // Check if the current packet fits in the buffer.
-  if ((is_launch_ram && !buffer.empty()) ||
-      (!is_launch_ram && buffer.size() + packet_size > kBufferSize)) {
-    previous_header_ = std::move(header);
-    return DataPacket(DataType::kDataFragment, std::move(buffer));
+  if (!buffer.empty()) {
+    return DataPacket(is_final_packet_of_all_files ? DataType::kDataEnd
+                                                   : DataType::kDataFragment,
+                      std::move(buffer));
   }
-
-  // At this point, the packet (even if it's launch_ram) will be added to
-  // the buffer.
-
-  // Read remaining packet data and append to buffer.
-  buffer.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
-  buffer.insert(buffer.end(), header.begin(), header.end());
-
-  std::vector<uint8_t> payload(payload_size);
-  ssize_t bytes_read = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-      firmware_file_fd_, payload.data(), payload_size));
-  if (bytes_read != static_cast<ssize_t>(payload_size)) {
-    // Incomplete packet or error.
-    LOG(ERROR) << __func__ << ": Failed to read full payload for packet in "
-               << current_firmware_filenames_[current_firmware_file_index_];
-    firmware_file_fd_ = -1;
-    buffer.clear();
-    continue;  // Try next file or fail.
-  }
-  buffer.insert(buffer.end(), payload.begin(), payload.end());
-
-  // Check for target opcode after reading the whole packet.
-  if (is_launch_ram) {
-    LOG(INFO) << __func__ << " Launch RAM command found in file "
-              << current_firmware_filenames_[current_firmware_file_index_];
-    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
-    firmware_file_fd_ = -1;
-    if (is_last_file) {
-      is_final_packet_of_all_files = true;
-    }
-    break;
-  }
-}
-
-if (!buffer.empty()) {
-  return DataPacket(is_final_packet_of_all_files ? DataType::kDataEnd
-                                                 : DataType::kDataFragment,
-                    std::move(buffer));
-}
-return std::nullopt;
+  return std::nullopt;
 }
 
 std::mutex FirmwareConfigLoader::loader_mutex_;
