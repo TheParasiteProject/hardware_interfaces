@@ -957,6 +957,112 @@ TEST_F(FirmwareAccumulatedBufferTest,
       FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
+class MultiFileAccumulatedTest : public FirmwareConfigLoaderTestBase {
+ protected:
+  void SetUp() override {
+    FirmwareConfigLoaderTestBase::SetUp();
+
+    std::vector<TransportType> priority_list = {TransportType::kUartH4};
+    EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+        .WillRepeatedly(ReturnRef(priority_list));
+    EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+        kConfigMultiFileAccumulated));
+  }
+
+  static constexpr std::string_view kConfigMultiFileAccumulated = R"({
+   "firmware_configs": [
+     {
+       "transport_type": 1,
+       "firmware_folder_name": "/test/fw_multi_accum/",
+       "firmware_file_name": ["file1_accum.bin", "file2_accum.bin"],
+       "firmware_data_loading_type": "ACCUMULATED_BUFFER"
+     }
+   ]
+ })";
+};
+
+TEST_F(MultiFileAccumulatedTest, ReadsDataFromMultipleFilesSuccessfully) {
+  // File 1.
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw_multi_accum/file1_accum.bin"),
+                   _))
+      .WillOnce(Return(kFile1Fd));
+
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> file1_packet1_hdr = {0x01, 0xFC, 0x02};
+  std::vector<uint8_t> file1_packet1_pld = {0xAA, 0xBB};
+  std::vector<uint8_t> file1_launch_ram_hdr = {0x4E, 0xFC, 0x01};
+  std::vector<uint8_t> file1_launch_ram_pld = {0xCC};
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file1_packet1_hdr.data(), 3);
+                      }),
+                      Return(3)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file1_launch_ram_hdr.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 2))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file1_packet1_pld.data(), 2);
+                      }),
+                      Return(2)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file1_launch_ram_pld.data(), 1);
+                      }),
+                      Return(1)));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet1->GetPayload(),
+            HalPacket({0x01, 0x01, 0xFC, 0x02, 0xAA, 0xBB}));
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet2->GetPayload(),
+            HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xCC}));
+
+  // File 2.
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw_multi_accum/file2_accum.bin"),
+                   _))
+      .WillOnce(Return(kFile2Fd));
+
+  std::vector<uint8_t> file2_launch_ram_hdr = {0x4E, 0xFC, 0x01};
+  std::vector<uint8_t> file2_launch_ram_pld = {0xFF};
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile2Fd, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file2_launch_ram_hdr.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile2Fd, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, file2_launch_ram_pld.data(), 1);
+                      }),
+                      Return(1)));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile2Fd)).Times(1);
+
+  auto data_packet3 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet3.has_value());
+  EXPECT_EQ(data_packet3->GetDataType(), DataType::kDataEnd);
+  EXPECT_EQ(data_packet3->GetPayload(),
+            HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xFF}));
+
+  // No more data.
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
