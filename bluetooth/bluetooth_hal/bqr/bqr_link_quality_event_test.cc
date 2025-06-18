@@ -20,6 +20,10 @@
 #include <vector>
 
 #include "bluetooth_hal/bluetooth_address.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v1_to_v3.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v4.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v5.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v6.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "gtest/gtest.h"
@@ -148,7 +152,7 @@ HalPacket CreateWrongReportIdPacket() {
   return HalPacket(data);
 }
 
-void VerifyV3AndBackward(const BqrLinkQualityEventV3AndBackward& packet) {
+void VerifyV1ToV3(const BqrLinkQualityEventV1ToV3& packet) {
   // Assertions for common Link Quality fields
   ASSERT_EQ(packet.GetPacketTypes(), 0x51);
   ASSERT_EQ(packet.GetConnectionHandle(), 0x0060);
@@ -193,8 +197,7 @@ void VerifyV5(const BqrLinkQualityEventV5& packet) {
   ASSERT_EQ(packet.GetRxDuplicatePackets(), 0x00000003);
 }
 
-void VerifyDefaultV3AndBackward(
-    const BqrLinkQualityEventV3AndBackward& packet) {
+void VerifyDefaultV1ToV3(const BqrLinkQualityEventV1ToV3& packet) {
   ASSERT_FALSE(packet.IsValid());
   ASSERT_EQ(packet.GetVersion(), BqrVersion::kNone);
   ASSERT_EQ(packet.GetPacketTypes(), 0);
@@ -218,7 +221,7 @@ void VerifyDefaultV3AndBackward(
 }
 
 void VerifyDefaultV4(const BqrLinkQualityEventV4& packet) {
-  VerifyDefaultV3AndBackward(packet);
+  VerifyDefaultV1ToV3(packet);
 
   // Assertions for V4 specific fields
   ASSERT_FALSE(packet.IsValid());
@@ -232,7 +235,7 @@ void VerifyDefaultV4(const BqrLinkQualityEventV4& packet) {
 }
 
 void VerifyDefaultV5(const BqrLinkQualityEventV5& packet) {
-  VerifyDefaultV3AndBackward(packet);
+  VerifyDefaultV1ToV3(packet);
 
   // Assertions for V5 specific fields
   ASSERT_FALSE(packet.IsValid());
@@ -257,14 +260,13 @@ void VerifyDefaultV6(const BqrLinkQualityEventV6& packet) {
 }
 
 TEST(BqrLinkQualityEventTest, ValidV3PacketParsing) {
-  auto packet =
-      BqrLinkQualityEventV3AndBackward(CreateBqrLinkQualityEventV6V5V3());
+  auto packet = BqrLinkQualityEventV1ToV3(CreateBqrLinkQualityEventV6V5V3());
   ASSERT_TRUE(packet.IsValid());
   ASSERT_EQ(packet.GetVersion(), BqrVersion::kV1ToV3);
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
-  VerifyV3AndBackward(packet);
+  VerifyV1ToV3(packet);
 }
 
 TEST(BqrLinkQualityEventTest, ValidV4PacketParsing) {
@@ -274,7 +276,7 @@ TEST(BqrLinkQualityEventTest, ValidV4PacketParsing) {
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
-  VerifyV3AndBackward(packet);
+  VerifyV1ToV3(packet);
   VerifyV4(packet);
 }
 
@@ -285,7 +287,7 @@ TEST(BqrLinkQualityEventTest, ValidV5PacketParsing) {
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
-  VerifyV3AndBackward(packet);
+  VerifyV1ToV3(packet);
   VerifyV5(packet);
 }
 
@@ -296,7 +298,7 @@ TEST(BqrLinkQualityEventTest, ValidV6PacketParsing) {
   ASSERT_EQ(packet.GetBqrReportId(), BqrReportId::kLeAudioChoppy);
   ASSERT_EQ(packet.GetBqrEventType(), BqrEventType::kLinkQuality);
 
-  VerifyV3AndBackward(packet);
+  VerifyV1ToV3(packet);
   VerifyV5(packet);
 
   // Verify V6 specific fields
@@ -305,35 +307,33 @@ TEST(BqrLinkQualityEventTest, ValidV6PacketParsing) {
 }
 
 TEST(BqrLinkQualityEventTest, InvalidPacketParsingIncorrectFormat) {
-  auto packet_v3 =
-      BqrLinkQualityEventV3AndBackward(CreateIncorrectBqrHalPacket());
+  auto packet_v3 = BqrLinkQualityEventV1ToV3(CreateIncorrectBqrHalPacket());
   auto packet_v4 = BqrLinkQualityEventV4(CreateIncorrectBqrHalPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateIncorrectBqrHalPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateIncorrectBqrHalPacket());
-  VerifyDefaultV3AndBackward(packet_v3);
+  VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);
 }
 
 TEST(BqrLinkQualityEventTest, InvalidPacketParsingPacketTooShort) {
-  auto packet_v3 = BqrLinkQualityEventV3AndBackward(CreateShortBqrPacket());
+  auto packet_v3 = BqrLinkQualityEventV1ToV3(CreateShortBqrPacket());
   auto packet_v4 = BqrLinkQualityEventV4(CreateShortBqrPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateShortBqrPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateShortBqrPacket());
-  VerifyDefaultV3AndBackward(packet_v3);
+  VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);
 }
 
 TEST(BqrLinkQualityEventTest, InvalidPacketParsingWrongReportId) {
-  auto packet_v3 =
-      BqrLinkQualityEventV3AndBackward(CreateWrongReportIdPacket());
+  auto packet_v3 = BqrLinkQualityEventV1ToV3(CreateWrongReportIdPacket());
   auto packet_v4 = BqrLinkQualityEventV4(CreateWrongReportIdPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateWrongReportIdPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateWrongReportIdPacket());
-  VerifyDefaultV3AndBackward(packet_v3);
+  VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);

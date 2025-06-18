@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <map>
@@ -34,6 +35,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android-base/stringprintf.h"
+#include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
 #include "bluetooth_hal/debug/bluetooth_bqr.h"
@@ -76,10 +78,8 @@ static constexpr uint8_t kVseSubEventDebug1 =
 static constexpr uint8_t kVseSubEventDebug2 =
     0x1B;  // Vendor specific sub event:  Debug logging
 
-bool force_coredump_timer_created = false;
 timer_t force_coredump_timer;
-constexpr uint8_t kForceCoredumpTimerExpiredSec = 1;
-constexpr uint32_t kForceCoredumpTimerExpiredNs = 0;
+constexpr int kHandleDebugInfoCommandMs = 1000;
 static const std::string kDumpReasonForceCollectCoredump =
     "Force Collect Coredump";
 static const std::string kDumpReasonControllerHwError = "ControllerHwError";
@@ -346,6 +346,7 @@ namespace bluetooth_hal {
 namespace debug {
 
 using ::android::base::StringPrintf;
+using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
 using ::bluetooth_hal::debug::BqrQualityReportId;
 using ::bluetooth_hal::debug::BtActivitiesLogger;
 using ::bluetooth_hal::debug::BtBqrEnergyRecoder;
@@ -519,26 +520,20 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   }
 }
 
-void DebugCentral::ForceGetCoredumpTimeout(union sigval sig) {
-  DebugCentral* debug_ctrl = static_cast<DebugCentral*>(sig.sival_ptr);
+void DebugCentral::HandleDebugInfoCommand() {
   // It is supported to generate coredump and record crash_timestamp_ when bthal
   // received root-inflamed event or any fw dump packet, if the controller
   // did not send any response packets, we force to trigger coredump here
-  if (debug_ctrl->crash_timestamp_.empty()) {
-    LOG(ERROR) << __func__
-               << ": Force a coredump to be generated if it has not been "
-                  "generated for 1 second.";
-    debug_ctrl->start_crash_dump(true,
-                                 kDumpReasonForceCollectCoredump + " (BtFw)");
-  }
-
-  if (force_coredump_timer_created == true) {
-    itimerspec ts{};
-    LOG(WARNING) << __func__ << ": Delete force_coredump_timer.";
-    timer_settime(force_coredump_timer, 0, &ts, NULL);
-    timer_delete(force_coredump_timer);
-    force_coredump_timer_created = false;
-  }
+  debug_info_command_timer_.Schedule(
+      [this]() {
+        if (crash_timestamp_.empty()) {
+          LOG(ERROR) << __func__
+                     << ": Force a coredump to be generated if it has not been "
+                        "generated for 1 second.";
+          start_crash_dump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
+        }
+      },
+      std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
 
 bool DebugCentral::is_hw_stage_supported() {
@@ -569,7 +564,7 @@ bool DebugCentral::report_ssr_crash(uint8_t vendor_error_code) {
       ThreadHandler::IsHandlerRunning() &&
       ThreadHandler::GetHandler().IsDaemonRunning();
 
-  return is_thread_dispatcher_working || has_client_;
+  return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
 void DebugCentral::dump_hal_log(int fd) {
@@ -598,34 +593,6 @@ void DebugCentral::dump_hal_log(int fd) {
     ss << anchor_timestamp << ": " << anchor << std::endl;
   }
   write(fd, ss.str().c_str(), ss.str().length());
-}
-
-void DebugCentral::handle_vendor_specific_event(const HalPacket& packet) {
-  if (packet.size() < kVseSubEventCodeOffset) {
-    LOG(WARNING) << __func__ << ": Invalid length of VS event!";
-    return;
-  }
-  uint8_t sub_event_code = packet[kVseSubEventCodeOffset];
-  switch (sub_event_code) {
-    case kVseSubEventDebugInfo:
-      static int msg_counter = 0;
-      if (++msg_counter <= 20) {
-        LOG(WARNING) << __func__ << ": Received Debug Info event!";
-      }
-      handle_debug_info_event(packet);
-      hijack_event_ = true;
-      break;
-    case kVseSubEventBqr:
-      handle_bqr_event(packet);
-      break;
-    case kVseSubEventDebug1:
-      [[fallthrough]];
-    case kVseSubEventDebug2:
-      hijack_event_ = true;
-      break;
-    default:
-      break;
-  }
 }
 
 void DebugCentral::handle_bqr_event(const HalPacket& packet) {
@@ -717,7 +684,34 @@ void DebugCentral::handle_bqr_event(const HalPacket& packet) {
   }
 }
 
-void DebugCentral::handle_debug_info_event(const HalPacket& packet) {
+void DebugCentral::HandleRootInflammationEvent(
+    const BqrRootInflammationEvent& event) {
+  if (!event.IsValid()) {
+    LOG(ERROR) << __func__ << ": Invalid root inflammation event! "
+               << event.ToString();
+    return;
+  }
+
+  uint8_t error_code = event.GetErrorCode();
+  uint8_t vendor_error_code = event.GetVendorErrorCode();
+  LOG(ERROR) << __func__ << ": Received Root Inflammation event! (0x"
+             << std::hex << std::setw(2) << std::setfill('0')
+             << static_cast<int>(error_code) << std::setw(2)
+             << std::setfill('0') << static_cast<int>(vendor_error_code)
+             << ").";
+  // For some vendor error codes that we do not generate a crash dump.
+  if (report_ssr_crash(vendor_error_code)) {
+    start_crash_dump(
+        false, kDumpReasonControllerRootInflammed + " (" +
+                   StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
+                   ")" + " - " +
+                   get_error_code_string(
+                       static_cast<BqrErrorCode>(vendor_error_code)));
+    backup_logging_files_before_crash(crash_timestamp_);
+  }
+}
+
+void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   bool last_soc_dump_packet = false;
   if (packet.size() <= kDebugInfoPayloadOffset) {
     LOG(INFO) << __func__ << ": Invalid length of debug info event!";
