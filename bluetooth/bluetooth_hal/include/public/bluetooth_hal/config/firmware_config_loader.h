@@ -25,6 +25,7 @@
 
 #include "bluetooth_hal/config/config_loader.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hal_types.h"
 
 namespace bluetooth_hal {
 namespace config {
@@ -103,6 +104,20 @@ class FirmwareConfigLoader : public ConfigLoader {
 
   virtual bool LoadConfig() override = 0;
   virtual std::string DumpConfigToString() const override = 0;
+
+  /**
+   * @brief Selects the firmware configuration for a given transport type.
+   *
+   * This method sets the internal active configuration to the one matching
+   * the provided transport_type. Subsequent calls to getters will use this
+   * active configuration.
+   *
+   * @param transport_type The transport type to select configuration for.
+   *
+   * @return true if a configuration was found and selected, false otherwise.
+   */
+  virtual bool SelectFirmwareConfiguration(
+      ::bluetooth_hal::transport::TransportType transport_type) = 0;
 
   /**
    * @brief Resets the state of the firmware data loading process.

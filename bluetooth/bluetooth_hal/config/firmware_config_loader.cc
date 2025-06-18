@@ -35,6 +35,8 @@
 #include <vector>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/config/config_constants.h"
+#include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
 #include "firmware_config.pb.h"
@@ -44,8 +46,10 @@ namespace bluetooth_hal {
 namespace config {
 namespace {
 
-using ::bluetooth_hal::config::proto::FirmwareConfig;
+using ::bluetooth_hal::config::proto::FirmwareConfigForTransport;
+using ::bluetooth_hal::config::proto::FirmwareConfigsContainer;
 using ::bluetooth_hal::hci::HciPacketType;
+using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::SystemCallWrapper;
 
 using ::google::protobuf::RepeatedField;
@@ -53,15 +57,10 @@ using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
 using ::google::protobuf::util::Status;
 
-constexpr std::string_view kFirmwareConfigFile =
-    "/vendor/etc/bluetooth/firmware_config.json";
-
-constexpr int kDefaultLoadMiniDrvDelayMs = 50;
-constexpr int kDefaultLaunchRamDelayMs = 250;
+namespace cfg_consts = ::bluetooth_hal::config::constants;
 
 // Used for downloading firmware data.
 constexpr uint16_t kHciVscLaunchRamOpcode = 0xfc4e;
-constexpr int kBufferSize = 32 * 1024;
 
 enum class DataLoadingType : int {
   kByPacket = 0,
@@ -111,6 +110,8 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   bool LoadConfigFromFile(std::string_view path) override;
   bool LoadConfigFromString(std::string_view content) override;
 
+  bool SelectFirmwareConfiguration(TransportType transport_type) override;
+
   bool ResetFirmwareDataLoadingState() override;
 
   std::optional<DataPacket> GetNextFirmwareData() override;
@@ -119,26 +120,28 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   GetSetupCommandPacket(SetupCommandType command_type) const override;
 
   int GetLoadMiniDrvDelayMs() const override;
-
   int GetLaunchRamDelayMs() const override;
 
   std::string DumpConfigToString() const override;
 
  private:
-  void LoadSetupCommandsFromConfig(const FirmwareConfig& config);
+  void LoadSetupCommandsFromConfig(
+      const FirmwareConfigForTransport& config,
+      std::unordered_map<SetupCommandType, std::unique_ptr<SetupCommandPacket>>&
+          target_map);
 
   std::optional<DataPacket> GetNextFirmwareDataByPacket();
   std::optional<DataPacket> GetNextFirmwareDataByAccumulation();
 
+  std::unordered_map<TransportType, FirmwareConfigForTransport>
+      transport_specific_configs_;
+  std::optional<std::reference_wrapper<const FirmwareConfigForTransport>>
+      active_config_;
   std::unordered_map<SetupCommandType, std::unique_ptr<SetupCommandPacket>>
-      setup_commands_;
+      active_setup_commands_;
 
   std::string firmware_folder_;
   std::string firmware_file_;
-  int chip_id_;
-  int load_mini_drv_delay_ms_{kDefaultLoadMiniDrvDelayMs};
-  int launch_ram_delay_ms_{kDefaultLaunchRamDelayMs};
-  DataLoadingType data_loading_type_{DataLoadingType::kByPacket};
 
   std::mutex firmware_data_mutex_;
 
@@ -147,7 +150,16 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
 };
 
 bool FirmwareConfigLoaderImpl::ResetFirmwareDataLoadingState() {
-  const std::string firmware_path = firmware_folder_ + firmware_file_;
+  if (!active_config_ || !active_config_->get().has_firmware_folder_name() ||
+      !active_config_->get().has_firmware_file_name()) {
+    LOG(ERROR) << __func__
+               << ": No active config or firmware path/file not set.";
+    return false;
+  }
+
+  const std::string firmware_path =
+      active_config_->get().firmware_folder_name() +
+      active_config_->get().firmware_file_name();
   firmware_file_fd_ =
       SystemCallWrapper::GetWrapper().Open(firmware_path.c_str(), O_RDONLY);
   if (firmware_file_fd_ < 0) {
@@ -166,6 +178,17 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextFirmwareData() {
 
   {
     std::scoped_lock lock(firmware_data_mutex_);
+    if (!active_config_ ||
+        !active_config_->get().has_firmware_data_loading_type()) {
+      LOG(WARNING) << __func__
+                   << ": No active config or data loading type not set, "
+                      "defaulting to PACKET_BY_PACKET.";
+      return GetNextFirmwareDataByPacket();
+    }
+
+    DataLoadingType data_loading_type_ = static_cast<DataLoadingType>(
+        active_config_->get().firmware_data_loading_type());
+
     switch (data_loading_type_) {
       case DataLoadingType::kByAccumulation:
         return GetNextFirmwareDataByAccumulation();
@@ -180,47 +203,80 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextFirmwareData() {
 std::optional<std::reference_wrapper<const SetupCommandPacket>>
 FirmwareConfigLoaderImpl::GetSetupCommandPacket(
     SetupCommandType command_type) const {
-  const auto iter = setup_commands_.find(command_type);
-  if (iter == setup_commands_.end()) {
+  if (!active_config_) {
+    LOG(ERROR) << __func__ << ": No active firmware configuration selected.";
     return std::nullopt;
   }
+
+  const auto iter = active_setup_commands_.find(command_type);
+  if (iter == active_setup_commands_.end()) {
+    return std::nullopt;
+  }
+
   return std::cref(*iter->second);
 }
 
 int FirmwareConfigLoaderImpl::GetLoadMiniDrvDelayMs() const {
-  return load_mini_drv_delay_ms_;
+  if (!active_config_) {
+    LOG(ERROR) << __func__ << ": No active firmware configuration selected.";
+    return cfg_consts::kDefaultLoadMiniDrvDelayMs;
+  }
+  const auto& config = active_config_->get();
+  return config.has_load_mini_drv_delay_ms()
+             ? config.load_mini_drv_delay_ms()
+             : cfg_consts::kDefaultLoadMiniDrvDelayMs;
 }
 
 int FirmwareConfigLoaderImpl::GetLaunchRamDelayMs() const {
-  return launch_ram_delay_ms_;
+  if (!active_config_) {
+    LOG(ERROR) << __func__ << ": No active firmware configuration selected.";
+    return cfg_consts::kDefaultLaunchRamDelayMs;
+  }
+  const auto& config = active_config_->get();
+  return config.has_launch_ram_delay_ms()
+             ? config.launch_ram_delay_ms()
+             : cfg_consts::kDefaultLaunchRamDelayMs;
 }
 
 std::string FirmwareConfigLoaderImpl::DumpConfigToString() const {
   std::stringstream ss;
   ss << "--- FirmwareConfigLoaderImpl State ---\n";
-  ss << "Firmware Folder: \"" << firmware_folder_ << "\"\n";
-  ss << "Firmware File: \"" << firmware_file_ << "\"\n";
-  ss << "Chip ID: " << chip_id_ << "\n";
-  ss << "Load MiniDrv Delay (ms): " << GetLoadMiniDrvDelayMs() << "\n";
-  ss << "Launch RAM Delay (ms): " << GetLaunchRamDelayMs() << "\n";
-  ss << "Data Loading Type: " << static_cast<int>(data_loading_type_)
-     << (data_loading_type_ == DataLoadingType::kByAccumulation
-             ? " (Accumulation)"
-             : " (By Packet)")
-     << "\n";
+  ss << "Loaded Transport Specific Configurations: "
+     << transport_specific_configs_.size() << "\n";
 
-  ss << "Setup Commands Loaded:\n";
-  if (setup_commands_.empty()) {
-    ss << "  (None)\n";
-  } else {
-    for (const auto& [type, packet_ptr] : setup_commands_) {
-      ss << "  - " << SetupCommandTypeToString(type) << ": "
-         << (packet_ptr ? "Present" : "Absent") << "\n";
+  for (const auto& [transport_type, config] : transport_specific_configs_) {
+    ss << "  Transport Type: " << static_cast<int>(transport_type) << "\n";
+    ss << "    Firmware Folder: \"" << config.firmware_folder_name() << "\"\n";
+    ss << "    Firmware File: \"" << config.firmware_file_name() << "\"\n";
+    ss << "    Chip ID: " << config.chip_id() << "\n";
+    ss << "    Load MiniDrv Delay (ms): " << config.load_mini_drv_delay_ms()
+       << "\n";
+    ss << "    Launch RAM Delay (ms): " << config.launch_ram_delay_ms() << "\n";
+    ss << "    Data Loading Type: "
+       << FirmwareDataLoadingType_Name(config.firmware_data_loading_type())
+       << "\n";
+    ss << "    Setup Commands Loaded:\n";
+    if (active_setup_commands_.empty()) {
+      ss << "      (None)\n";
+    } else {
+      for (const auto& [command_type, packet_ptr] : active_setup_commands_) {
+        ss << "      - " << SetupCommandTypeToString(command_type) << ": "
+           << (packet_ptr ? "Present" : "Absent") << "\n";
+      }
     }
   }
+
+  if (active_config_) {
+    ss << "Active Configuration for Transport Type: "
+       << active_config_->get().transport_type() << "\n";
+  } else {
+    ss << "No Active Firmware Configuration Selected.\n";
+  }
   ss << "-------------------------------------\n";
+
   return ss.str();
 }
+
 FirmwareConfigLoaderImpl::FirmwareConfigLoaderImpl() {
 #ifndef UNIT_TEST
   LoadConfig();
@@ -228,7 +284,7 @@ FirmwareConfigLoaderImpl::FirmwareConfigLoaderImpl() {
 }
 
 bool FirmwareConfigLoaderImpl::LoadConfig() {
-  return LoadConfigFromFile(kFirmwareConfigFile);
+  return LoadConfigFromFile(cfg_consts::kFirmwareConfigFile);
 }
 
 bool FirmwareConfigLoaderImpl::LoadConfigFromFile(std::string_view path) {
@@ -245,55 +301,67 @@ bool FirmwareConfigLoaderImpl::LoadConfigFromFile(std::string_view path) {
 }
 
 bool FirmwareConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
-  FirmwareConfig config;
+  FirmwareConfigsContainer container;
   JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
-  Status status = JsonStringToMessage(content, &config, options);
+  Status status = JsonStringToMessage(content, &container, options);
   if (!status.ok()) {
     LOG(ERROR) << __func__
                << ": Failed to parse json file, error: " << status.message();
     return false;
   }
 
-  if (config.has_firmware_folder_name()) {
-    firmware_folder_ = config.firmware_folder_name();
+  transport_specific_configs_.clear();
+  for (const auto& config_entry : container.firmware_configs()) {
+    auto type = static_cast<TransportType>(config_entry.transport_type());
+    transport_specific_configs_[type] = config_entry;
   }
 
-  if (config.has_firmware_file_name()) {
-    firmware_file_ = config.firmware_file_name();
+  const auto& transport_type_priorities =
+      HalConfigLoader::GetLoader().GetTransportTypePriority();
+  for (auto& type : transport_type_priorities) {
+    if (transport_specific_configs_.find(type) !=
+        transport_specific_configs_.end()) {
+      SelectFirmwareConfiguration(type);
+      break;
+    }
   }
-
-  if (config.has_chip_id()) {
-    chip_id_ = config.chip_id();
-  }
-
-  if (config.has_load_mini_drv_delay_ms()) {
-    load_mini_drv_delay_ms_ = config.load_mini_drv_delay_ms();
-  }
-
-  if (config.has_launch_ram_delay_ms()) {
-    launch_ram_delay_ms_ = config.launch_ram_delay_ms();
-  }
-
-  if (config.has_firmware_data_loading_type()) {
-    data_loading_type_ =
-        static_cast<DataLoadingType>(config.firmware_data_loading_type());
-  }
-
-  LoadSetupCommandsFromConfig(config);
 
   LOG(INFO) << DumpConfigToString();
 
   return true;
 }
 
-void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
-    const FirmwareConfig& config) {
-  if (!config.has_setup_commands()) {
-    return;
+bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
+    TransportType transport_type) {
+  auto it = transport_specific_configs_.find(transport_type);
+  if (it == transport_specific_configs_.end()) {
+    LOG(ERROR) << __func__
+               << ": No firmware configuration found for transport type "
+               << static_cast<int>(transport_type);
+    active_config_ = std::nullopt;
+    active_setup_commands_.clear();
+    return false;
   }
 
+  active_config_ = std::cref(it->second);
+  LOG(INFO) << __func__
+            << ": Selected firmware configuration for transport type "
+            << static_cast<int>(transport_type);
+
+  active_setup_commands_.clear();
+  if (active_config_->get().has_setup_commands()) {
+    LoadSetupCommandsFromConfig(active_config_->get(), active_setup_commands_);
+  }
+
+  return true;
+}
+
+void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
+    const FirmwareConfigForTransport& config,
+    std::unordered_map<SetupCommandType, std::unique_ptr<SetupCommandPacket>>&
+        target_map) {
   const auto& commands = config.setup_commands();
 
   auto to_vector = [](const RepeatedField<uint32_t>& field) {
@@ -301,7 +369,7 @@ void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
   };
 
   auto add = [&](SetupCommandType type, const RepeatedField<uint32_t>& data) {
-    setup_commands_.emplace(
+    target_map.emplace(
         type, std::make_unique<SetupCommandPacket>(type, to_vector(data)));
   };
 
@@ -383,6 +451,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
   }
 
   std::vector<uint8_t> buffer;
+  constexpr int kBufferSize = 32 * 1024;
   buffer.reserve(kBufferSize);
 
   bool is_end = false;
@@ -402,6 +471,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
       if (bytes_read <= 0) {
         // End of stream or error.
         firmware_file_fd_ = -1;
+        buffer.clear();
         break;
       }
     }
@@ -432,6 +502,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
     if (bytes_read != static_cast<ssize_t>(payload_size)) {
       // Incomplete packet or error.
       firmware_file_fd_ = -1;
+      buffer.clear();
       break;
     }
     buffer.insert(buffer.end(), payload.begin(), payload.end());
