@@ -21,6 +21,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "bluetooth_hal/config/config_loader.h"
@@ -46,6 +47,32 @@ enum class SetupCommandType : int {
   kSetupLowPowerMode,
   kWriteBdAddress,
 };
+
+inline constexpr std::string_view SetupCommandTypeToString(
+    SetupCommandType type) {
+  switch (type) {
+    case SetupCommandType::kReset:
+      return "Reset";
+    case SetupCommandType::kReadChipId:
+      return "ReadChipId";
+    case SetupCommandType::kUpdateChipBaudRate:
+      return "UpdateChipBaudRate";
+    case SetupCommandType::kSetFastDownload:
+      return "SetFastDownload";
+    case SetupCommandType::kDownloadMinidrv:
+      return "DownloadMinidrv";
+    case SetupCommandType::kLaunchRam:
+      return "LaunchRam";
+    case SetupCommandType::kReadFwVersion:
+      return "ReadFwVersion";
+    case SetupCommandType::kSetupLowPowerMode:
+      return "SetupLowPowerMode";
+    case SetupCommandType::kWriteBdAddress:
+      return "WriteBdAddress";
+    default:
+      return "Unknown";
+  }
+}
 
 enum class DataType : int { kDataFragment = 0, kDataEnd };
 
