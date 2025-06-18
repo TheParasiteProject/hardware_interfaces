@@ -26,7 +26,7 @@ use explicitkeydice::OwnedDiceArtifactsWithExplicitKey;
 use rdroidtest::{ignore_if, rdroidtest};
 use secretkeeper_client::{SkSession, Error as SkClientError};
 use secretkeeper_core::cipher;
-use secretkeeper_comm::data_types::error::SecretkeeperError;
+use secretkeeper_comm::data_types::error::{SecretkeeperErrorCode, SecretkeeperError};
 use secretkeeper_comm::data_types::request::Request;
 use secretkeeper_comm::data_types::request_response_impl::{
     GetVersionRequest, GetVersionResponse, GetSecretRequest, GetSecretResponse, StoreSecretRequest,
@@ -304,17 +304,17 @@ impl From<secretkeeper_comm::data_types::error::Error> for Error {
 
 // Assert that the error is `EntryNotFound`.
 fn assert_entry_not_found(res: Result<Secret, Error>) {
-    assert_result_matches(res, SecretkeeperError::EntryNotFound)
+    assert_result_matches(res, SecretkeeperErrorCode::EntryNotFound)
 }
 
 // Assert that the error is `DicePolicyError`.
 fn assert_dice_policy_error(res: Result<Secret, Error>) {
-    assert_result_matches(res, SecretkeeperError::DicePolicyError)
+    assert_result_matches(res, SecretkeeperErrorCode::DicePolicyError)
 }
 
-fn assert_result_matches(res: Result<Secret, Error>, want: SecretkeeperError) {
+fn assert_result_matches(res: Result<Secret, Error>, want: SecretkeeperErrorCode) {
     match res {
-        Err(Error::SecretkeeperError(e)) if e == want => {}
+        Err(Error::SecretkeeperError(e)) if e.code == want => {}
         Err(got) => panic!("unexpected error {got:?}, expected {want:?}"),
         Ok(_) => panic!("unexpected success instead of {want:?}"),
     }
@@ -445,8 +445,8 @@ fn secret_management_malformed_request(instance: String) {
 
     let response_packet = ResponsePacket::from_slice(&response_bytes).unwrap();
     assert_eq!(response_packet.response_type().unwrap(), ResponseType::Error);
-    let err = *SecretkeeperError::deserialize_from_packet(response_packet).unwrap();
-    assert_eq!(err, SecretkeeperError::RequestMalformed);
+    let err = SecretkeeperError::deserialize_from_packet(response_packet).unwrap();
+    assert_eq!(err.code, SecretkeeperErrorCode::RequestMalformed);
 }
 
 #[rdroidtest(get_instances())]
