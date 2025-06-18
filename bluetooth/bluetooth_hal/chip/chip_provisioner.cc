@@ -44,6 +44,7 @@ using ::bluetooth_hal::config::DataPacket;
 using ::bluetooth_hal::config::DataType;
 using ::bluetooth_hal::config::HalConfigLoader;
 using ::bluetooth_hal::config::SetupCommandType;
+using ::bluetooth_hal::config::SetupCommandTypeToString;
 using ::bluetooth_hal::hci::EventResultCode;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::HciPacketType;
@@ -103,8 +104,9 @@ bool ChipProvisioner::ExecuteCurrentSetupStep(SetupCommandType command_type) {
   // Get the next firmware setup command via command type.
   auto next_setup_command = config_loader_.GetSetupCommandPacket(command_type);
   if (!next_setup_command.has_value()) {
-    LOG(ERROR) << __func__ << ": Failed to get next setup command.";
-    return false;
+    LOG(INFO) << __func__ << ": No command for type "
+              << SetupCommandTypeToString(command_type);
+    return true;
   }
 
   return SendCommandAndWait(next_setup_command->get().GetPayload());

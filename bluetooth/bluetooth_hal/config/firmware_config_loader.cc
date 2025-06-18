@@ -75,30 +75,6 @@ constexpr uint16_t GetOpcode(std::span<const uint8_t> packet) {
   return (packet[1] << 8) | packet[0];
 }
 
-std::string SetupCommandTypeToString(SetupCommandType type) {
-  switch (type) {
-    case SetupCommandType::kReset:
-      return "Reset";
-    case SetupCommandType::kReadChipId:
-      return "ReadChipId";
-    case SetupCommandType::kUpdateChipBaudRate:
-      return "UpdateChipBaudRate";
-    case SetupCommandType::kSetFastDownload:
-      return "SetFastDownload";
-    case SetupCommandType::kDownloadMinidrv:
-      return "DownloadMinidrv";
-    case SetupCommandType::kLaunchRam:
-      return "LaunchRam";
-    case SetupCommandType::kReadFwVersion:
-      return "ReadFwVersion";
-    case SetupCommandType::kSetupLowPowerMode:
-      return "SetupLowPowerMode";
-    case SetupCommandType::kWriteBdAddress:
-      return "WriteBdAddress";
-    default:
-      return "Unknown";
-  }
-}
 }  // namespace
 
 class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
