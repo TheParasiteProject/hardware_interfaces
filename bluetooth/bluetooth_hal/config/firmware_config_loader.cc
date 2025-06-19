@@ -133,7 +133,6 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   int current_firmware_file_index_;
 
   std::optional<DataPacket> previous_packet_;
-  std::optional<std::vector<uint8_t>> previous_header_;
   int firmware_file_fd_{-1};
 
   DataReadingMethod data_reading_method_{DataReadingMethod::kCommandBased};
@@ -203,7 +202,7 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextFirmwareData() {
 
   // If no file is currently open (or previous one ended), try opening the
   // next one.
-  if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
+  if (!previous_packet_ && firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
     return std::nullopt;
   }
 
@@ -582,93 +581,71 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
 
 std::optional<DataPacket>
 FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
-  std::vector<uint8_t> buffer;
+  std::vector<uint8_t> accumulated_buffer;
   constexpr int kBufferSize = 32 * 1024;
-  buffer.reserve(kBufferSize);
-  bool is_final_packet_of_all_files = false;
+  accumulated_buffer.reserve(kBufferSize);
 
-  while (true) {
-    std::vector<uint8_t> header;
-
-    if (previous_header_.has_value()) {
-      header = std::move(previous_header_.value());
-      previous_header_.reset();
-    } else {
-      if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
-        // No more files or error opening. If buffer has data, return it.
-        break;
-      }
-      // Read packet header (opcode and length).
-      header.resize(3);
-      ssize_t bytes_read =
-          TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-              firmware_file_fd_, header.data(), header.size()));
-      if (bytes_read <= 0) {
-        SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
-        firmware_file_fd_ = -1;
-        if (!buffer.empty()) {
-          // Return current buffer if it has content.
-          break;
-        }
-        // Attempt to open the next file.
-        continue;
-      }
-    }
-
-    // Calculate total packet size.
-    const size_t payload_size = header[2];
-    const size_t packet_size = 1 + header.size() + payload_size;
-
-    bool is_launch_ram = (GetOpcode(header) == kDefaultHciVscLaunchRamOpcode);
-    bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
-                         current_firmware_filenames_.size() - 1);
-
-    // Check if the current packet fits in the buffer.
-    if ((is_launch_ram && !buffer.empty()) ||
-        (!is_launch_ram && buffer.size() + packet_size > kBufferSize)) {
-      previous_header_ = std::move(header);
-      return DataPacket(DataType::kDataFragment, std::move(buffer));
-    }
-
-    // At this point, the packet (even if it's launch_ram) will be added to
-    // the buffer.
-
-    // Read remaining packet data and append to buffer.
-    buffer.push_back(static_cast<uint8_t>(HciPacketType::kCommand));
-    buffer.insert(buffer.end(), header.begin(), header.end());
-
-    std::vector<uint8_t> payload(payload_size);
-    ssize_t bytes_read =
-        TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
-            firmware_file_fd_, payload.data(), payload_size));
-    if (bytes_read != static_cast<ssize_t>(payload_size)) {
-      // Incomplete packet or error.
-      LOG(ERROR) << __func__ << ": Failed to read full payload for packet in "
-                 << current_firmware_filenames_[current_firmware_file_index_];
-      firmware_file_fd_ = -1;
-      buffer.clear();
-      continue;  // Try next file or fail.
-    }
-    buffer.insert(buffer.end(), payload.begin(), payload.end());
-
-    // Check for target opcode after reading the whole packet.
-    if (is_launch_ram) {
-      LOG(INFO) << __func__ << " Launch RAM command found in file "
-                << current_firmware_filenames_[current_firmware_file_index_];
+  if (previous_packet_.has_value()) {
+    // Check if it is the end of the packet.
+    if (previous_packet_->GetPayload().GetCommandOpcode() ==
+            launch_ram_opcode_ ||
+        previous_packet_->GetDataType() == DataType::kDataEnd) {
+      // If the previous packet was the end, just return it.
+      DataPacket result = std::move(previous_packet_.value());
+      previous_packet_.reset();
       SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
       firmware_file_fd_ = -1;
-      if (is_last_file) {
-        is_final_packet_of_all_files = true;
-      }
+      return result;
+    }
+
+    accumulated_buffer.insert(accumulated_buffer.end(),
+                              previous_packet_->GetPayload().begin(),
+                              previous_packet_->GetPayload().end());
+
+    previous_packet_.reset();
+  }
+
+  while (accumulated_buffer.size() <= kBufferSize) {
+    std::optional<DataPacket> next_packet = GetNextSinglePacket();
+
+    if (!next_packet.has_value()) {
+      break;
+    }
+
+    // Check if adding this packet would exceed the buffer size.
+    // Or if this is a kDataEnd / launch ram packet and we already have some
+    // data.
+    bool is_launch_ram_or_end_of_file =
+        next_packet->GetPayload().GetCommandOpcode() == launch_ram_opcode_ ||
+        (next_packet->GetDataType() == DataType::kDataEnd);
+
+    if ((is_launch_ram_or_end_of_file && !accumulated_buffer.empty()) ||
+        (accumulated_buffer.size() + next_packet->GetPayload().size() >
+         kBufferSize)) {
+      previous_packet_ = std::move(next_packet);
+      break;
+    }
+
+    accumulated_buffer.insert(accumulated_buffer.end(),
+                              next_packet->GetPayload().begin(),
+                              next_packet->GetPayload().end());
+
+    if (next_packet->GetDataType() == DataType::kDataEnd) {
       break;
     }
   }
 
-  if (!buffer.empty()) {
+  if (!accumulated_buffer.empty()) {
+    bool is_final_packet_of_all_files =
+        !previous_packet_.has_value() &&
+        (accumulated_buffer.size() > 0 && firmware_file_fd_ == -1 &&
+         static_cast<size_t>(current_firmware_file_index_) ==
+             current_firmware_filenames_.size() - 1);
     return DataPacket(is_final_packet_of_all_files ? DataType::kDataEnd
                                                    : DataType::kDataFragment,
-                      std::move(buffer));
+                      std::move(accumulated_buffer));
   }
+
   return std::nullopt;
 }
 

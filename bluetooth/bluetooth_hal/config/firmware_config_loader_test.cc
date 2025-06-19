@@ -800,6 +800,10 @@ TEST_F(FirmwareAccumulatedBufferTest, GetNextFirmwareDataAccumulatedBuffer) {
       .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
                         memcpy(buf, fw_data_p2_pld.data(), 1);
                       }),
+                      Return(1)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, fw_data_p3_pld.data(), 1);
+                      }),
                       Return(1)));
 
   auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
@@ -810,12 +814,6 @@ TEST_F(FirmwareAccumulatedBufferTest, GetNextFirmwareDataAccumulatedBuffer) {
   EXPECT_EQ(data_packet1->GetPayload(), expected_accumulated_p1_p2);
 
   Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
-
-  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile2Fd, _, 1))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, fw_data_p3_pld.data(), 1);
-                      }),
-                      Return(1)));
 
   auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet2.has_value());
@@ -891,6 +889,12 @@ TEST_F(FirmwareAccumulatedBufferTest,
                           memcpy(buf, p3_hdr.data(), 3);
                         }),
                         Return(3)));
+
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile3Fd, _, p3_pld.size()))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, p3_pld.data(), p3_pld.size());
+                        }),
+                        Return(p3_pld.size())));
   }
 
   // First call: 126 * P1 + P2 should be returned as it fills the buffer.
@@ -910,18 +914,16 @@ TEST_F(FirmwareAccumulatedBufferTest,
 
   Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
 
-  EXPECT_CALL(mock_system_call_wrapper_,
-              Read(kFile3Fd, _, p3_pld.size()))  // P3 Pld.
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, p3_pld.data(), p3_pld.size());
-                      }),
-                      Return(p3_pld.size())));
-
   EXPECT_CALL(mock_system_call_wrapper_, Read(kFile3Fd, _, 3))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {  // P4 Hdr.
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
                         memcpy(buf, p4_hdr.data(), 3);
                       }),
                       Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile3Fd, _, p4_pld.size()))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, p4_pld.data(), p4_pld.size());
+                      }),
+                      Return(p4_pld.size())));
 
   // Second call: P3 should be returned.
   auto data_packet3 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
@@ -934,13 +936,6 @@ TEST_F(FirmwareAccumulatedBufferTest,
   EXPECT_EQ(data_packet3->GetPayload(), expected_p3);
 
   Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
-
-  EXPECT_CALL(mock_system_call_wrapper_,
-              Read(kFile3Fd, _, p4_pld.size()))  // P4 Pld.
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, p4_pld.data(), p4_pld.size());
-                      }),
-                      Return(p4_pld.size())));
 
   // Third call: P4 (Launch RAM) should be returned as kDataEnd.
   auto data_packet4 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
@@ -997,32 +992,40 @@ TEST_F(MultiFileAccumulatedTest, ReadsDataFromMultipleFilesSuccessfully) {
   std::vector<uint8_t> file1_launch_ram_hdr = {0x4E, 0xFC, 0x01};
   std::vector<uint8_t> file1_launch_ram_pld = {0xCC};
 
-  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, file1_packet1_hdr.data(), 3);
-                      }),
-                      Return(3)))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, file1_launch_ram_hdr.data(), 3);
-                      }),
-                      Return(3)));
-  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 2))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, file1_packet1_pld.data(), 2);
-                      }),
-                      Return(2)));
-  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 1))
-      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
-                        memcpy(buf, file1_launch_ram_pld.data(), 1);
-                      }),
-                      Return(1)));
-  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+  {
+    InSequence s;
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, file1_packet1_hdr.data(), 3);
+                        }),
+                        Return(3)));
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 2))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, file1_packet1_pld.data(), 2);
+                        }),
+                        Return(2)));
+
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, file1_launch_ram_hdr.data(), 3);
+                        }),
+                        Return(3)));
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 1))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                          memcpy(buf, file1_launch_ram_pld.data(), 1);
+                        }),
+                        Return(1)));
+
+    EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+  }
 
   auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet1.has_value());
   EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
   EXPECT_EQ(data_packet1->GetPayload(),
             HalPacket({0x01, 0x01, 0xFC, 0x02, 0xAA, 0xBB}));
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
 
   auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet2.has_value());
