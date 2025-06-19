@@ -35,6 +35,20 @@ enum FirmwareDataLoadingType {
   ACCUMULATED_BUFFER = 1;
 }
 
+// Configuration for command-based firmware data reading.
+message CommandBasedReading {
+  // The HCI VSC opcode that signals the end of the firmware data.
+  // If not specified, a default value (e.g., 0xFC4E) will be used.
+  optional uint32 launch_ram_opcode = 1;
+}
+
+// Configuration for fixed-size firmware data reading.
+message FixedSizeReading {
+  // The size of each chunk to read from the firmware file, in bytes.
+  // If not specified, a default value will be used.
+  optional uint32 chunk_size = 1;
+}
+
 // Represents the firmware configuration for a specific transport type.
 message FirmwareConfigForTransport {
   // Matches values from bluetooth_hal::transport::TransportType
@@ -47,6 +61,13 @@ message FirmwareConfigForTransport {
   optional uint32 launch_ram_delay_ms = 6;
   optional FirmwareDataLoadingType firmware_data_loading_type = 7;
   optional SetupCommands setup_commands = 8;
+
+  // Specifies the method for reading data from the firmware file.
+  // If not specified, defaults to command_based_reading.
+  oneof data_reading_method {
+    CommandBasedReading command_based_reading = 9;
+    FixedSizeReading fixed_size_reading = 10;
+  }
 }
 
 // Top-level message for the firmware_config.json file.
