@@ -1295,6 +1295,83 @@ TEST_F(FirmwareAccumulatedFixedSizeTest, ExceedsInternalBuffer) {
       FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
+class FirmwareDataCommandBasedCustomOpcodeTest
+    : public FirmwareConfigLoaderTestBase {
+ protected:
+  void SetUp() override {
+    FirmwareConfigLoaderTestBase::SetUp();
+    std::vector<TransportType> priority_list = {TransportType::kUartH4};
+    EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+        .WillRepeatedly(ReturnRef(priority_list));
+    EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+        kConfigCommandBasedCustomOpcode));
+  }
+  static constexpr uint16_t kCustomLaunchRamOpcode = 0xABCD;
+  static constexpr std::string_view kConfigCommandBasedCustomOpcode = R"({
+    "firmware_configs": [
+      {
+        "transport_type": 1,
+        "firmware_folder_name": "/test/fw/",
+        "firmware_file_name": "test_fw_cmd_custom_op.bin",
+        "command_based_reading": { "launch_ram_opcode": 43981 }
+      }
+    ]
+  })";
+};
+
+TEST_F(FirmwareDataCommandBasedCustomOpcodeTest, UsesCustomOpcode) {
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw/test_fw_cmd_custom_op.bin"),
+                   _))
+      .WillOnce(Return(kFile1Fd));
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> packet1_header = {0x01, 0xFC, 0x02};  // Normal command.
+  std::vector<uint8_t> packet1_payload = {0xAA, 0xBB};
+  std::vector<uint8_t> packet2_header = {
+      static_cast<uint8_t>(kCustomLaunchRamOpcode & 0xFF),
+      static_cast<uint8_t>((kCustomLaunchRamOpcode >> 8) & 0xFF),
+      0x01};  // Custom Launch RAM
+  std::vector<uint8_t> packet2_payload = {0xCC};
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, packet1_header.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 2))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, packet1_payload.data(), 2);
+                      }),
+                      Return(2)));
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 3))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, packet2_header.data(), 3);
+                      }),
+                      Return(3)));
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, 1))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t) {
+                        memcpy(buf, packet2_payload.data(), 1);
+                      }),
+                      Return(1)));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(),
+            DataType::kDataEnd);  // Should be kDataEnd due to custom opcode.
+
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
