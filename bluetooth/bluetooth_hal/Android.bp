@@ -66,6 +66,7 @@ filegroup {
         "hci_router.cc",
         "hci_router_client.cc",
         "hci_router_client_agent.cc",
+        "hci_proxy_aidl.cc",
     ],
 }
 

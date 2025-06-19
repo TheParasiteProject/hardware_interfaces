@@ -24,15 +24,15 @@
 #include "android/binder_manager.h"
 #include "android/binder_process.h"
 #include "android/binder_status.h"
-#include "bluetooth_hal/bluetooth_hci.h"
 #include "bluetooth_hal/chip/chip_provisioner_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder.h"
+#include "bluetooth_hal/hci_proxy_aidl.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 
 namespace bluetooth_hal {
 
-using ::bluetooth_hal::BluetoothHci;
+using ::bluetooth_hal::HciProxyAidl;
 using ::bluetooth_hal::chip::ChipProvisionerInterface;
 using ::bluetooth_hal::extensions::cs::BluetoothChannelSounding;
 using ::bluetooth_hal::extensions::finder::BluetoothFinder;
@@ -56,15 +56,12 @@ void BluetoothHal::RegisterVendorChipProvisioner(
 }
 
 void BluetoothHal::Start() {
-  std::shared_ptr<BluetoothChannelSounding> bluetooth_channel_sounding =
-      SharedRefBase::make<BluetoothChannelSounding>();
-  std::shared_ptr<BluetoothFinder> bluetooth_finder =
-      SharedRefBase::make<BluetoothFinder>();
-
   std::string instance;
   int status;
 
   instance = std::string() + BluetoothChannelSounding::descriptor + "/default";
+  std::shared_ptr<BluetoothChannelSounding> bluetooth_channel_sounding =
+      SharedRefBase::make<BluetoothChannelSounding>();
   status = AServiceManager_addService(
       bluetooth_channel_sounding->asBinder().get(), instance.c_str());
   if (status != STATUS_OK) {
@@ -72,15 +69,18 @@ void BluetoothHal::Start() {
   }
 
   instance = std::string() + BluetoothFinder::descriptor + "/default";
+  std::shared_ptr<BluetoothFinder> bluetooth_finder =
+      SharedRefBase::make<BluetoothFinder>();
   status = AServiceManager_addService(bluetooth_finder->asBinder().get(),
                                       instance.c_str());
   if (status != STATUS_OK) {
     LOG(ERROR) << "Could not register BluetoothFinder as a service!";
   }
 
-  instance = std::string() + BluetoothHci::descriptor + "/default";
-  status = AServiceManager_addService(BluetoothHci::GetHci().asBinder().get(),
-                                      instance.c_str());
+  instance = std::string() + HciProxyAidl::descriptor + "/default";
+  std::shared_ptr<HciProxyAidl> hci_proxy = SharedRefBase::make<HciProxyAidl>();
+  status =
+      AServiceManager_addService(hci_proxy->asBinder().get(), instance.c_str());
   if (status == STATUS_OK) {
     ABinderProcess_joinThreadPool();
   } else {
