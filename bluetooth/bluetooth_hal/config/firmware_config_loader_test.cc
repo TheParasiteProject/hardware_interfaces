@@ -1140,6 +1140,161 @@ TEST_F(FirmwareDataPacketByPacketFixedSizeTest, ReadSingleFileSuccessfully) {
       FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
+class FirmwareAccumulatedFixedSizeTest : public FirmwareConfigLoaderTestBase {
+ protected:
+  void SetUp() override {
+    FirmwareConfigLoaderTestBase::SetUp();
+    std::vector<TransportType> priority_list = {TransportType::kUartH4};
+    EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+        .WillRepeatedly(ReturnRef(priority_list));
+    EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+        kConfigAccumulatedFixedSize));
+  }
+
+  static constexpr std::string_view kConfigAccumulatedFixedSize = R"({
+    "firmware_configs": [
+      {
+        "transport_type": 1,
+        "firmware_folder_name": "/test/fw/",
+        "firmware_file_name": "test_fw_accum_fixed.bin",
+        "firmware_data_loading_type": "ACCUMULATED_BUFFER",
+        "fixed_size_reading": { "chunk_size": 32 }
+      }
+    ]
+  })";
+  static constexpr size_t kChunkSize = 32;
+};
+
+TEST_F(FirmwareAccumulatedFixedSizeTest, AccumulateMultipleChunks) {
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw/test_fw_accum_fixed.bin"),
+                   _))
+      .WillOnce(Return(kFile1Fd));
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> chunk1(kChunkSize, 0xA1);
+  std::vector<uint8_t> chunk2(kChunkSize, 0xA2);
+  std::vector<uint8_t> chunk3(10, 0xA3);  // Last partial chunk.
+
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, kChunkSize))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t c) {
+                        memcpy(buf, chunk1.data(), c);
+                      }),
+                      Return(kChunkSize)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t c) {
+                        memcpy(buf, chunk2.data(), c);
+                      }),
+                      Return(kChunkSize)))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t /*c*/) {
+                        memcpy(buf, chunk3.data(), chunk3.size());
+                      }),
+                      Return(chunk3.size())));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(1)).Times(1);
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+
+  HalPacket expected_payload1;
+  expected_payload1.insert(expected_payload1.end(), chunk1.begin(),
+                           chunk1.end());
+  expected_payload1.insert(expected_payload1.end(), chunk2.begin(),
+                           chunk2.end());
+  EXPECT_EQ(data_packet1->GetPayload(), expected_payload1);
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataEnd);
+
+  HalPacket expected_payload2;
+  expected_payload2.insert(expected_payload2.end(), chunk3.begin(),
+                           chunk3.end());
+  EXPECT_EQ(data_packet2->GetPayload(), expected_payload2);
+
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
+TEST_F(FirmwareAccumulatedFixedSizeTest, ExceedsInternalBuffer) {
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw/test_fw_accum_fixed.bin"),
+                   _))
+      .WillOnce(Return(kFile1Fd));
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  constexpr size_t kInternalBufferSize = 32 * 1024;
+  const size_t num_full_chunks_to_fill_buffer =
+      kInternalBufferSize / kChunkSize;  // 1024 chunks.
+
+  std::vector<uint8_t> chunk(kChunkSize, 0xAA);
+  std::vector<uint8_t> last_chunk(10, 0xBB);
+
+  HalPacket expected_first_batch;
+  {
+    InSequence s;
+    for (size_t i = 0; i < num_full_chunks_to_fill_buffer; ++i) {
+      EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, kChunkSize))
+          .WillOnce(DoAll(Invoke([&](int, void* buf, size_t c) {
+                            memcpy(buf, chunk.data(), c);
+                          }),
+                          Return(kChunkSize)));
+      expected_first_batch.insert(expected_first_batch.end(), chunk.begin(),
+                                  chunk.end());
+    }
+    // This read will cause the buffer to be full, and its result stored in
+    // previous_packet_
+    EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, kChunkSize))
+        .WillOnce(DoAll(Invoke([&](int, void* buf, size_t c) {
+                          memcpy(buf, chunk.data(), c);
+                        }),
+                        Return(kChunkSize)));
+  }
+
+  auto data_packet1 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet1.has_value());
+  EXPECT_EQ(data_packet1->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet1->GetPayload().size(), kInternalBufferSize);
+  EXPECT_EQ(data_packet1->GetPayload(), expected_first_batch);
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
+
+  // Next call should return the chunk stored in previous_packet_ and then the
+  // last_chunk.
+  EXPECT_CALL(mock_system_call_wrapper_, Read(kFile1Fd, _, kChunkSize))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t /*c*/) {
+                        memcpy(buf, last_chunk.data(), last_chunk.size());
+                      }),
+                      Return(last_chunk.size())));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+
+  auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet2.has_value());
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataFragment);
+
+  HalPacket expected_second_batch;
+  expected_second_batch.insert(expected_second_batch.end(), chunk.begin(),
+                               chunk.end());  // From previous_packet_
+  EXPECT_EQ(data_packet2->GetPayload(), expected_second_batch);
+
+  Mock::VerifyAndClearExpectations(&mock_system_call_wrapper_);
+
+  auto data_packet3 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet3.has_value());
+  EXPECT_EQ(data_packet3->GetDataType(), DataType::kDataEnd);
+
+  HalPacket expected_third_batch;
+  expected_third_batch.insert(expected_third_batch.end(), last_chunk.begin(),
+                              last_chunk.end());
+  EXPECT_EQ(data_packet3->GetPayload(), expected_third_batch);
+
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
