@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "bthal"
+
 #include "bluetooth_hal/bluetooth_hal.h"
 
 #include <memory>
@@ -28,10 +30,12 @@
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder.h"
 #include "bluetooth_hal/hci_proxy_aidl.h"
+#include "bluetooth_hal/hci_proxy_ffi.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 
 namespace bluetooth_hal {
 
+using ::aidl::android::hardware::bluetooth::hal::IBluetoothHci_addService;
 using ::bluetooth_hal::HciProxyAidl;
 using ::bluetooth_hal::chip::ChipProvisionerInterface;
 using ::bluetooth_hal::extensions::cs::BluetoothChannelSounding;
@@ -56,6 +60,27 @@ void BluetoothHal::RegisterVendorChipProvisioner(
 }
 
 void BluetoothHal::Start() {
+  StartExtensions();
+
+  std::string instance = std::string() + HciProxyAidl::descriptor + "/default";
+  std::shared_ptr<HciProxyAidl> hci_proxy = SharedRefBase::make<HciProxyAidl>();
+  int status =
+      AServiceManager_addService(hci_proxy->asBinder().get(), instance.c_str());
+  if (status == STATUS_OK) {
+    ABinderProcess_joinThreadPool();
+  } else {
+    LOG(ERROR) << "Could not register as a service!";
+  }
+}
+
+void BluetoothHal::StartOffloadHal() {
+  StartExtensions();
+  static HciProxyFfi ffi;
+  IBluetoothHci_addService(&ffi);
+  ABinderProcess_joinThreadPool();
+}
+
+void BluetoothHal::StartExtensions() {
   std::string instance;
   int status;
 
@@ -75,16 +100,6 @@ void BluetoothHal::Start() {
                                       instance.c_str());
   if (status != STATUS_OK) {
     LOG(ERROR) << "Could not register BluetoothFinder as a service!";
-  }
-
-  instance = std::string() + HciProxyAidl::descriptor + "/default";
-  std::shared_ptr<HciProxyAidl> hci_proxy = SharedRefBase::make<HciProxyAidl>();
-  status =
-      AServiceManager_addService(hci_proxy->asBinder().get(), instance.c_str());
-  if (status == STATUS_OK) {
-    ABinderProcess_joinThreadPool();
-  } else {
-    LOG(ERROR) << "Could not register as a service!";
   }
 }
 

@@ -43,6 +43,9 @@ cc_defaults {
         "//hardware/google/interfaces:hardware.google.bluetooth.sar-V1-ndk",
         "//hardware/google/interfaces:hardware.google.bluetooth.bt_channel_avoidance-V1-ndk",
     ],
+    static_libs: [
+        "libbluetooth_offload_hal",
+    ],
     shared_libs: [
         "libbase",
         "libbinder_ndk",
@@ -67,6 +70,7 @@ filegroup {
         "hci_router_client.cc",
         "hci_router_client_agent.cc",
         "hci_proxy_aidl.cc",
+        "hci_proxy_ffi.cc",
     ],
 }
 
