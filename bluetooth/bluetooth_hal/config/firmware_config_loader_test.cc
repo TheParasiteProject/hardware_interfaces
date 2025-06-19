@@ -1395,7 +1395,6 @@ class FirmwareDataFixedSizeDefaultChunkTest
      }
    ]
  })";
-  static constexpr size_t kExpectedDefaultChunkSize = 200;
 };
 
 TEST_F(FirmwareDataFixedSizeDefaultChunkTest, UsesDefaultChunkSize) {
@@ -1407,14 +1406,14 @@ TEST_F(FirmwareDataFixedSizeDefaultChunkTest, UsesDefaultChunkSize) {
   ASSERT_TRUE(
       FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
 
-  std::vector<uint8_t> chunk(kExpectedDefaultChunkSize, 0xCC);
+  std::vector<uint8_t> chunk(cfg_consts::kDefaultFixedChunkSize, 0xCC);
 
   EXPECT_CALL(mock_system_call_wrapper_,
-              Read(kFile1Fd, _, kExpectedDefaultChunkSize))
+              Read(kFile1Fd, _, cfg_consts::kDefaultFixedChunkSize))
       .WillOnce(DoAll(Invoke([&](int, void* buf, size_t count) {
                         memcpy(buf, chunk.data(), count);
                       }),
-                      Return(kExpectedDefaultChunkSize)));
+                      Return(cfg_consts::kDefaultFixedChunkSize)));
 
   auto data_packet = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet.has_value());
@@ -1423,7 +1422,7 @@ TEST_F(FirmwareDataFixedSizeDefaultChunkTest, UsesDefaultChunkSize) {
 
   // Simulate EOF for next read.
   EXPECT_CALL(mock_system_call_wrapper_,
-              Read(kFile1Fd, _, kExpectedDefaultChunkSize))
+              Read(kFile1Fd, _, cfg_consts::kDefaultFixedChunkSize))
       .WillOnce(Return(0));
   EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
   EXPECT_FALSE(

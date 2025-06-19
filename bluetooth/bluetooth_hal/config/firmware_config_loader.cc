@@ -59,11 +59,6 @@ using ::google::protobuf::util::Status;
 
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
-// Default value if not specified in config.
-constexpr uint16_t kDefaultHciVscLaunchRamOpcode = 0xfc4e;
-// Default value for fixed-size reading.
-constexpr size_t kDefaultFixedChunkSize = 200;
-
 enum class DataLoadingType : int {
   kByPacket = 0,
   kByAccumulation,
@@ -136,8 +131,8 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   int firmware_file_fd_{-1};
 
   DataReadingMethod data_reading_method_{DataReadingMethod::kCommandBased};
-  uint16_t launch_ram_opcode_{kDefaultHciVscLaunchRamOpcode};
-  size_t fixed_chunk_size_{kDefaultFixedChunkSize};
+  uint16_t launch_ram_opcode_{cfg_consts::kDefaultHciVscLaunchRamOpcode};
+  size_t fixed_chunk_size_{cfg_consts::kDefaultFixedChunkSize};
 };
 
 bool FirmwareConfigLoaderImpl::ResetFirmwareDataLoadingState() {
@@ -421,7 +416,7 @@ bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
       launch_ram_opcode_ =
           config.command_based_reading().has_launch_ram_opcode()
               ? config.command_based_reading().launch_ram_opcode()
-              : kDefaultHciVscLaunchRamOpcode;
+              : cfg_consts::kDefaultHciVscLaunchRamOpcode;
       LOG(INFO)
           << __func__
           << ": Data reading method set to COMMAND_BASED, Launch RAM Opcode: 0x"
@@ -432,7 +427,7 @@ bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
       data_reading_method_ = DataReadingMethod::kFixedSize;
       fixed_chunk_size_ = config.fixed_size_reading().has_chunk_size()
                               ? config.fixed_size_reading().chunk_size()
-                              : kDefaultFixedChunkSize;
+                              : cfg_consts::kDefaultFixedChunkSize;
       LOG(INFO) << __func__
                 << ": Data reading method set to FIXED_SIZE, Chunk Size: "
                 << fixed_chunk_size_ << " bytes";
@@ -441,7 +436,7 @@ bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
     case FirmwareConfigForTransport::DATA_READING_METHOD_NOT_SET:
     default:
       data_reading_method_ = DataReadingMethod::kCommandBased;
-      launch_ram_opcode_ = kDefaultHciVscLaunchRamOpcode;
+      launch_ram_opcode_ = cfg_consts::kDefaultHciVscLaunchRamOpcode;
       LOG(INFO) << __func__
                 << ": Data reading method not specified, defaulting to "
                    "COMMAND_BASED, Launch RAM Opcode: 0x"
