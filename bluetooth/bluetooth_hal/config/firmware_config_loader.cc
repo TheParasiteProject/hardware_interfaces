@@ -565,7 +565,39 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByCommand() {
 }
 
 std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByFixedSize() {
-  return std::nullopt;
+  if (firmware_file_fd_ == -1) {
+    if (!OpenNextFirmwareFile()) {
+      return std::nullopt;
+    }
+  }
+
+  std::vector<uint8_t> buffer(fixed_chunk_size_);
+  ssize_t bytes_read = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Read(
+      firmware_file_fd_, buffer.data(), fixed_chunk_size_));
+
+  if (bytes_read <= 0) {
+    // End of stream or error.
+    firmware_file_fd_ = -1;
+    return std::nullopt;
+  }
+
+  buffer.resize(bytes_read);
+
+  // If we read less than the requested chunk size, it means we hit EOF.
+  bool is_end_of_current_file =
+      (bytes_read < static_cast<ssize_t>(fixed_chunk_size_));
+
+  if (is_end_of_current_file) {
+    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
+    firmware_file_fd_ = -1;
+    bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
+                         current_firmware_filenames_.size() - 1);
+    return DataPacket(
+        is_last_file ? DataType::kDataEnd : DataType::kDataFragment,
+        std::move(buffer));
+  }
+
+  return DataPacket(DataType::kDataFragment, std::move(buffer));
 }
 
 std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextSinglePacket() {
