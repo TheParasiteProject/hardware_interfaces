@@ -1372,6 +1372,64 @@ TEST_F(FirmwareDataCommandBasedCustomOpcodeTest, UsesCustomOpcode) {
       FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
 }
 
+class FirmwareDataFixedSizeDefaultChunkTest
+    : public FirmwareConfigLoaderTestBase {
+ protected:
+  void SetUp() override {
+    FirmwareConfigLoaderTestBase::SetUp();
+    std::vector<TransportType> priority_list = {TransportType::kUartH4};
+    EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+        .WillRepeatedly(ReturnRef(priority_list));
+    EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+        kConfigFixedSizeDefaultChunk));
+  }
+
+  static constexpr std::string_view kConfigFixedSizeDefaultChunk = R"({
+   "firmware_configs": [
+     {
+       "transport_type": 1,
+       "firmware_folder_name": "/test/fw/",
+       "firmware_file_name": "test_fw_fixed_default_chunk.bin",
+       "firmware_data_loading_type": "PACKET_BY_PACKET",
+       "fixed_size_reading": { }
+     }
+   ]
+ })";
+  static constexpr size_t kExpectedDefaultChunkSize = 200;
+};
+
+TEST_F(FirmwareDataFixedSizeDefaultChunkTest, UsesDefaultChunkSize) {
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Open(MatcherFactory::CreateStringMatcher(
+                       "/test/fw/test_fw_fixed_default_chunk.bin"),
+                   _))
+      .WillOnce(Return(kFile1Fd));
+  ASSERT_TRUE(
+      FirmwareConfigLoader::GetLoader().ResetFirmwareDataLoadingState());
+
+  std::vector<uint8_t> chunk(kExpectedDefaultChunkSize, 0xCC);
+
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Read(kFile1Fd, _, kExpectedDefaultChunkSize))
+      .WillOnce(DoAll(Invoke([&](int, void* buf, size_t count) {
+                        memcpy(buf, chunk.data(), count);
+                      }),
+                      Return(kExpectedDefaultChunkSize)));
+
+  auto data_packet = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
+  ASSERT_TRUE(data_packet.has_value());
+  EXPECT_EQ(data_packet->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet->GetPayload(), HalPacket(chunk));
+
+  // Simulate EOF for next read.
+  EXPECT_CALL(mock_system_call_wrapper_,
+              Read(kFile1Fd, _, kExpectedDefaultChunkSize))
+      .WillOnce(Return(0));
+  EXPECT_CALL(mock_system_call_wrapper_, Close(kFile1Fd)).Times(1);
+  EXPECT_FALSE(
+      FirmwareConfigLoader::GetLoader().GetNextFirmwareData().has_value());
+}
+
 }  // namespace
 }  // namespace config
 }  // namespace bluetooth_hal
