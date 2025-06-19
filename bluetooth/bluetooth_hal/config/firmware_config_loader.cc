@@ -577,6 +577,7 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByFixedSize() {
 
   if (bytes_read <= 0) {
     // End of stream or error.
+    SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
     firmware_file_fd_ = -1;
     return std::nullopt;
   }
@@ -625,8 +626,6 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
       // If the previous packet was the end, just return it.
       DataPacket result = std::move(previous_packet_.value());
       previous_packet_.reset();
-      SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
-      firmware_file_fd_ = -1;
       return result;
     }
 
