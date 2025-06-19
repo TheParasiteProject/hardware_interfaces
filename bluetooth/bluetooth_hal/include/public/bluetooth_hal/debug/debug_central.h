@@ -317,7 +317,6 @@ class DebugCentral {
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
   bool hijack_event_ = false;
-  bool has_client_ = false;
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
