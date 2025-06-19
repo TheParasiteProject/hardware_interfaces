@@ -84,6 +84,7 @@ filegroup {
         "debug/bluetooth_activity.cc",
         "debug/bluetooth_bqr.cc",
         "debug/debug_central.cc",
+        "debug/debug_monitor.cc",
         "debug/stack_trace_helper.cc",
         "debug/vnd_snoop_logger.cc",
         "debug/debug_event_watcher.cc",
@@ -96,6 +97,11 @@ filegroup {
         "bqr/bqr_handler.cc",
         "bqr/bqr_event.cc",
         "bqr/bqr_link_quality_event.cc",
+        "bqr/bqr_link_quality_event_v1_to_v3.cc",
+        "bqr/bqr_link_quality_event_v4.cc",
+        "bqr/bqr_link_quality_event_v5.cc",
+        "bqr/bqr_link_quality_event_v6.cc",
+        "bqr/bqr_root_inflammation_event.cc",
     ],
 }
 
@@ -420,10 +426,42 @@ cc_test {
         "config/hal_config_loader_test.cc",
         ":test_mock_transport_srcs",
         ":test_mock_util_srcs",
+    ],
+    static_libs: [
+        "libgmock",
+        "hal_proto_lib",
+    ],
+    shared_libs: [
+        "libbase",
+        "libprotobuf-cpp-full",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_cs_config_loader_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
         "config/cs_config_loader.cc",
         "config/cs_config_loader_test.cc",
+        ":test_mock_util_srcs",
+    ],
+    static_libs: [
+        "libgmock",
+        "hal_proto_lib",
+    ],
+    shared_libs: [
+        "libbase",
+        "libprotobuf-cpp-full",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_firmware_config_loader_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
         "config/firmware_config_loader.cc",
         "config/firmware_config_loader_test.cc",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -537,7 +575,13 @@ cc_test {
         "bqr/bqr_event.cc",
         "bqr/bqr_event_test.cc",
         "bqr/bqr_link_quality_event.cc",
+        "bqr/bqr_link_quality_event_v1_to_v3.cc",
+        "bqr/bqr_link_quality_event_v4.cc",
+        "bqr/bqr_link_quality_event_v5.cc",
+        "bqr/bqr_link_quality_event_v6.cc",
         "bqr/bqr_link_quality_event_test.cc",
+        "bqr/bqr_root_inflammation_event.cc",
+        "bqr/bqr_root_inflammation_event_test.cc",
     ],
     shared_libs: [
         "libbase",

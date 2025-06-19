@@ -23,7 +23,11 @@
 #include <sstream>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/bqr/bqr_handler.h"
+#include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
+#include "bluetooth_hal/debug/debug_monitor.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/util/timer_manager.h"
 
 // Code Enter Point
 enum class AnchorType : uint8_t {
@@ -285,6 +289,30 @@ class DebugCentral {
     return DebugAnchor(type, anchor);
   }
 
+  /**
+   * @brief Inform DebugCentral to handle Root Inflammation Event reported from
+   * the Bluetooth chip. It also generates a Bluetooth HAL coredump.
+   *
+   * @param packet The root inflammation event.
+   */
+  void HandleRootInflammationEvent(
+      const ::bluetooth_hal::bqr::BqrRootInflammationEvent& event);
+
+  /**
+   * @brief Inform DebugCentral to handle Debug Info Event reported from the
+   * Bluetooth chip. It also generates a Bluetooth HAL coredump.
+   *
+   * @param packet The debug info event.
+   */
+  void HandleDebugInfoEvent(const ::bluetooth_hal::hci::HalPacket& packet);
+
+  /**
+   * @brief Inform DebugCentral to handle Debug Info Command sent from the
+   * stack. It generates a Bluetooth HAL coredump if the Bluetooth chip did
+   * not report Debug Info events in time.
+   */
+  void HandleDebugInfoCommand();
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
@@ -299,18 +327,17 @@ class DebugCentral {
   // BtHal Logger
   std::list<std::pair<std::string, std::string>> history_record_;
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
+  ::bluetooth_hal::util::Timer debug_info_command_timer_;
+  DebugMonitor debug_monitor_;
+  ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
 
-  static void ForceGetCoredumpTimeout(union sigval sig);
   bool report_ssr_crash(uint8_t vendor_error_code);
   bool is_hw_stage_supported();
   void dump_hal_log(int fd);
-  void handle_vendor_specific_event(
-      const ::bluetooth_hal::hci::HalPacket& packet);
   void handle_bqr_fw_debug_data_dump(
       const ::bluetooth_hal::hci::HalPacket& packet);
   void handle_bqr_chre_debug_data_dump(
       const ::bluetooth_hal::hci::HalPacket& packet);
-  void handle_debug_info_event(const ::bluetooth_hal::hci::HalPacket& packet);
   void handle_bqr_event(const ::bluetooth_hal::hci::HalPacket& packet);
   void start_crash_dump(bool slient_report, const std::string& reason);
 };

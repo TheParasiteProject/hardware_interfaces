@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/bqr/bqr_event.h"
@@ -26,11 +27,28 @@
 namespace bluetooth_hal {
 namespace bqr {
 
-// Forward declarations
-class BqrLinkQualityEventV3AndBackward;
-class BqrLinkQualityEventV4;
-class BqrLinkQualityEventV5;
-class BqrLinkQualityEventV6;
+enum class LinkQualityOffset : uint8_t {
+  // After H4 type(1) + event code(1) + length(1) + sub event(1) + report id(1)
+  kPacketTypes = 5,                    // 1 byte
+  kConnectionHandle = 6,               // 2 bytes
+  kConnectionRole = 8,                 // 1 byte
+  kTxPowerLevel = 9,                   // 1 byte
+  kRssi = 10,                          // 1 byte
+  kSnr = 11,                           // 1 byte
+  kUnusedAfhChannelCount = 12,         // 1 byte
+  kAfhSelectUnidealChannelCount = 13,  // 1 byte
+  kLsto = 14,                          // 2 byte
+  kConnectionPiconetClock = 16,        // 4 bytes
+  kRetransmissionCount = 20,           // 4 bytes
+  kNoRxCount = 24,                     // 4 bytes
+  kNakCount = 28,                      // 4 bytes
+  kLastTxAckTimestamp = 32,            // 4 bytes
+  kFlowOffCount = 36,                  // 4 bytes
+  kLastFlowOnTimestamp = 40,           // 4 bytes
+  kBufferOverflowBytes = 44,           // 4 bytes
+  kBufferUnderflowBytes = 48,          // 4 bytes
+  kEnd = 52,
+};
 
 // Base class for all BQR Link Quality events.
 // It provides methods to access common parameters across different versions.
@@ -89,8 +107,12 @@ class BqrLinkQualityEventBase : public BqrEvent {
   // Retrieves the buffer underflow count (in bytes).
   uint32_t GetBufferUnderflowBytes() const;
 
+  // Returns a string representation of the event.
+  std::string ToString() const;
+
  protected:
   void ParseData();
+  std::string ToBqrString() const;
 
   bool is_valid_;
   BqrVersion version_;
@@ -112,115 +134,6 @@ class BqrLinkQualityEventBase : public BqrEvent {
   uint32_t last_flow_on_timestamp_;
   uint32_t buffer_overflow_bytes_;
   uint32_t buffer_underflow_bytes_;
-};
-
-// Represents BQR Link Quality event for versions V1 to V3.
-// It inherits all common parameters from BqrLinkQualityEventBase.
-class BqrLinkQualityEventV3AndBackward : public BqrLinkQualityEventBase {
- public:
-  explicit BqrLinkQualityEventV3AndBackward(
-      const ::bluetooth_hal::hci::HalPacket& packet);
-  ~BqrLinkQualityEventV3AndBackward() = default;
-
-  // Checks if the BQR Link Quality Event V3 and backward is valid.
-  bool IsValid() const override;
-};
-
-// Represents BQR Link Quality event for version V4.
-// It extends BqrLinkQualityEventV3AndBackward with V4-specific parameters.
-class BqrLinkQualityEventV4 : public BqrLinkQualityEventV3AndBackward {
- public:
-  explicit BqrLinkQualityEventV4(const ::bluetooth_hal::hci::HalPacket& packet);
-  ~BqrLinkQualityEventV4() = default;
-
-  // Checks if the BQR Link Quality Event V4 is valid.
-  bool IsValid() const override;
-
-  // Retrieves the number of packets that are sent out.
-  uint32_t GetTxTotalPackets() const;
-  // Retrieves the number of packets that don't receive an acknowledgment.
-  uint32_t GetTxUnackedPackets() const;
-  // Retrieves the number of packets that are not sent out by its flush point.
-  uint32_t GetTxFlushedPackets() const;
-  // Retrieves the number of packets that Link Layer transmits a CIS Data PDU in
-  // the last subevent of a CIS event.
-  uint32_t GetTxLastSubeventPackets() const;
-  // Retrieves the number of received packages with CRC error since the last
-  // event.
-  uint32_t GetCrcErrorPackets() const;
-  // Retrieves the number of duplicate (retransmission) packages that are
-  // received since the last event.
-  uint32_t GetRxDuplicatePackets() const;
-
- protected:
-  void ParseData();
-
-  uint32_t tx_total_packets_;
-  uint32_t tx_unacked_packets_;
-  uint32_t tx_flushed_packets_;
-  uint32_t tx_last_subevent_packets_;
-  uint32_t crc_error_packets_;
-  uint32_t rx_duplicate_packets_;
-};
-
-// Represents BQR Link Quality event for version V5.
-// It extends BqrLinkQualityEventV3AndBackward with V5-specific parameters,
-// and redefines the V4-like parameters at new offsets.
-class BqrLinkQualityEventV5 : public BqrLinkQualityEventV3AndBackward {
- public:
-  explicit BqrLinkQualityEventV5(const ::bluetooth_hal::hci::HalPacket& packet);
-  ~BqrLinkQualityEventV5() = default;
-
-  // Checks if the BQR Link Quality Event V5 is valid.
-  bool IsValid() const override;
-
-  // Retrieves the remote Bluetooth address.
-  ::bluetooth_hal::hci::BluetoothAddress GetRemoteAddress() const;
-  // Retrieves the count of calibration failed items.
-  uint8_t GetCallFailedItemCount() const;
-
-  // V4-like parameters, but at offsets specific to V5
-  uint32_t GetTxTotalPackets() const;
-  uint32_t GetTxUnackedPackets() const;
-  uint32_t GetTxFlushedPackets() const;
-  uint32_t GetTxLastSubeventPackets() const;
-  uint32_t GetCrcErrorPackets() const;
-  uint32_t GetRxDuplicatePackets() const;
-
- protected:
-  void ParseData();
-
-  ::bluetooth_hal::hci::BluetoothAddress remote_addr_;
-  uint8_t call_failed_item_count_;
-  uint32_t v5_tx_total_packets_;
-  uint32_t v5_tx_unacked_packets_;
-  uint32_t v5_tx_flushed_packets_;
-  uint32_t v5_tx_last_subevent_packets_;
-  uint32_t v5_crc_error_packets_;
-  uint32_t v5_rx_duplicate_packets_;
-};
-
-// Represents BQR Link Quality event for version V6.
-// It extends BqrLinkQualityEventV5 with V6-specific parameters.
-class BqrLinkQualityEventV6 : public BqrLinkQualityEventV5 {
- public:
-  explicit BqrLinkQualityEventV6(const ::bluetooth_hal::hci::HalPacket& packet);
-  ~BqrLinkQualityEventV6() = default;
-
-  // Checks if the BQR Link Quality Event V6 is valid.
-  bool IsValid() const override;
-
-  // Retrieves the number of unreceived packets, same as LE Read ISO Link
-  // Quality command.
-  uint32_t GetRxUnreceivedPackets() const;
-  // Retrieves the coex activities information mask.
-  uint16_t GetCoexInfoMask() const;
-
- protected:
-  void ParseData();
-
-  uint32_t rx_unreceived_packets_;
-  uint16_t coex_info_mask_;
 };
 
 }  // namespace bqr

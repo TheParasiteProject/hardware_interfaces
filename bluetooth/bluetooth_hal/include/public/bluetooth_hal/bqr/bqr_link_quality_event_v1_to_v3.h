@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,31 +16,32 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
+#include "bluetooth_hal/bqr/bqr_link_quality_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
 
 namespace bluetooth_hal {
 namespace bqr {
 
-class BqrEvent : public ::bluetooth_hal::hci::HalPacket {
- public:
-  explicit BqrEvent(const ::bluetooth_hal::hci::HalPacket& packet);
-  virtual ~BqrEvent() = default;
+using LinkQualityOffsetV1ToV3 = LinkQualityOffset;
 
-  virtual bool IsValid() const;
-  BqrReportId GetBqrReportId() const;
-  BqrEventType GetBqrEventType() const;
+class BqrLinkQualityEventV1ToV3 : public BqrLinkQualityEventBase {
+ public:
+  explicit BqrLinkQualityEventV1ToV3(
+      const ::bluetooth_hal::hci::HalPacket& packet);
+  ~BqrLinkQualityEventV1ToV3() = default;
+
+  // Checks if the BQR Link Quality Event is valid.
+  bool IsValid() const override;
+
+  // Returns a string representation of the event.
   std::string ToString() const;
 
  protected:
-  void ParseData();
   std::string ToBqrString() const;
-
-  bool is_valid_;
-  BqrReportId report_id_;
-  BqrEventType bqr_event_type_;
 };
 
 }  // namespace bqr

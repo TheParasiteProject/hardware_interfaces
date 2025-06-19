@@ -43,6 +43,11 @@ inline constexpr std::string_view kRfkillFolderPrefix =
     "/sys/class/rfkill/rfkill";
 inline constexpr std::string_view kRfkillTypeBluetooth = "bluetooth";
 
+inline constexpr std::string_view kFirmwareConfigFile =
+    "/vendor/etc/bluetooth/firmware_config.json";
+inline constexpr int kDefaultLoadMiniDrvDelayMs = 50;
+inline constexpr int kDefaultLaunchRamDelayMs = 250;
+
 }  // namespace constants
 }  // namespace config
 }  // namespace bluetooth_hal
