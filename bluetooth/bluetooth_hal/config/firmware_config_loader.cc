@@ -59,12 +59,19 @@ using ::google::protobuf::util::Status;
 
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
-// Used for downloading firmware data.
-constexpr uint16_t kHciVscLaunchRamOpcode = 0xfc4e;
+// Default value if not specified in config.
+constexpr uint16_t kDefaultHciVscLaunchRamOpcode = 0xfc4e;
+// Default value for fixed-size reading.
+constexpr size_t kDefaultFixedChunkSize = 200;
 
 enum class DataLoadingType : int {
   kByPacket = 0,
   kByAccumulation,
+};
+
+enum class DataReadingMethod {
+  kCommandBased,
+  kFixedSize,
 };
 
 constexpr uint16_t GetOpcode(std::span<const uint8_t> packet) {
@@ -108,8 +115,11 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
 
   bool OpenNextFirmwareFile();
 
-  std::optional<DataPacket> GetNextFirmwareDataByPacket();
+  std::optional<DataPacket> GetNextPacketByCommand();
+  std::optional<DataPacket> GetNextPacketByFixedSize();
+  std::optional<DataPacket> GetNextSinglePacket();
   std::optional<DataPacket> GetNextFirmwareDataByAccumulation();
+  std::optional<DataPacket> GetNextFirmwareDataByPacket();
 
   std::unordered_map<TransportType, FirmwareConfigForTransport>
       transport_specific_configs_;
@@ -122,8 +132,13 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
   std::vector<std::string> current_firmware_filenames_;
   int current_firmware_file_index_;
 
+  std::optional<DataPacket> previous_packet_;
   std::optional<std::vector<uint8_t>> previous_header_;
   int firmware_file_fd_{-1};
+
+  DataReadingMethod data_reading_method_{DataReadingMethod::kCommandBased};
+  uint16_t launch_ram_opcode_{kDefaultHciVscLaunchRamOpcode};
+  size_t fixed_chunk_size_{kDefaultFixedChunkSize};
 };
 
 bool FirmwareConfigLoaderImpl::ResetFirmwareDataLoadingState() {
@@ -150,7 +165,7 @@ bool FirmwareConfigLoaderImpl::OpenNextFirmwareFile() {
     SystemCallWrapper::GetWrapper().Close(firmware_file_fd_);
     firmware_file_fd_ = -1;
   }
-  previous_header_.reset();  // Reset for accumulation mode for the new file.
+  previous_packet_.reset();  // Reset for accumulation mode for the new file.
 
   current_firmware_file_index_++;
   if (static_cast<size_t>(current_firmware_file_index_) >=
@@ -180,6 +195,12 @@ bool FirmwareConfigLoaderImpl::OpenNextFirmwareFile() {
 
 std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextFirmwareData() {
   std::scoped_lock lock(firmware_data_mutex_);
+
+  if (!active_config_) {
+    LOG(ERROR) << __func__ << ": No active firmware configuration selected.";
+    return std::nullopt;
+  }
+
   // If no file is currently open (or previous one ended), try opening the
   // next one.
   if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
@@ -268,6 +289,25 @@ std::string FirmwareConfigLoaderImpl::DumpConfigToString() const {
     ss << "    Data Loading Type: "
        << FirmwareDataLoadingType_Name(config.firmware_data_loading_type())
        << "\n";
+    switch (config.data_reading_method_case()) {
+      case FirmwareConfigForTransport::kCommandBasedReading:
+        ss << "    Data Reading Method: COMMAND_BASED\n";
+        ss << "      Launch RAM Opcode: 0x" << std::hex
+           << config.command_based_reading().launch_ram_opcode() << std::dec
+           << "\n";
+        break;
+
+      case FirmwareConfigForTransport::kFixedSizeReading:
+        ss << "    Data Reading Method: FIXED_SIZE\n";
+        ss << "      Chunk Size: " << config.fixed_size_reading().chunk_size()
+           << " bytes\n";
+        break;
+
+      case FirmwareConfigForTransport::DATA_READING_METHOD_NOT_SET:
+      default:
+        ss << "    Data Reading Method: (Default) COMMAND_BASED\n";
+        break;
+    }
     ss << "    Setup Commands Loaded:\n";
     if (active_setup_commands_.empty()) {
       ss << "      (None)\n";
@@ -375,6 +415,41 @@ bool FirmwareConfigLoaderImpl::SelectFirmwareConfiguration(
     LoadSetupCommandsFromConfig(active_config_->get(), active_setup_commands_);
   }
 
+  // Configure data reading method.
+  switch (config.data_reading_method_case()) {
+    case FirmwareConfigForTransport::kCommandBasedReading:
+      data_reading_method_ = DataReadingMethod::kCommandBased;
+      launch_ram_opcode_ =
+          config.command_based_reading().has_launch_ram_opcode()
+              ? config.command_based_reading().launch_ram_opcode()
+              : kDefaultHciVscLaunchRamOpcode;
+      LOG(INFO)
+          << __func__
+          << ": Data reading method set to COMMAND_BASED, Launch RAM Opcode: 0x"
+          << std::hex << launch_ram_opcode_ << std::dec;
+      break;
+
+    case FirmwareConfigForTransport::kFixedSizeReading:
+      data_reading_method_ = DataReadingMethod::kFixedSize;
+      fixed_chunk_size_ = config.fixed_size_reading().has_chunk_size()
+                              ? config.fixed_size_reading().chunk_size()
+                              : kDefaultFixedChunkSize;
+      LOG(INFO) << __func__
+                << ": Data reading method set to FIXED_SIZE, Chunk Size: "
+                << fixed_chunk_size_ << " bytes";
+      break;
+
+    case FirmwareConfigForTransport::DATA_READING_METHOD_NOT_SET:
+    default:
+      data_reading_method_ = DataReadingMethod::kCommandBased;
+      launch_ram_opcode_ = kDefaultHciVscLaunchRamOpcode;
+      LOG(INFO) << __func__
+                << ": Data reading method not specified, defaulting to "
+                   "COMMAND_BASED, Launch RAM Opcode: 0x"
+                << std::hex << launch_ram_opcode_ << std::dec;
+      break;
+  }
+
   return true;
 }
 
@@ -424,8 +499,7 @@ void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
   }
 }
 
-std::optional<DataPacket>
-FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
+std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByCommand() {
   while (true) {
     if (firmware_file_fd_ == -1 && !OpenNextFirmwareFile()) {
       return std::nullopt;  // No more files or error opening.
@@ -468,8 +542,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
       continue;
     }
 
-    bool is_launch_ram =
-        (GetOpcode(std::span(header)) == kHciVscLaunchRamOpcode);
+    bool is_launch_ram = (GetOpcode(std::span(header)) == launch_ram_opcode_);
     bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
                          current_firmware_filenames_.size() - 1);
 
@@ -487,8 +560,24 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
         packet_data_type = DataType::kDataEnd;
       }
     }
+
     return DataPacket(packet_data_type, packet_payload);
   }
+}
+
+std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByFixedSize() {
+  return std::nullopt;
+}
+
+std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextSinglePacket() {
+  return data_reading_method_ == DataReadingMethod::kCommandBased
+             ? GetNextPacketByCommand()
+             : GetNextPacketByFixedSize();
+}
+
+std::optional<DataPacket>
+FirmwareConfigLoaderImpl::GetNextFirmwareDataByPacket() {
+  return GetNextSinglePacket();
 }
 
 std::optional<DataPacket>
@@ -530,7 +619,7 @@ FirmwareConfigLoaderImpl::GetNextFirmwareDataByAccumulation() {
     const size_t payload_size = header[2];
     const size_t packet_size = 1 + header.size() + payload_size;
 
-    bool is_launch_ram = (GetOpcode(header) == kHciVscLaunchRamOpcode);
+    bool is_launch_ram = (GetOpcode(header) == kDefaultHciVscLaunchRamOpcode);
     bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
                          current_firmware_filenames_.size() - 1);
 
