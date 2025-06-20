@@ -208,8 +208,9 @@ class TxHandler {
 
     VndSnoopLogger::GetLogger().Capture(packet,
                                         VndSnoopLogger::Direction::kOutgoing);
-    if (HciRouterClientAgent::GetAgent().DispatchPacketToClients(packet) ==
-        MonitorMode::kIntercept) {
+    if (packet.GetType() == HciPacketType::kCommand &&
+        HciRouterClientAgent::GetAgent().DispatchPacketToClients(packet) ==
+            MonitorMode::kIntercept) {
       // TODO: b/417582927 - Should force the client to provide an event if a
       // command is intercepted.
       HAL_LOG(DEBUG) << __func__ << ": packet intercepted by a client, "
