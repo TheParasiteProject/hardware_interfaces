@@ -433,7 +433,8 @@ class EffectHelper {
                              std::unique_ptr<EffectHelper::DataMQ>& inputMQ,
                              std::unique_ptr<EffectHelper::DataMQ>& outputMQ, int version) {
         State state;
-        while (effect->getState(&state).getStatus() == EX_NONE && state == State::DRAINING) {
+        while (effect->getState(&state).getStatus() == EX_NONE && state == State::DRAINING &&
+               version >= kDrainSupportedVersion) {
             EXPECT_NO_FATAL_FAILURE(
                     EffectHelper::writeToFmq(statusMQ, inputMQ, inputBuffer, version));
             EXPECT_NO_FATAL_FAILURE(EffectHelper::readFromFmq(
