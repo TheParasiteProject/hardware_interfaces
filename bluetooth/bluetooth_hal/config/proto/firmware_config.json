@@ -11,6 +11,9 @@
       "load_mini_drv_delay_ms": 100,
       "launch_ram_delay_ms": 100,
       "firmware_data_loading_type": "PACKET_BY_PACKET",
+      "fixed_size_reading": {
+        "chunk_size": 200
+      },
       "setup_commands": {
         "hci_reset": [
           1,
