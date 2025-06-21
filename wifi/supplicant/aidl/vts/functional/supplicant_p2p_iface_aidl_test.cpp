@@ -925,7 +925,8 @@ TEST_P(SupplicantP2pIfaceAidlTest, ProvisionDiscoveryWithParams) {
     params.pairingBootstrappingMethod =
             P2pPairingBootstrappingMethodMask::BOOTSTRAPPING_OPPORTUNISTIC;
 
-    EXPECT_TRUE(p2p_iface_->provisionDiscoveryWithParams(params).isOk());
+    // This will fail with fake values.
+    EXPECT_FALSE(p2p_iface_->provisionDiscoveryWithParams(params).isOk());
 }
 
 /*
@@ -979,7 +980,8 @@ TEST_P(SupplicantP2pIfaceAidlTest, ReinvokePersistentGroup) {
     params.persistentNetworkId = 0;
     params.deviceIdentityEntryId = 0;
 
-    EXPECT_TRUE(p2p_iface_->reinvokePersistentGroup(params).isOk());
+    // This will fail with fake values.
+    EXPECT_FALSE(p2p_iface_->reinvokePersistentGroup(params).isOk());
 }
 
 /*

@@ -82,7 +82,6 @@ filegroup {
     name: "hal_debug_srcs",
     srcs: [
         "debug/bluetooth_activity.cc",
-        "debug/bluetooth_bqr.cc",
         "debug/debug_central.cc",
         "debug/debug_monitor.cc",
         "debug/stack_trace_helper.cc",

@@ -27,6 +27,7 @@
 #include <thread>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
@@ -36,8 +37,8 @@ namespace transport {
 namespace {
 
 using ::android::base::unique_fd;
+using ::bluetooth_hal::bqr::BqrErrorCode;
 using ::bluetooth_hal::config::HalConfigLoader;
-using ::bluetooth_hal::debug::BqrErrorCode;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::util::SystemCallWrapper;
 
@@ -93,7 +94,7 @@ std::string GetRfkillStatePath() {
 // TODO: b/421766932 - Add battery level query.
 
 bool PowerManager::PowerControl(bool is_enabled) {
-  DURATION_TRACKER(AnchorType::POWER_CTRL, __func__);
+  DURATION_TRACKER(AnchorType::kPowerControl, __func__);
 
   const std::string state_path = GetRfkillStatePath();
   if (state_path.empty()) {
@@ -108,13 +109,13 @@ bool PowerManager::PowerControl(bool is_enabled) {
     LOG(ERROR) << __func__ << ": Unable to open rfkill state {" << state_path
                << "}: " << strerror(errno) << " (" << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::kHostPowerUpController,
                                        "Unable to open rfkill state");
 #endif
     return false;
   }
 
-  ANCHOR_LOG_INFO(AnchorType::POWER_STATE)
+  ANCHOR_LOG_INFO(AnchorType::kLowPowerMode)
       << __func__ << ": " << (is_enabled ? "Enabling" : "Disabling")
       << ", state_path: " << state_path;
 
@@ -127,7 +128,7 @@ bool PowerManager::PowerControl(bool is_enabled) {
                << ": Failed to change rfkill state: " << strerror(errno) << " ("
                << errno << ")";
 #ifndef UNIT_TEST
-    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_POWER_UP_CONTROLLER,
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::kHostPowerUpController,
                                        "Cannot write power control data");
 #endif
     return false;
@@ -137,17 +138,14 @@ bool PowerManager::PowerControl(bool is_enabled) {
 }
 
 bool PowerManager::SetupLowPowerMode() {
-  ANCHOR_LOG_INFO(AnchorType::LPM_ENABLE) << __func__ << ": LPM enabling";
+  HAL_LOG(INFO) << __func__ << ": LPM enabling";
 
   lpm_fd_.reset(SystemCallWrapper::GetWrapper().Open(
       HalConfigLoader::GetLoader().GetLpmWakingProcNode().c_str(), O_WRONLY));
   if (!lpm_fd_.ok()) {
-    LOG(WARNING) << __func__ << ": Unable to open LPM control port ("
-                 << HalConfigLoader::GetLoader().GetLpmWakingProcNode()
-                 << "): " << strerror(errno) << " (" << errno << ").";
-    ANCHOR_LOG(AnchorType::LPM_SETUP_ERR)
-        << __func__ << ": Unable to open LPM control port, " << strerror(errno)
-        << "(" << errno << ")";
+    HAL_LOG(WARNING) << __func__ << ": Unable to open LPM control port ("
+                     << HalConfigLoader::GetLoader().GetLpmWakingProcNode()
+                     << "): " << strerror(errno) << " (" << errno << ").";
     return false;
   }
 
@@ -155,9 +153,8 @@ bool PowerManager::SetupLowPowerMode() {
   unique_fd enable_fd(SystemCallWrapper::GetWrapper().Open(
       HalConfigLoader::GetLoader().GetLpmEnableProcNode().c_str(), O_WRONLY));
   if (!enable_fd.ok()) {
-    ANCHOR_LOG_WARNING(AnchorType::LPM_SETUP_ERR)
-        << __func__ << ": Unable to open LPM driver, " << strerror(errno) << "("
-        << errno << ")";
+    HAL_LOG(WARNING) << __func__ << ": Unable to open LPM driver, "
+                     << strerror(errno) << "(" << errno << ")";
     return false;
   }
 
@@ -175,9 +172,9 @@ bool PowerManager::SetupLowPowerMode() {
   length = TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Write(
       lpm_fd_.get(), &enable_cmd, sizeof(enable_cmd)));
   if (length < 1) {
-    ANCHOR_LOG_WARNING(AnchorType::LPM_SETUP_ERR)
-        << __func__ << ": Unable to wake up LPM:" << strerror(errno) << " ("
-        << errno << ").";
+    HAL_LOG(WARNING) << __func__
+                     << ": Unable to wake up LPM:" << strerror(errno) << " ("
+                     << errno << ").";
     TeardownLowPowerMode();
     return false;
   }
@@ -186,17 +183,16 @@ bool PowerManager::SetupLowPowerMode() {
 }
 
 void PowerManager::TeardownLowPowerMode() {
-  ANCHOR_LOG_INFO(AnchorType::LPM_DISABLE) << __func__ << ": LPM disabling.";
+  HAL_LOG(INFO) << __func__ << ": LPM disabling.";
 
   lpm_fd_.reset();
 
   unique_fd disable_fd(SystemCallWrapper::GetWrapper().Open(
       HalConfigLoader::GetLoader().GetLpmEnableProcNode().c_str(), O_WRONLY));
   if (!disable_fd.ok()) {
-    ANCHOR_LOG_WARNING(AnchorType::LPM_CLOSE_ERR)
-        << __func__ << ": Unable to close LPM driver ("
-        << HalConfigLoader::GetLoader().GetLpmEnableProcNode()
-        << "): " << strerror(errno) << " (" << errno << ").";
+    HAL_LOG(WARNING) << __func__ << ": Unable to close LPM driver ("
+                     << HalConfigLoader::GetLoader().GetLpmEnableProcNode()
+                     << "): " << strerror(errno) << " (" << errno << ").";
     return;
   }
 
@@ -221,14 +217,13 @@ bool PowerManager::ResumeFromLowPowerMode() {
       TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Write(
           lpm_fd_.get(), &resume_cmd, sizeof(resume_cmd)));
   if (length < 1) {
-    ANCHOR_LOG_ERROR(AnchorType::LPM_WAKEUP_ERR)
-        << __func__ << ": Unable to wake up LPM:" << strerror(errno) << " ("
-        << errno << ").";
+    HAL_LOG(ERROR) << __func__ << ": Unable to wake up LPM:" << strerror(errno)
+                   << " (" << errno << ").";
     return false;
   }
 
   std::this_thread::sleep_for(kLpmWakeupSettlementMs);
-  ANCHOR_LOG(AnchorType::LPM_WAKEUP) << __func__ << ": Assert";
+  HAL_LOG(VERBOSE) << __func__ << ": Assert";
   return true;
 }
 
@@ -243,13 +238,12 @@ bool PowerManager::SuspendToLowPowerMode() {
       TEMP_FAILURE_RETRY(SystemCallWrapper::GetWrapper().Write(
           lpm_fd_.get(), &suspend_cmd, sizeof(suspend_cmd)));
   if (length < 1) {
-    ANCHOR_LOG_ERROR(AnchorType::LPM_WAKEUP_ERR)
-        << __func__ << ": Unable to suspend LPM:" << strerror(errno) << " ("
-        << errno << ").";
+    HAL_LOG(ERROR) << __func__ << ": Unable to suspend LPM:" << strerror(errno)
+                   << " (" << errno << ").";
     return false;
   }
 
-  ANCHOR_LOG(AnchorType::LPM_SUSPEND) << __func__ << ": Deassert";
+  HAL_LOG(VERBOSE) << __func__ << ": Deassert";
   return true;
 }
 

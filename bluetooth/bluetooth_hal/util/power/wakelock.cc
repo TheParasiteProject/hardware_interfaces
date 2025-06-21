@@ -73,9 +73,9 @@ void WakelockImpl::Acquire(WakeSource source) {
   acquired_sources_.emplace(source);
   WakelockWatchdog::GetWatchdog().Start(source);
 
-  ANCHOR_LOG(AnchorType::WAKELOCK_VOTE)
-      << "Wakelock VOTE for: " << WakelockUtil::WakeSourceToString(source)
-      << ", current wakelocks: " << ToString();
+  HAL_LOG(VERBOSE) << "Wakelock VOTE for: "
+                   << WakelockUtil::WakeSourceToString(source)
+                   << ", current wakelocks: " << ToString();
 }
 
 void WakelockImpl::Release(WakeSource source) {
@@ -85,9 +85,9 @@ void WakelockImpl::Release(WakeSource source) {
   }
   WakelockWatchdog::GetWatchdog().Stop(source);
 
-  ANCHOR_LOG(AnchorType::WAKELOCK_UNVOTE)
-      << "Wakelock UNVOTE for: " << WakelockUtil::WakeSourceToString(source)
-      << ", current wakelocks: " << ToString();
+  HAL_LOG(VERBOSE) << "Wakelock UNVOTE for: "
+                   << WakelockUtil::WakeSourceToString(source)
+                   << ", current wakelocks: " << ToString();
 
   if (acquired_sources_.empty()) {
     // The wakelock list is empty, schedule a timer to release the wakelock.
@@ -110,7 +110,7 @@ bool WakelockImpl::IsWakeSourceAcquired(WakeSource source) {
 void WakelockImpl::AcquireWakelock() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   if (!wakelock_acquired_) {
-    ANCHOR_LOG_INFO(AnchorType::WAKELOCK_ACQUIRE) << "Acuqire system wakelock";
+    HAL_LOG(DEBUG) << "Acuqire system wakelock";
     PowerInterface::GetInterface().AcquireWakelock();
     wakelock_acquired_ = true;
   }
@@ -119,7 +119,7 @@ void WakelockImpl::AcquireWakelock() {
 void WakelockImpl::ReleaseWakelock() {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   if (wakelock_acquired_) {
-    ANCHOR_LOG_INFO(AnchorType::WAKELOCK_RELEASE) << "Release system wakelock";
+    HAL_LOG(DEBUG) << "Release system wakelock";
     PowerInterface::GetInterface().ReleaseWakelock();
     wakelock_acquired_ = false;
   }

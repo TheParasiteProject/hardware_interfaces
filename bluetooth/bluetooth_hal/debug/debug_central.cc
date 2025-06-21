@@ -27,7 +27,6 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
-#include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -36,17 +35,23 @@
 #include "android-base/properties.h"
 #include "android-base/stringprintf.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
-#include "bluetooth_hal/debug/bluetooth_bqr.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hci_router.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/util/logging.h"
 
+namespace bluetooth_hal {
+namespace debug {
 namespace {
 
+using ::android::base::StringPrintf;
+using ::bluetooth_hal::bqr::BqrErrorCode;
+using ::bluetooth_hal::bqr::BqrErrorToStringView;
+using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
 using ::bluetooth_hal::config::HalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::HciRouter;
@@ -55,65 +60,42 @@ using ::bluetooth_hal::transport::TransportInterface;
 using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::Logger;
 
-static constexpr int kVseSubEventCodeOffset = 2;
-static constexpr int kBqrReportIdOffset = 3;
-static constexpr int kBqrInflamedErrorCode = 4;
-static constexpr int kBqrInflamedVendorErrCode = 5;
-static constexpr int kDebugInfoPayloadOffset = 8;
-static constexpr int kChreDebugDumpLastBlockOffsetFisrtByte = 4;
-static constexpr int kChreDebugDumpLastBlockOffsetSecondByte = 5;
-static constexpr int kDebugInfoLastBlockOffset = 5;
-static constexpr int kHwCodeOffset = 2;
+constexpr int kVseSubEventCodeOffset = 2;
+constexpr int kBqrReportIdOffset = 3;
+constexpr int kBqrInflamedErrorCode = 4;
+constexpr int kBqrInflamedVendorErrCode = 5;
+constexpr int kDebugInfoPayloadOffset = 8;
+constexpr int kChreDebugDumpLastBlockOffsetFisrtByte = 4;
+constexpr int kChreDebugDumpLastBlockOffsetSecondByte = 5;
+constexpr int kDebugInfoLastBlockOffset = 5;
+constexpr int kHwCodeOffset = 2;
 
-static constexpr uint8_t kEventVendorSpecific =
-    0xFF;  // Event code: Vendor specific event
-static constexpr uint8_t kEventHardwareError =
-    0x10;  // Event code: Hardware error
-static constexpr uint8_t kVseSubEventDebugInfo =
-    0x57;  // Vendor specific sub event: Debug info
-static constexpr uint8_t kVseSubEventBqr =
-    0x58;  // Vendor specific sub event: Bluetooth quality report
-static constexpr uint8_t kVseSubEventDebug1 =
-    0x6A;  // Vendor specific sub event:  Debug logging
-static constexpr uint8_t kVseSubEventDebug2 =
-    0x1B;  // Vendor specific sub event:  Debug logging
-
-timer_t force_coredump_timer;
 constexpr int kHandleDebugInfoCommandMs = 1000;
-static const std::string kDumpReasonForceCollectCoredump =
-    "Force Collect Coredump";
-static const std::string kDumpReasonControllerHwError = "ControllerHwError";
-static const std::string kDumpReasonControllerRootInflammed =
+const std::string kDumpReasonForceCollectCoredump = "Force Collect Coredump";
+const std::string kDumpReasonControllerHwError = "ControllerHwError";
+const std::string kDumpReasonControllerRootInflammed =
     "ControllerRootInflammed";
-static const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
+const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
     "ControllerDebugInfoDataDumpWithoutRootInflammed";
-static const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
+const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
 
-static const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
-static const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
-static const std::string kCrashInfoFilePrefix = "crashinfo_bt_";
-static const std::string kSsrdumpFilePrefix = "coredump_bt_";
-static const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
-static const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
-static const std::string kSocdumpFilePath =
+const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
+const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
+const std::string kCrashInfoFilePrefix = "crashinfo_bt_";
+const std::string kSsrdumpFilePrefix = "coredump_bt_";
+const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
+const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
+const std::string kSocdumpFilePath =
     "/data/vendor/ssrdump/coredump/coredump_bt_socdump_";
-static const std::string kChredumpFilePath =
+const std::string kChredumpFilePath =
     "/data/vendor/ssrdump/coredump/coredump_bt_chredump_";
-static const std::string kVendorSnoopFilePath =
-    "/data/vendor/bluetooth/btsnoop_hci_vnd.log";
-static const std::string kBackupVendorSnoopFilePath =
-    "/data/vendor/bluetooth/backup_btsnoop_hci_vnd.log";
-static const std::string kVendorSnoopLastFilePath =
-    "/data/vendor/bluetooth/btsnoop_hci_vnd.log.last";
-static const std::string kBackupVendorSnoopLastFilePath =
-    "/data/vendor/bluetooth/backup_btsnoop_hci_vnd.log.last";
 
-static const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
+const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 constexpr uint8_t kReservedCoredumpFileCount = 2;
 
-std::string crash_file_create_timestamp() {
+std::string GetTimestampString() {
   time_t rawtime;
   time(&rawtime);
   struct tm* timeinfo = localtime(&rawtime);
@@ -129,48 +111,7 @@ std::string crash_file_create_timestamp() {
   return ss.str();
 }
 
-void copy_file(const std::string& SrcDir, const std::string& DestDir) {
-  std::ifstream src(SrcDir, std::ios::binary);
-  std::ofstream dst(DestDir, std::ios::binary);
-
-  if (!src.is_open()) {
-    LOG(ERROR) << __func__ << ": Error opening source file.";
-    return;
-  }
-
-  if (!dst.is_open()) {
-    LOG(ERROR) << __func__ << ": Error opening destination file.";
-    return;
-  }
-
-  dst << src.rdbuf();
-
-  // Get source file permissions
-  struct stat src_stat;
-  if (stat(SrcDir.c_str(), &src_stat) != 0) {
-    LOG(ERROR) << __func__ << ": Error getting source file permissions.";
-    return;
-  }
-
-  // Apply permissions to destination file
-  if (chmod(DestDir.c_str(), src_stat.st_mode) != 0) {
-    LOG(ERROR) << __func__ << ": Error setting destination file permissions.";
-    return;
-  }
-}
-
-void backup_logging_files_before_crash(std::string crash_timestamp) {
-  LOG(INFO) << __func__;
-  if (crash_timestamp.empty()) {
-    crash_timestamp = crash_file_create_timestamp();
-  }
-  copy_file(kVendorSnoopLastFilePath,
-            kBackupVendorSnoopLastFilePath + "_" + crash_timestamp);
-  copy_file(kVendorSnoopFilePath,
-            kBackupVendorSnoopFilePath + "_" + crash_timestamp);
-}
-
-void dump_debugfs_to_fd(int fd, const std::string& debugfs) {
+void DumpDebugfs(int fd, const std::string& debugfs) {
   std::stringstream ss;
   std::ifstream file;
 
@@ -202,8 +143,8 @@ void read_as_hex(std::ifstream& file, std::stringstream& content) {
   }
 }
 
-void collect_sscd_logs(int fd, const std::string& prefix,
-                       const std::string& dir) {
+void GetStringLogFromStorage(int fd, const std::string& prefix,
+                             const std::string& dir) {
   std::unique_ptr<DIR, decltype(&closedir)> dir_dump(opendir(dir.c_str()),
                                                      closedir);
 
@@ -261,7 +202,7 @@ void collect_sscd_logs(int fd, const std::string& prefix,
   write(fd, content.str().c_str(), content.str().length());
 }
 
-int open_firmware_dump_file(const std::string& crash_timestamp) {
+int OpenFileWithTimestamp(const std::string& crash_timestamp) {
   std::stringstream fname;
   fname << kSocdumpFilePath << crash_timestamp << ".bin";
   int socdump_fd;
@@ -279,25 +220,7 @@ int open_firmware_dump_file(const std::string& crash_timestamp) {
   return socdump_fd;
 }
 
-int open_lpp_chre_dump_file(const std::string& crash_timestamp) {
-  std::stringstream fname;
-  fname << kChredumpFilePath << crash_timestamp << ".bin";
-  int chredump_fd;
-  if ((chredump_fd =
-           open(fname.str().c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
-                S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
-    LOG(ERROR) << __func__ << ": Failed to open chredump file: " << fname.str()
-               << ", failed: " << strerror(errno) << " (" << errno << ")";
-  }
-  // Change the file's permissions to OWNER Read/Write, GROUP Read, OTHER Read
-  if (chmod(fname.str().c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
-    LOG(ERROR) << __func__ << ": Unable to change file permissions "
-               << fname.str() << ".";
-  }
-  return chredump_fd;
-}
-
-bool is_coredump_file(const std::string& filename) {
+bool IsCoredumpFile(const std::string& filename) {
   return filename.find("coredump_bt_") == 0 &&
          filename.find(".bin") == filename.size() - 4;
 }
@@ -307,17 +230,17 @@ struct CoredumpFile {
   time_t timestamp;
 };
 
-bool compare_file_create_time(const CoredumpFile& a, const CoredumpFile& b) {
+bool CompareFileCreatedTime(const CoredumpFile& a, const CoredumpFile& b) {
   return a.timestamp < b.timestamp;
 }
 
-void delete_coredump_files(const std::string& dir) {
+void DeleteCoredumpFiles(const std::string& dir) {
   std::vector<CoredumpFile> coredumpfiles;
   DIR* dir_ptr = opendir(dir.c_str());
   if (dir_ptr != nullptr) {
     struct dirent* entry;
     while ((entry = readdir(dir_ptr)) != nullptr) {
-      if (is_coredump_file(entry->d_name)) {
+      if (IsCoredumpFile(entry->d_name)) {
         struct stat statbuf;
         stat((dir + "/" + entry->d_name).c_str(), &statbuf);
         coredumpfiles.push_back({entry->d_name, statbuf.st_mtime});
@@ -326,7 +249,7 @@ void delete_coredump_files(const std::string& dir) {
     closedir(dir_ptr);
   }
 
-  sort(coredumpfiles.begin(), coredumpfiles.end(), compare_file_create_time);
+  sort(coredumpfiles.begin(), coredumpfiles.end(), CompareFileCreatedTime);
   LOG(INFO) << __func__ << ": Coredump files count: " << coredumpfiles.size()
             << ".";
   if (coredumpfiles.size() > kReservedCoredumpFileCount) {
@@ -342,104 +265,22 @@ void delete_coredump_files(const std::string& dir) {
 
 }  // namespace
 
-namespace bluetooth_hal {
-namespace debug {
-
-using ::android::base::StringPrintf;
-using ::bluetooth_hal::bqr::BqrRootInflammationEvent;
-using ::bluetooth_hal::debug::BqrQualityReportId;
-using ::bluetooth_hal::debug::BtActivitiesLogger;
-using ::bluetooth_hal::debug::BtBqrEnergyRecoder;
-using ::bluetooth_hal::debug::ParseAdvanceRFStatsEvt;
-using ::bluetooth_hal::debug::ParseLinkQualityRelatedEvt;
-using ::bluetooth_hal::debug::ParseVendorSpecificQualityEvt;
-using ::bluetooth_hal::debug::ParseVendorSpecificTraceEvt;
-using ::bluetooth_hal::debug::updateControllerCapability;
-
 void LogFatal(BqrErrorCode error, std::string extra_info);
-const std::string get_error_code_string(BqrErrorCode error_code);
 
-const std::map<BqrErrorCode, std::string> error_code_string = {
-    // SOC FW Report Error Code
-    {BqrErrorCode::UART_PARSING, "UART Parsing error (BtFw)"},
-    {BqrErrorCode::UART_INCOMPLETE_PACKET, "UART Incomplete Packet (BtFw)"},
-    {BqrErrorCode::FIRMWARE_CHECKSUM, "Patch Firmware checksum failure (BtFw)"},
-    {BqrErrorCode::FIRMWARE_HARD_FAULT,
-     "Firmware Crash due to Hard Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MEM_MANAGE_FAULT,
-     "Firmware Crash due to Mem manage Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_BUS_FAULT,
-     "Firmware Crash due to Bus Fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_USAGE_FAULT,
-     "Firmware Crash due to Usage fault (BtFw)"},
-    {BqrErrorCode::FIRMWARE_WATCHDOG_TIMEOUT,
-     "Firmware Crash due to Watchdog timeout (BtFw)"},
-    {BqrErrorCode::FIRMWARE_ASSERTION_FAILURE,
-     "Firmware Crash due to Assertion failure (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS,
-     "Firmware Crash Miscallaneuous (BtFw)"},
-    {BqrErrorCode::FIRMWARE_HOST_REQUEST_DUMP, "HCI Command Timeout (BtCmd)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS_MAJOR_FAULT,
-     "Firmware Miscellaneous error - Major (BtFw)"},
-    {BqrErrorCode::FIRMWARE_MISCELLANEOUS_CRITICAL_FAULT,
-     "Firmware Miscellaneous error - Critical (BtFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_GENERIC_ERROR,
-     "Firmware crash due to 15.4 Thread error (ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_INVALID_FRAME,
-     "Firmware crash due to detecting malformed frame from host (ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_INVALID_PARAM,
-     "Firmware crash due to receiving invalid frame meta-data/parameters "
-     "(ThreadFw)"},
-    {BqrErrorCode::FIRMWARE_THREAD_UNSUPPORTED_FRAME,
-     "Firmware crash due to receiving frames from host with unsupported "
-     "command ID (ThreadFw)"},
-    {BqrErrorCode::SOC_BIG_HAMMER_FAULT, "Soc Big Hammer Error (BtWifi)"},
-    // BT HAL Report Error Code
-    {BqrErrorCode::HOST_RX_THREAD_STUCK, "Host RX Thread Stuck (BtHal)"},
-    {BqrErrorCode::HOST_HCI_COMMAND_TIMEOUT,
-     "Host HCI Command Timeout (BtHal)"},
-    {BqrErrorCode::HOST_INVALID_HCI_EVENT,
-     "Invalid / un-reassembled HCI event (BtHal)"},
-    {BqrErrorCode::HOST_UNIMPLEMENTED_PACKET_TYPE,
-     "Host Received Unimplemented Packet Type (BtHal)"},
-    {BqrErrorCode::HOST_HCI_H4_TX_ERROR, "Host HCI H4 TX Error (BtHal)"},
-    {BqrErrorCode::HOST_OPEN_USERIAL, "Host Open Userial Error (BtHal)"},
-    {BqrErrorCode::HOST_POWER_UP_CONTROLLER,
-     "Host Can't Power Up Controller (BtHal)"},
-    {BqrErrorCode::HOST_CHANGE_BAUDRATE, "Host Change Baudrate Error (BtHal)"},
-    {BqrErrorCode::HOST_RESET_BEFORE_FW,
-     "Host HCI Reset Error Before FW Download (BtHal)"},
-    {BqrErrorCode::HOST_DOWNLOAD_FW, "Host Firmware Download Error (BtHal)"},
-    {BqrErrorCode::HOST_RESET_AFTER_FW,
-     "Host HCI Reset Error After FW Download (BtHal)"},
-    {BqrErrorCode::HOST_BDADDR_FAULT,
-     "Host Can't fetch the provisioning BDA (BtHal)"},
-    {BqrErrorCode::HOST_ACCEL_BT_INIT_FAILED,
-     "Host Accelerated Init Failed (BtHal)"},
-    {BqrErrorCode::HOST_ACCEL_BT_SHUTDOWN_FAILED,
-     "Host Accelerated ShutDown Failed (BtHal)"},
-    {BqrErrorCode::CHRE_ARBITRATOR_UNIMPLEMENTED_PACKET,
-     "Arbitrator Detected Unimplemented Packet Type Error (BtChre)"},
-    {BqrErrorCode::CHRE_ARBITRATOR_INVALID_PACKET_SIZE,
-     "Arbitrator Detected Invalid Packet Size (BtChre)"},
-};
-
-DebugAnchor::DebugAnchor(AnchorType type, const std::string& anchor)
-    : anchor_(anchor), type_(type) {
+DurationTracker::DurationTracker(AnchorType type, const std::string& log)
+    : log_(log), type_(type) {
   std::stringstream ss;
-  ss << anchor << " [ IN]";
+  ss << "[ IN] " << log_;
   DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
-DebugAnchor::~DebugAnchor() {
-  if (anchor_.empty()) {
+DurationTracker::~DurationTracker() {
+  if (log_.empty()) {
     return;
   }
   std::stringstream ss;
-  ss << anchor_ << " [OUT]";
-  DebugCentral::Get().UpdateRecord(
-      static_cast<AnchorType>(static_cast<uint8_t>(type_) + 1), ss.str());
-  anchor_.clear();
+  ss << "[OUT] " << log_;
+  DebugCentral::Get().UpdateRecord(type_, ss.str());
 }
 
 DebugCentral& DebugCentral::Get() {
@@ -449,22 +290,22 @@ DebugCentral& DebugCentral::Get() {
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
-  dump_hal_log(fd);
+  DumpBluetoothHalLog(fd);
   if (TransportInterface::GetTransportType() == TransportType::kUartH4) {
     // Dump Kernel driver debugfs log
-    dump_debugfs_to_fd(fd, serial_debug_port_);
-    dump_debugfs_to_fd(fd, kDebugNodeBtLpm);
+    DumpDebugfs(fd, serial_debug_port_);
+    DumpDebugfs(fd, kDebugNodeBtLpm);
   }
   // Dump all crashinfo_bt files in ssrdump folder
-  collect_sscd_logs(fd, kCrashInfoFilePrefix, kCrashInfoFilePath);
+  GetStringLogFromStorage(fd, kCrashInfoFilePrefix, kCrashInfoFilePath);
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  collect_sscd_logs(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
+  GetStringLogFromStorage(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
   // Dump Controller BT Activities Statistics
   BtActivitiesLogger::GetInstacne()->ForceUpdating();
   BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
-  delete_coredump_files(kSsrdumpFilePath);
+  DeleteCoredumpFiles(kSsrdumpFilePath);
 }
 
 void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
@@ -492,26 +333,27 @@ void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
     history_record_.pop_front();
   }
   history_record_.push_back(log_entry);
-  lasttime_record_[type] = log_entry;
+  if (type != AnchorType::kNone) {
+    lasttime_record_[type] = log_entry;
+  }
 }
 
 void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   HalPacket bqr_event({0xff, 0x04, 0x58, 0x05, 0x00, (uint8_t)error});
   // collect debug dump and popup ssrdump notification UI
-  ONE_TIME_LOGGER(AnchorType::BQR_ERR_MSG, "%s", extra_info.c_str());
+  HAL_LOG(ERROR) << extra_info;
   LOG(ERROR) << __func__ << ": Root inflamed event with error_code: ("
              << static_cast<uint8_t>(error) << "), error_info: " << extra_info
              << ".";
   // report bqr root inflamed event to Stack
   HciRouter::GetRouter().SendPacketToStack(bqr_event);
 
-  if (report_ssr_crash(static_cast<uint8_t>(error))) {
-    start_crash_dump(false,
-                     kDumpReasonControllerRootInflammed + " (" +
-                         StringPrintf("error_code: 0x%02hhX",
-                                      static_cast<unsigned char>(error)) +
-                         ")" + " - " + get_error_code_string(error));
-    backup_logging_files_before_crash(crash_timestamp_);
+  if (OkToGenerateCrashDump(static_cast<uint8_t>(error))) {
+    GenerateCrashDump(
+        false, kDumpReasonControllerRootInflammed + " (" +
+                   StringPrintf("error_code: 0x%02hhX",
+                                static_cast<unsigned char>(error)) +
+                   ")" + " - " + std::string(BqrErrorToStringView(error)));
     LogFatal(error, extra_info);
   } else {
     LOG(ERROR) << __func__ << ": Silent recover!";
@@ -530,13 +372,13 @@ void DebugCentral::HandleDebugInfoCommand() {
           LOG(ERROR) << __func__
                      << ": Force a coredump to be generated if it has not been "
                         "generated for 1 second.";
-          start_crash_dump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
+          GenerateCrashDump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
         }
       },
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
 
-bool DebugCentral::is_hw_stage_supported() {
+bool DebugCentral::IsHardwareStageSupported() {
   std::string cur_hw_stage = ::android::base::GetProperty(kHwStage, "default");
   std::vector<std::string> not_supported_hw_stages =
       HalConfigLoader::GetLoader().GetFwUnsupportedHwStages();
@@ -547,16 +389,16 @@ bool DebugCentral::is_hw_stage_supported() {
                       }) == not_supported_hw_stages.end();
 }
 
-bool DebugCentral::report_ssr_crash(uint8_t vendor_error_code) {
+bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   // Report scenario:
   // 1) report ssr crash when bt is on
   // 2) report ssr crash when bt is off, thread is enabled, and supports
   // accelerated bt on
 
-  bool is_major_fault = (static_cast<BqrErrorCode>(vendor_error_code) ==
-                         BqrErrorCode::FIRMWARE_MISCELLANEOUS_MAJOR_FAULT);
+  bool is_major_fault = (static_cast<BqrErrorCode>(error_code) ==
+                         BqrErrorCode::kFirmwareMiscellaneousMajorFault);
 
-  if (is_major_fault || !is_hw_stage_supported()) {
+  if (is_major_fault || !IsHardwareStageSupported()) {
     return false;
   }
 
@@ -567,7 +409,7 @@ bool DebugCentral::report_ssr_crash(uint8_t vendor_error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-void DebugCentral::dump_hal_log(int fd) {
+void DebugCentral::DumpBluetoothHalLog(int fd) {
   std::stringstream ss;
 
   ss << "=============================================" << std::endl;
@@ -595,95 +437,6 @@ void DebugCentral::dump_hal_log(int fd) {
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
-void DebugCentral::handle_bqr_event(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__ << ": Invalid length of BQR event!";
-    return;
-  }
-  auto quality_report_id =
-      static_cast<BqrQualityReportId>(packet[kBqrReportIdOffset]);
-  switch (quality_report_id) {
-    case BqrQualityReportId::kMonitorMode:
-      [[fallthrough]];
-    case BqrQualityReportId::kApproachLsto:
-      [[fallthrough]];
-    case BqrQualityReportId::kA2dpAudioChoppy:
-      [[fallthrough]];
-    case BqrQualityReportId::kScoVoiceChoppy:
-      [[fallthrough]];
-    case BqrQualityReportId::kLeAudioChoppy:
-      ParseLinkQualityRelatedEvt(packet);
-      break;
-
-    case BqrQualityReportId::kRootInflammation: {
-      uint8_t error_code = packet[kBqrInflamedErrorCode];
-      uint8_t vendor_error_code = packet[kBqrInflamedVendorErrCode];
-      LOG(ERROR) << __func__ << ": Received Root Inflammation event! (0x"
-                 << std::hex << std::setw(2) << std::setfill('0')
-                 << static_cast<int>(error_code) << std::setw(2)
-                 << std::setfill('0') << static_cast<int>(vendor_error_code)
-                 << ").";
-      // for some vendor error code event that we do not report root inflamed
-      // event
-      if (report_ssr_crash(vendor_error_code)) {
-        start_crash_dump(
-            false,
-            kDumpReasonControllerRootInflammed + " (" +
-                StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
-                ")" + " - " +
-                get_error_code_string(
-                    static_cast<BqrErrorCode>(vendor_error_code)));
-        backup_logging_files_before_crash(crash_timestamp_);
-        hijack_event_ = false;
-      } else {
-        hijack_event_ = true;
-      }
-      break;
-    }
-
-    // Just logs to vnd snoop and skips reporting to stack
-    case BqrQualityReportId::kEnergyMonitoring:
-      BtBqrEnergyRecoder::GetInstacne()->ParseBqrEnergyMonitorEvt(packet);
-      hijack_event_ = true;
-      break;
-
-    case BqrQualityReportId::kControllerDbgInfo: {
-      handle_bqr_fw_debug_data_dump(packet);
-      hijack_event_ = true;
-      break;
-    }
-
-    case BqrQualityReportId::kAdvanceRfStats:
-      [[fallthrough]];
-    case BqrQualityReportId::kAdvanceRfStatsPeriodic:
-      ParseAdvanceRFStatsEvt(packet);
-      hijack_event_ = true;
-      break;
-    case BqrQualityReportId::kControllerHealthMonitor:
-      [[fallthrough]];
-    case BqrQualityReportId::kControllerHealthMonitorPeriodic:
-      ParseControllerHealthMonitorEvt(packet);
-      hijack_event_ = true;
-      break;
-    case BqrQualityReportId::kChreDbgInfo: {
-      handle_bqr_chre_debug_data_dump(packet);
-      hijack_event_ = true;
-      break;
-    }
-    case BqrQualityReportId::kVendorSpecificTrace: {
-      ParseVendorSpecificTraceEvt(packet);
-      break;
-    }
-    case BqrQualityReportId::kVendorSpecificQuality: {
-      ParseVendorSpecificQualityEvt(packet);
-      break;
-    }
-    default: {
-      break;
-    }
-  }
-}
-
 void DebugCentral::HandleRootInflammationEvent(
     const BqrRootInflammationEvent& event) {
   if (!event.IsValid()) {
@@ -700,14 +453,13 @@ void DebugCentral::HandleRootInflammationEvent(
              << std::setfill('0') << static_cast<int>(vendor_error_code)
              << ").";
   // For some vendor error codes that we do not generate a crash dump.
-  if (report_ssr_crash(vendor_error_code)) {
-    start_crash_dump(
+  if (OkToGenerateCrashDump(vendor_error_code)) {
+    GenerateCrashDump(
         false, kDumpReasonControllerRootInflammed + " (" +
                    StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
                    ")" + " - " +
-                   get_error_code_string(
-                       static_cast<BqrErrorCode>(vendor_error_code)));
-    backup_logging_files_before_crash(crash_timestamp_);
+                   std::string(BqrErrorToStringView(
+                       static_cast<BqrErrorCode>(vendor_error_code))));
   }
 }
 
@@ -719,19 +471,18 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 
   if (crash_timestamp_.empty()) {
-    start_crash_dump(is_hw_stage_supported() ? false : true,
-                     kDumpReasonControllerDebugInfo + " (BtFw)");
+    GenerateCrashDump(IsHardwareStageSupported() ? false : true,
+                      kDumpReasonControllerDebugInfo + " (BtFw)");
   }
 
   // the Last soc dump debug info packet has been received
   if (packet[kDebugInfoLastBlockOffset]) {
     LOG(INFO) << __func__ << ": Last soc dump fragment has been received.";
-    backup_logging_files_before_crash(crash_timestamp_);
     last_soc_dump_packet = true;
   }
 
   int socdump_fd;
-  if ((socdump_fd = open_firmware_dump_file(crash_timestamp_)) < 0) {
+  if ((socdump_fd = OpenFileWithTimestamp(crash_timestamp_)) < 0) {
     return;
   }
 
@@ -751,102 +502,8 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 }
 
-void DebugCentral::handle_bqr_fw_debug_data_dump(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__
-                 << ": Invalid length of bqr debug firmware dump event!";
-    return;
-  }
-
-  if (crash_timestamp_.empty()) {
-    LOG(ERROR) << __func__
-               << ": Did not receive Root Inflammation event before FW Dump!";
-    start_crash_dump(
-        is_hw_stage_supported() ? false : true,
-        kDumpReasonControllerDebugDumpWithoutRootInflammed + " (BtFw)");
-  }
-
-  int socdump_fd;
-  if ((socdump_fd = open_firmware_dump_file(crash_timestamp_)) < 0) {
-    return;
-  }
-
-  size_t ret = 0;
-  if ((ret = TEMP_FAILURE_RETRY(
-           write(socdump_fd, packet.data(), packet.size()))) < 0) {
-    LOG(ERROR) << __func__ << ": Error writing to dest file: " << ret << " ("
-               << strerror(errno) << ").";
-  }
-
-  close(socdump_fd);
-}
-
-void DebugCentral::handle_bqr_chre_debug_data_dump(const HalPacket& packet) {
-  if (packet.size() <= kBqrReportIdOffset) {
-    LOG(WARNING) << __func__
-                 << ": Invalid length of bqr chre debug dump event!";
-    return;
-  }
-
-  if (crash_timestamp_.empty()) {
-    LOG(ERROR) << __func__
-               << ": Did not receive Root Inflammation event before CHRE Dump!";
-    start_crash_dump(false, kDumpReasonControllerDebugDumpWithoutRootInflammed +
-                                " (BtChre)");
-  }
-
-  std::vector<uint8_t> payload(packet.size());
-  memcpy(payload.data(), packet.data(), packet.size());
-  chredump_.push(payload);
-
-  // Cache Chre dump in DEBUG_INFO event, dump to file if last fragment.
-  uint16_t last_block;
-  last_block =
-      packet[kChreDebugDumpLastBlockOffsetSecondByte] +
-      ((packet[kChreDebugDumpLastBlockOffsetFisrtByte] << 8u) & 0xFF00);
-
-  if (last_block != 0x5A00) {
-    return;
-  }
-  LOG(INFO) << __func__ << ": Last Chre dump packet has been received.";
-
-  int chredump_fd;
-  if ((chredump_fd = open_lpp_chre_dump_file(crash_timestamp_)) < 0) {
-    return;
-  }
-
-  size_t bytes_written = 0;
-  size_t ret = 0;
-  while (!chredump_.empty()) {
-    std::vector<uint8_t>& segment = chredump_.front();
-    if ((ret = TEMP_FAILURE_RETRY(
-             write(chredump_fd, segment.data(), segment.size()))) < 0) {
-      LOG(ERROR) << __func__ << ": Error writing to dest file: " << ret << " ("
-                 << strerror(errno) << ").";
-      break;
-    }
-    if (ret != segment.size()) {
-      LOG(ERROR) << __func__ << ": Actual write (" << ret
-                 << " bytes) is not the same with expected write "
-                 << "(" << segment.size() << " bytes) size.";
-    }
-    bytes_written += ret;
-    chredump_.pop();
-  }
-  LOG(INFO) << __func__ << ": Total written " << bytes_written << " bytes.";
-
-  if (!chredump_.empty()) {
-    LOG(WARNING) << __func__ << ": There are " << chredump_.size()
-                 << " segments not be saved.";
-    chredump_ = {};
-  }
-
-  close(chredump_fd);
-  hijack_event_ = true;
-}
-
-void DebugCentral::start_crash_dump(bool slient_report,
-                                    const std::string& reason) {
+void DebugCentral::GenerateCrashDump(bool silent_report,
+                                     const std::string& reason) {
   if (!crash_timestamp_.empty()) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
@@ -854,8 +511,8 @@ void DebugCentral::start_crash_dump(bool slient_report,
   }
 
   LOG(ERROR) << __func__ << ": Reason: " << reason.c_str()
-             << ", slient_report:" << slient_report << ".";
-  crash_timestamp_ = crash_file_create_timestamp();
+             << ", silent_report:" << silent_report << ".";
+  crash_timestamp_ = GetTimestampString();
   std::stringstream coredump_fname;
   coredump_fname << kSsrdumpFilePath << kSsrdumpFilePrefix << crash_timestamp_
                  << ".bin";
@@ -878,12 +535,12 @@ void DebugCentral::start_crash_dump(bool slient_report,
      << crash_timestamp_ << std::endl;
   write(coredump_fd, ss.str().c_str(), ss.str().length());
 
-  dump_hal_log(coredump_fd);
+  DumpBluetoothHalLog(coredump_fd);
   LOG(INFO) << __func__ << ": Request to get Transport Layer Debug Dump.";
   // TODO: b/373786258 - Need to dump debug info.
   close(coredump_fd);
 
-  if (slient_report) {
+  if (silent_report) {
     return;
   }
   // generate crashinfo file
@@ -910,12 +567,6 @@ void DebugCentral::start_crash_dump(bool slient_report,
   crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
   write(crashinfo_fd, crashinfo_ss.str().c_str(), crashinfo_ss.str().length());
   close(crashinfo_fd);
-}
-
-const std::string get_error_code_string(BqrErrorCode error_code) {
-  return error_code_string.find(error_code) != error_code_string.end()
-             ? error_code_string.at(error_code)
-             : "Undefined error code";
 }
 
 }  // namespace debug

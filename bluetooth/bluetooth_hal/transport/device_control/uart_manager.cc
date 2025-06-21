@@ -28,6 +28,7 @@
 
 #include "android-base/logging.h"
 #include "android-base/unique_fd.h"
+#include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
@@ -37,8 +38,8 @@ namespace transport {
 namespace {
 
 using ::android::base::unique_fd;
+using ::bluetooth_hal::bqr::BqrErrorCode;
 using ::bluetooth_hal::config::HalConfigLoader;
-using ::bluetooth_hal::debug::BqrErrorCode;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::uart::BaudRate;
 using ::bluetooth_hal::util::SystemCallWrapper;
@@ -82,7 +83,7 @@ bool ConfigureUartPort(int fd) {
 }  // namespace
 
 bool UartManager::Open() {
-  DURATION_TRACKER(AnchorType::USERIAL_OPEN, __func__);
+  DURATION_TRACKER(AnchorType::kUserialOpen, __func__);
 
   const std::string bt_uart_port =
       HalConfigLoader::GetLoader().GetBtUartDevicePort();
@@ -91,14 +92,14 @@ bool UartManager::Open() {
   DebugCentral::Get().SetBtUartDebugPort(bt_uart_port);
 #endif
 
-  ANCHOR_LOG(AnchorType::USERIAL_TTY_OPEN)
+  ANCHOR_LOG(AnchorType::kUserialTtyOpen)
       << __func__ << ": open " << bt_uart_port;
 
   uart_fd_.reset(
       SystemCallWrapper::GetWrapper().Open(bt_uart_port.c_str(), O_RDWR));
   if (!uart_fd_.ok()) {
 #ifndef UNIT_TEST
-    DebugCentral::Get().ReportBqrError(BqrErrorCode::HOST_OPEN_USERIAL,
+    DebugCentral::Get().ReportBqrError(BqrErrorCode::kHostOpenUserial,
                                        "Host Open Port Error");
 #endif
     return false;
@@ -117,7 +118,7 @@ bool UartManager::Open() {
 }
 
 void UartManager::Close() {
-  DURATION_TRACKER(AnchorType::USERIAL_CLOSE, __func__);
+  DURATION_TRACKER(AnchorType::kUserialClose, __func__);
   uart_fd_.reset();
 }
 

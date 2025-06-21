@@ -107,7 +107,7 @@ class BluetoothHalDeathRecipient {
       return;
     }
     has_died_ = true;
-    ANCHOR_LOG(AnchorType::SERVICE_DIED) << __func__;
+    ANCHOR_LOG_ERROR(AnchorType::kServiceDied) << __func__;
 
     // TODO: b/414524533 - remove FATAL message once the bug is fixed.
     LOG(FATAL) << "Bluetooth stack ServiceDied!";
@@ -177,7 +177,7 @@ void BluetoothHci::SigtermHandler(int signum) {
 
 ScopedAStatus BluetoothHci::initialize(
     const std::shared_ptr<IBluetoothHciCallbacks>& cb) {
-  DURATION_TRACKER(AnchorType::BTHAL_INIT, __func__);
+  DURATION_TRACKER(AnchorType::kInitialize, __func__);
   ScopedWakelock wakelock(WakeSource::kInitialize);
 
   LOG(INFO) << "Initializing Bluetooth HAL.";
@@ -213,7 +213,7 @@ ScopedAStatus BluetoothHci::sendHciCommand(
     const std::vector<uint8_t>& command) {
   HalPacket packet(static_cast<uint8_t>(HciPacketType::kCommand), command);
   DURATION_TRACKER(
-      AnchorType::SEND_HCI_CMD,
+      AnchorType::kSendHciCommand,
       (std::stringstream() << __func__ << ": 0x" << std::hex << std::setw(4)
                            << std::setfill('0') << packet.GetCommandOpcode()
                            << " - " << std::dec << packet.size() << " bytes")
@@ -225,7 +225,7 @@ ScopedAStatus BluetoothHci::sendHciCommand(
 ScopedAStatus BluetoothHci::sendAclData(const std::vector<uint8_t>& data) {
   HalPacket packet(static_cast<uint8_t>(HciPacketType::kAclData), data);
   DURATION_TRACKER(
-      AnchorType::SEND_ACL_DAT,
+      AnchorType::kSendAclData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
@@ -235,7 +235,7 @@ ScopedAStatus BluetoothHci::sendAclData(const std::vector<uint8_t>& data) {
 ScopedAStatus BluetoothHci::sendScoData(const std::vector<uint8_t>& data) {
   HalPacket packet(static_cast<uint8_t>(HciPacketType::kScoData), data);
   DURATION_TRACKER(
-      AnchorType::SEND_SCO_DAT,
+      AnchorType::kSendScoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
@@ -245,7 +245,7 @@ ScopedAStatus BluetoothHci::sendScoData(const std::vector<uint8_t>& data) {
 ScopedAStatus BluetoothHci::sendIsoData(const std::vector<uint8_t>& data) {
   HalPacket packet(static_cast<uint8_t>(HciPacketType::kIsoData), data);
   DURATION_TRACKER(
-      AnchorType::SEND_ISO_DAT,
+      AnchorType::kSendIsoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
@@ -254,7 +254,7 @@ ScopedAStatus BluetoothHci::sendIsoData(const std::vector<uint8_t>& data) {
 
 ScopedAStatus BluetoothHci::close() {
   bluetooth_hci_callback_ = nullptr;
-  ANCHOR_LOG_INFO(AnchorType::BTHAL_CLOSE) << __func__;
+  ANCHOR_LOG_INFO(AnchorType::kClose) << __func__;
   ScopedWakelock wakelock(WakeSource::kClose);
   HciRouter::GetRouter().Cleanup();
   unlink_cb_(death_recipient_);
@@ -282,7 +282,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
   HciPacketType type = packet.GetType();
   switch (type) {
     case HciPacketType::kEvent: {
-      DURATION_TRACKER(AnchorType::CALLBACK_HCI_EVT,
+      DURATION_TRACKER(AnchorType::kCallbackHciEvent,
                        (std::stringstream() << "cb->hciEventReceived: "
                                             << packet.size() << " bytes")
                            .str());
@@ -290,7 +290,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kAclData: {
-      DURATION_TRACKER(AnchorType::CALLBACK_HCI_ACL,
+      DURATION_TRACKER(AnchorType::kCallbackAclData,
                        (std::stringstream()
                         << "cb->aclDataReceived: " << packet.size() << " bytes")
                            .str());
@@ -298,7 +298,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kScoData: {
-      DURATION_TRACKER(AnchorType::CALLBACK_HCI_SCO,
+      DURATION_TRACKER(AnchorType::kCallbackScoData,
                        (std::stringstream()
                         << "cb->scoDataReceived: " << packet.size() << " bytes")
                            .str());
@@ -306,7 +306,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kIsoData: {
-      DURATION_TRACKER(AnchorType::CALLBACK_HCI_ISO,
+      DURATION_TRACKER(AnchorType::kCallbackIsoData,
                        (std::stringstream()
                         << "cb->isoDataReceived: " << packet.size() << " bytes")
                            .str());
