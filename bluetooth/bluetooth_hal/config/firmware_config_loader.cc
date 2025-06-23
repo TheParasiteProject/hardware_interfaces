@@ -486,9 +486,6 @@ void FirmwareConfigLoaderImpl::LoadSetupCommandsFromConfig(
   if (commands.hci_download_minidrv_size()) {
     add(SetupCommandType::kDownloadMinidrv, commands.hci_download_minidrv());
   }
-  if (commands.hci_vsc_launch_ram_size()) {
-    add(SetupCommandType::kLaunchRam, commands.hci_vsc_launch_ram());
-  }
   if (commands.hci_read_fw_version_size()) {
     add(SetupCommandType::kReadFwVersion, commands.hci_read_fw_version());
   }

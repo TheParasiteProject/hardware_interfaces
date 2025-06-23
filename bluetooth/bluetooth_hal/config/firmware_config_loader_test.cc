@@ -199,9 +199,6 @@ INSTANTIATE_TEST_SUITE_P(
                .command_type = SetupCommandType::kDownloadMinidrv,
                .expected_command = {}},
            SetupCommandValueTestParam{
-               .command_type = SetupCommandType::kLaunchRam,
-               .expected_command = {}},
-           SetupCommandValueTestParam{
                .command_type = SetupCommandType::kReadFwVersion,
                .expected_command = {}},
            SetupCommandValueTestParam{

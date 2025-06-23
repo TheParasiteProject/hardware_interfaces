@@ -42,7 +42,6 @@ enum class SetupCommandType : int {
   kUpdateChipBaudRate,
   kSetFastDownload,
   kDownloadMinidrv,
-  kLaunchRam,
   kReadFwVersion,
   kSetupLowPowerMode,
   kWriteBdAddress,
@@ -61,8 +60,6 @@ inline constexpr std::string_view SetupCommandTypeToString(
       return "SetFastDownload";
     case SetupCommandType::kDownloadMinidrv:
       return "DownloadMinidrv";
-    case SetupCommandType::kLaunchRam:
-      return "LaunchRam";
     case SetupCommandType::kReadFwVersion:
       return "ReadFwVersion";
     case SetupCommandType::kSetupLowPowerMode:
