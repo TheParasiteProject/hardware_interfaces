@@ -82,7 +82,6 @@ class ChipProvisioner : public ChipProvisionerInterface,
   };
 
   void UpdateHalState(::bluetooth_hal::HalState state);
-  void HandleNextSetupStep(::bluetooth_hal::config::SetupCommandType command);
   bool ExecuteCurrentSetupStep(
       ::bluetooth_hal::config::SetupCommandType next_command_type);
   bool SendCommandNoAck(const hci::HalPacket& packet);
@@ -92,6 +91,27 @@ class ChipProvisioner : public ChipProvisionerInterface,
 
   virtual bool WriteFwPatchramPacket();
 
+ private:
+  // Defines the states for the firmware provisioning state machine.
+  enum class ProvisioningState {
+    kIdle,
+    kInitialReset,
+    kReadChipId,
+    kSetRuntimeBaudRate,
+    kCheckFirmwareStatus,
+    kSetFastDownload,
+    kDownloadMinidrv,
+    kWriteFirmware,
+    kFinalReset,
+    kReadFwVersion,
+    kWriteBdAddress,
+    kSetupLowPowerMode,
+    kDone,
+    kError,
+  };
+
+  void RunProvisioningSequence();
+
   std::optional<std::function<void(::bluetooth_hal::HalState)>>
       on_hal_state_update_;
   ::bluetooth_hal::config::FirmwareConfigLoader& config_loader_;
@@ -100,6 +120,7 @@ class ChipProvisioner : public ChipProvisionerInterface,
 
   std::promise<void> command_promise_;
   bool firmware_command_success_;
+  ProvisioningState state_{ProvisioningState::kIdle};
 };
 
 }  // namespace chip
