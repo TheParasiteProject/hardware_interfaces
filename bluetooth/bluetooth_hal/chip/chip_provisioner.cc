@@ -281,17 +281,6 @@ void ChipProvisioner::HandleNextSetupStep(SetupCommandType command) {
                      << ": Failed to write Firmware PatchRam Packets.";
           return;
         }
-        HandleNextSetupStep(SetupCommandType::kLaunchRam);
-      }
-      break;
-    }
-    case SetupCommandType::kLaunchRam: {
-      if (ExecuteCurrentSetupStep(command)) {
-        // Add settlement time after launching ram.
-        int launch_ram_delay_ms = config_loader_.GetLaunchRamDelayMs();
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(launch_ram_delay_ms));
-
         LOG(INFO) << "[ FirmwareDownloadCompleted ]";
         UpdateHalState(HalState::kFirmwareDownloadCompleted);
         HandleNextSetupStep(SetupCommandType::kReset);
@@ -342,17 +331,23 @@ bool ChipProvisioner::WriteFwPatchramPacket() {
 
   std::optional<DataPacket> data_packet;
   while ((data_packet = config_loader_.GetNextFirmwareData()).has_value()) {
-    if ((*data_packet).GetDataType() == config::DataType::kDataEnd) {
-      // The last firmware patchram packet is expected be launchram command.
-      LOG(INFO) << " the latest patchram packet: "
-                << (*data_packet).GetPayload().ToString();
-      break;
-    }
-    if (!SendCommandNoAck((*data_packet).GetPayload())) {
-      LOG(ERROR) << __func__ << ": Failed to send firmware data packet";
-      return false;
+    if (data_packet->GetDataType() == config::DataType::kDataFragment) {
+      if (!SendCommandNoAck(data_packet->GetPayload())) {
+        LOG(ERROR) << __func__ << ": Failed to send firmware data fragment.";
+        return false;
+      }
+    } else {
+      if (!SendCommandAndWait(data_packet->GetPayload())) {
+        LOG(ERROR) << __func__
+                   << ": Failed to send final firmware data packet.";
+        return false;
+      }
     }
   }
+
+  int launch_ram_delay_ms = config_loader_.GetLaunchRamDelayMs();
+  std::this_thread::sleep_for(std::chrono::milliseconds(launch_ram_delay_ms));
+
   return true;
 }
 
