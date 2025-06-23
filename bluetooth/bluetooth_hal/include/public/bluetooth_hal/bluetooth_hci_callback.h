@@ -14,26 +14,31 @@
  * limitations under the License.
  */
 
-#include <memory>
+#pragma once
 
-#include "bluetooth_hal/chip/chip_provisioner_interface.h"
-#include "bluetooth_hal/transport/transport_interface.h"
+#include "bluetooth_hal/hal_packet.h"
 
 namespace bluetooth_hal {
 
-class BluetoothHal {
- public:
-  static BluetoothHal& GetHal();
-  bool RegisterVendorTransport(
-      std::unique_ptr<::bluetooth_hal::transport::TransportInterface>
-          transport);
-  void RegisterVendorChipProvisioner(
-      ::bluetooth_hal::chip::ChipProvisionerInterface::FactoryFn factory);
-  void Start();
-  void StartOffloadHal();
+enum class BluetoothHciStatus : uint8_t {
+  kSuccess = 0,
+  kAlreadyInitialized,
+  kHardwareInitializeError,
+};
 
- private:
-  void StartExtensions();
+class BluetoothHciCallback {
+ public:
+  virtual ~BluetoothHciCallback() = default;
+
+  virtual void InitializationComplete(BluetoothHciStatus status) = 0;
+  virtual void HciEventReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void AclDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void ScoDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void IsoDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
 };
 
 }  // namespace bluetooth_hal
