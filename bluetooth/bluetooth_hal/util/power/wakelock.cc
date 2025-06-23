@@ -62,6 +62,7 @@ void WakelockImpl::Acquire(WakeSource source) {
   if (acquired_sources_.count(source) > 0) {
     return;
   }
+  WakelockWatchdog::GetWatchdog().Start(source);
 
   if (acquired_sources_.empty()) {
     if (release_wakelock_timer_.IsScheduled()) {
@@ -71,7 +72,6 @@ void WakelockImpl::Acquire(WakeSource source) {
     AcquireWakelock();
   }
   acquired_sources_.emplace(source);
-  WakelockWatchdog::GetWatchdog().Start(source);
 
   HAL_LOG(VERBOSE) << "Wakelock VOTE for: "
                    << WakelockUtil::WakeSourceToString(source)
@@ -83,7 +83,6 @@ void WakelockImpl::Release(WakeSource source) {
   if (acquired_sources_.erase(source) == 0) {
     return;
   }
-  WakelockWatchdog::GetWatchdog().Stop(source);
 
   HAL_LOG(VERBOSE) << "Wakelock UNVOTE for: "
                    << WakelockUtil::WakeSourceToString(source)
@@ -95,6 +94,7 @@ void WakelockImpl::Release(WakeSource source) {
         std::bind_front(&WakelockImpl::ReleaseWakelock, this),
         std::chrono::milliseconds{kWakelockTimeMilliseconds});
   }
+  WakelockWatchdog::GetWatchdog().Stop(source);
 }
 
 bool WakelockImpl::IsAcquired() {
