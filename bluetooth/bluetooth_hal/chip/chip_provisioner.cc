@@ -155,7 +155,8 @@ bool ChipProvisioner::ProvisionBluetoothAddress() {
   }
 
   if (bdaddr_str.empty()) {
-    LOG(ERROR) << __func__ << "Can't fetch the provisioning BDA (empty string)";
+    LOG(ERROR) << __func__
+               << ": Can't fetch the provisioning BDA (empty string).";
     return false;
   }
 
@@ -171,7 +172,7 @@ bool ChipProvisioner::ProvisionBluetoothAddress() {
 
   if (!success) {
     LOG(ERROR) << __func__
-               << "Can't fetch the provisioning BDA (invalid format)";
+               << ": Can't fetch the provisioning BDA (invalid format).";
     return false;
   }
 
@@ -183,20 +184,20 @@ bool ChipProvisioner::ProvisionBluetoothAddress() {
   if (write_bda_packet.has_value()) {
     if (!SendCommandAndWait(write_bda_packet.value())) {
       LOG(ERROR) << __func__
-                 << "Failed to send write Bluetooth address command.";
+                 << ": Failed to send write Bluetooth address command.";
       return false;
     }
     return true;
   } else {
     LOG(ERROR) << __func__
-               << "Failed to prepare write Bluetooth address packet.";
+               << ": Failed to prepare write Bluetooth address packet.";
     return false;
   }
 }
 
 std::optional<HalPacket> ChipProvisioner::PrepareWriteBdAddressPacket() {
   if (bdaddr_.size() != kBluetoothAddressLength) {
-    LOG(ERROR) << __func__ << ": Invalid Bluetooth address length";
+    LOG(ERROR) << __func__ << ": Invalid Bluetooth address length.";
     return std::nullopt;
   }
 
@@ -225,7 +226,7 @@ void ChipProvisioner::UpdateHalState(HalState status) {
   if (on_hal_state_update_.has_value()) {
     on_hal_state_update_.value()(status);
   } else {
-    LOG(WARNING) << "No download callback registered.";
+    LOG(WARNING) << __func__ << ": No download callback registered.";
   }
 }
 
@@ -240,7 +241,8 @@ bool ChipProvisioner::SendCommandNoAck(const HalPacket& packet) {
 void ChipProvisioner::RunProvisioningSequence() {
   bool running = true;
   while (running) {
-    LOG(INFO) << "Executing provisioning state: " << static_cast<int>(state_);
+    LOG(INFO) << __func__
+              << ": Executing provisioning state: " << static_cast<int>(state_);
     switch (state_) {
       case ProvisioningState::kInitialReset:
         if (ExecuteCurrentSetupStep(SetupCommandType::kReset)) {
@@ -269,11 +271,9 @@ void ChipProvisioner::RunProvisioningSequence() {
       case ProvisioningState::kCheckFirmwareStatus:
         if (HciRouter::GetRouter().GetHalState() ==
             HalState::kFirmwareDownloadCompleted) {
-          LOG(INFO) << __func__ << ": [ FirmwareReady ]";
           UpdateHalState(HalState::kFirmwareReady);
           state_ = ProvisioningState::kReadFwVersion;
         } else {
-          LOG(INFO) << __func__ << ": [ FirmwareDownloading ]";
           UpdateHalState(HalState::kFirmwareDownloading);
           state_ = ProvisioningState::kSetFastDownload;
         }
@@ -300,14 +300,14 @@ void ChipProvisioner::RunProvisioningSequence() {
         int mini_drv_delay_ms = config_loader_.GetLoadMiniDrvDelayMs();
         std::this_thread::sleep_for(
             std::chrono::milliseconds(mini_drv_delay_ms));
-        LOG(INFO) << __func__ << ":Writing firmware patchram";
+        LOG(INFO) << __func__ << ": Writing firmware patchram.";
         // Write firmware patchram packets.
         if (WriteFwPatchramPacket()) {
-          LOG(INFO) << "[ FirmwareDownloadCompleted ]";
           UpdateHalState(HalState::kFirmwareDownloadCompleted);
           state_ = ProvisioningState::kFinalReset;
         } else {
-          LOG(ERROR) << "Failed to write Firmware PatchRam Packets.";
+          LOG(ERROR) << __func__
+                     << ": Failed to write Firmware PatchRam Packets.";
           state_ = ProvisioningState::kError;
         }
         break;
@@ -324,7 +324,7 @@ void ChipProvisioner::RunProvisioningSequence() {
 
       case ProvisioningState::kReadFwVersion:
         if (ExecuteCurrentSetupStep(SetupCommandType::kReadFwVersion)) {
-          LOG(INFO) << "ReadFwVersion successful.";
+          LOG(INFO) << __func__ << ": ReadFwVersion successful.";
           state_ = ProvisioningState::kWriteBdAddress;
         } else {
           state_ = ProvisioningState::kError;
@@ -332,7 +332,7 @@ void ChipProvisioner::RunProvisioningSequence() {
         break;
 
       case ProvisioningState::kWriteBdAddress:
-        LOG(INFO) << "writing BDA to controller";
+        LOG(INFO) << __func__ << ": Writing BDA to controller.";
         if (!ProvisionBluetoothAddress()) {
           LOG(ERROR) << __func__
                      << ": Failed to provision and write Bluetooth address.";
@@ -356,7 +356,6 @@ void ChipProvisioner::RunProvisioningSequence() {
         break;
 
       case ProvisioningState::kDone:
-        LOG(INFO) << __func__ << ": [ BtChipReady ]";
         UpdateHalState(HalState::kBtChipReady);
         [[fallthrough]];
       case ProvisioningState::kError:
@@ -370,7 +369,7 @@ void ChipProvisioner::RunProvisioningSequence() {
 
 bool ChipProvisioner::WriteFwPatchramPacket() {
   if (!config_loader_.ResetFirmwareDataLoadingState()) {
-    LOG(ERROR) << __func__ << ": Failed to load firmware data";
+    LOG(ERROR) << __func__ << ": Failed to load firmware data.";
     return false;
   }
 
