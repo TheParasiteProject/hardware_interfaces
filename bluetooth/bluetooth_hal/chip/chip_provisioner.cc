@@ -238,6 +238,73 @@ bool ChipProvisioner::SendCommandNoAck(const HalPacket& packet) {
   return HciRouter::GetRouter().SendCommandNoAck(packet);
 }
 
+/**
+ * @brief Executes the firmware provisioning state machine.
+ *
+ * This function implements a loop-driven state machine to manage the entire
+ * chip provisioning sequence, from initial reset to final configuration. The
+ * state machine progresses through a series of defined states, executing the
+ * necessary HCI commands at each step.
+ *
+ * The state flow is as follows:
+ *
+ *                 +---------+
+ *                 |  kIdle  |
+ *                 +---------+
+ *                      |
+ *                      v
+ *              +-----------------+
+ *              |  kInitialReset  |
+ *              +-----------------+
+ *                      |
+ *                      v
+ *              +---------------+
+ *              |  kReadChipId  |
+ *              +---------------+
+ *                      |
+ *                      v
+ *          +-----------------------+
+ *          |  kSetRuntimeBaudRate  |
+ *          +-----------------------+
+ *                      |
+ *                      v
+ *          +------------------------+
+ *          |  kCheckFirmwareStatus  |<------------------------------+
+ *          +------------------------+                               |
+ *                      |                                            |
+ *             +--------+-------------------+                        |
+ *             |                            |                        |
+ *             | FW Ready                   | FW Not Ready           |
+ *             |                            |                        |
+ *             v                            v                        |
+ * (HalState::kFirmwareReady)   (HalState::kFirmwareDownloading)     |
+ *             |                            |                        |
+ *             v                            v                        |
+ *    +------------------+      +--------------------+               |
+ *    |  kReadFwVersion  |      |  kSetFastDownload  |               |
+ *    +------------------+      +--------------------+               |
+ *             |                            |                        |
+ *             v                            v                        |
+ *   +-------------------+       +--------------------+              |
+ *   |  kWriteBdAddress  |       |  kDownloadMinidrv  |              |
+ *   +-------------------+       +--------------------+              |
+ *             |                            |                        |
+ *             v                            v                        |
+ *  +----------------------+      +------------------+               |
+ *  |  kSetupLowPowerMode  |      | kWriteFirmware   |               |
+ *  +----------------------+      +------------------+               |
+ *             |                            |                        |
+ *             |          (HalState::kFirmwareDownloadCompleted)     |
+ *             |                            |                        |
+ *             v                            v                        |
+ *        +---------+               +---------------+                |
+ *        |  kDone  |               |  kFinalReset  |----------------+
+ *        +---------+               +---------------+
+ *             |
+ *             v
+ *  (HalState::kChipReady)
+ *
+ */
 void ChipProvisioner::RunProvisioningSequence() {
   bool running = true;
   while (running) {
