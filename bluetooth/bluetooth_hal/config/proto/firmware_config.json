@@ -3,11 +3,17 @@
     {
       "transport_type": 1,
       "firmware_folder_name": "/PATH/TO/FOLDER/",
-      "firmware_file_name": "FILENAME",
+      "firmware_file_name": [
+        "FILENAME_1",
+        "FILENAME_2"
+      ],
       "chip_id": 123,
       "load_mini_drv_delay_ms": 100,
       "launch_ram_delay_ms": 100,
       "firmware_data_loading_type": "PACKET_BY_PACKET",
+      "fixed_size_reading": {
+        "chunk_size": 200
+      },
       "setup_commands": {
         "hci_reset": [
           1,

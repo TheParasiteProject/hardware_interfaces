@@ -89,6 +89,24 @@ class TxTask {
                   std::promise<std::shared_ptr<HalPacketCallback>>()};
   }
 
+  std::string ToString() const {
+    switch (type) {
+      case TxTaskType::kSendOrQueueCommand:
+        return "SendOrQueueCommand";
+      case TxTaskType::kGetCommandCallback:
+        return "GetCommandCallback";
+      case TxTaskType::kOnCommandCallbackCompleted:
+        return "OnCommandCallbackCompleted";
+      case TxTaskType::kSendToTransport:
+        return "SendToTransport";
+      default: {
+        std::ostringstream oss;
+        oss << "UnknownType(" << static_cast<int>(type) << ")";
+        return oss.str();
+      }
+    }
+  }
+
   TxTaskType type;
   HalPacket packet;
   std::shared_ptr<HalPacketCallback> callback;
@@ -113,7 +131,14 @@ class TxHandler {
 
   ~TxHandler() { SetBusy(false); }
 
-  void Post(TxTask task) { tx_thread_->Post(std::move(task)); }
+  void Post(TxTask task) {
+    HAL_LOG(VERBOSE) << "TxHandler: posting TxTask type:" << task.ToString();
+    if (tx_thread_->Post(std::move(task))) {
+      // Vote for RouterTask wakelock only if the task is successfully posted to
+      // the task queue.
+      VoteRouterTaskWakelock();
+    }
+  }
 
  private:
   struct QueuedHciCommand {
@@ -125,7 +150,7 @@ class TxHandler {
   void TxTaskDispatcher(TxTask task) {
     DURATION_TRACKER(AnchorType::kTxTask, __func__);
     HAL_LOG(VERBOSE) << "TxHandler: dispatching TxTask type:"
-                     << static_cast<int>(task.type);
+                     << task.ToString();
     switch (task.type) {
       case TxTask::TxTaskType::kSendOrQueueCommand:
         SendOrQueueCommand(task.packet, task.callback);
@@ -140,10 +165,10 @@ class TxHandler {
         SendToTransport(task.packet);
         break;
       default:
-        HAL_LOG(ERROR) << "Unknown TxTask type: "
-                       << static_cast<int>(task.type);
+        HAL_LOG(ERROR) << "Unknown TxTask type:" << task.ToString();
         break;
     }
+    UnvoteRouterTaskWakelock();
   }
 
   bool SendOrQueueCommand(const HalPacket& packet,
@@ -232,6 +257,24 @@ class TxHandler {
     TransportInterface::GetTransport().SetHciRouterBusy(busy);
   }
 
+  void VoteRouterTaskWakelock() {
+    std::unique_lock<std::mutex> lock(task_wakelock_mutex_);
+    if (wake_lock_votes_ == 0) {
+      Wakelock::GetWakelock().Acquire(WakeSource::kRouterTask);
+    }
+    wake_lock_votes_++;
+  }
+
+  void UnvoteRouterTaskWakelock() {
+    std::unique_lock<std::mutex> lock(task_wakelock_mutex_);
+    wake_lock_votes_--;
+    if (wake_lock_votes_ == 0) {
+      Wakelock::GetWakelock().Release(WakeSource::kRouterTask);
+    }
+  }
+
+  std::mutex task_wakelock_mutex_;
+  int wake_lock_votes_ = 0;
   std::queue<QueuedHciCommand> hci_cmd_queue_;
   std::unique_ptr<util::Worker<TxTask>> tx_thread_;
   std::atomic<bool> is_busy_;

@@ -19,18 +19,13 @@
 #include "bluetooth_hal/bluetooth_hci.h"
 
 #include <atomic>
-#include <csignal>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <sstream>
-#include <vector>
 
-#include "aidl/android/hardware/bluetooth/IBluetoothHciCallbacks.h"
-#include "aidl/android/hardware/bluetooth/Status.h"
 #include "android-base/logging.h"
-#include "android/binder_auto_utils.h"
-#include "android/binder_status.h"
+#include "bluetooth_hal/bluetooth_hci_callback.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder_handler.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -41,8 +36,7 @@
 
 namespace bluetooth_hal {
 
-using ::aidl::android::hardware::bluetooth::IBluetoothHciCallbacks;
-using ::aidl::android::hardware::bluetooth::Status;
+using ::bluetooth_hal::BluetoothHciCallback;
 using ::bluetooth_hal::HalState;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::extensions::finder::BluetoothFinderHandler;
@@ -55,73 +49,9 @@ using ::bluetooth_hal::hci::MonitorMode;
 using ::bluetooth_hal::util::power::ScopedWakelock;
 using ::bluetooth_hal::util::power::WakeSource;
 
-using ::ndk::ScopedAStatus;
-
 using HalStateChangedCallback = std::function<void(HalState, HalState)>;
 
 std::atomic<bool> BluetoothHci::is_signal_handled_{false};
-
-class BluetoothHalDeathRecipient {
- public:
-  void LinkToDeath(const std::shared_ptr<IBluetoothHciCallbacks>& cb) {
-    bluetooth_hci_callback_ = cb;
-
-    auto on_link_died = [](void* cookie) {
-      auto* death_recipient = static_cast<BluetoothHalDeathRecipient*>(cookie);
-      death_recipient->ServiceDied();
-    };
-
-    client_death_recipient_ = AIBinder_DeathRecipient_new(on_link_died);
-
-    binder_status_t link_to_death_return_status =
-        AIBinder_linkToDeath(bluetooth_hci_callback_->asBinder().get(),
-                             client_death_recipient_, this /* cookie */);
-
-    if (link_to_death_return_status != STATUS_OK) {
-      LOG(FATAL) << "Unable to link to death recipient";
-    }
-  }
-
-  void UnlinkToDeath(const std::shared_ptr<IBluetoothHciCallbacks>& cb) {
-    if (cb != bluetooth_hci_callback_) {
-      LOG(FATAL) << "Unable to unlink mismatched pointers";
-    }
-
-    binder_status_t unlink_to_death_return_status =
-        AIBinder_unlinkToDeath(bluetooth_hci_callback_->asBinder().get(),
-                               client_death_recipient_, this);
-
-    if (unlink_to_death_return_status != STATUS_OK) {
-      LOG(FATAL) << "Unable to unlink to death recipient";
-    }
-  }
-
-  void ServiceDied() {
-    if (bluetooth_hci_callback_ != nullptr &&
-        !AIBinder_isAlive(bluetooth_hci_callback_->asBinder().get())) {
-      LOG(ERROR)
-          << "BluetoothHalDeathRecipient::serviceDied - Bluetooth service died";
-    } else {
-      LOG(ERROR) << "BluetoothHalDeathRecipient::serviceDied called but "
-                    "service not dead";
-      return;
-    }
-    has_died_ = true;
-    ANCHOR_LOG_ERROR(AnchorType::kServiceDied) << __func__;
-
-    // TODO: b/414524533 - remove FATAL message once the bug is fixed.
-    LOG(FATAL) << "Bluetooth stack ServiceDied!";
-
-    BluetoothHci::GetHci().close();
-  }
-  bool GetHasDied() const { return has_died_; }
-  void SetHasDied(bool died) { has_died_ = died; }
-
- private:
-  bool has_died_;
-  std::shared_ptr<IBluetoothHciCallbacks> bluetooth_hci_callback_;
-  AIBinder_DeathRecipient* client_death_recipient_;
-};
 
 class HciCallback : public HciRouterCallback {
  public:
@@ -148,18 +78,12 @@ class HciCallback : public HciRouterCallback {
   HalStateChangedCallback handle_hal_state_changed_;
 };
 
-BluetoothHci::BluetoothHci()
-    : bluetooth_hci_callback_(nullptr),
-      death_recipient_(std::make_shared<BluetoothHalDeathRecipient>()) {
-  // Get configs.
-
-  std::signal(SIGTERM, SigtermHandler);
-
+BluetoothHci::BluetoothHci() : bluetooth_hci_callback_(nullptr) {
   // Lazily construct the static HciRouter instance.
   HciRouter::GetRouter();
 }
 
-void BluetoothHci::SigtermHandler(int signum) {
+void BluetoothHci::HandleSignal(int signum) {
   LOG(ERROR) << __func__ << ": Received signal: " << signum;
 
   if (is_signal_handled_.exchange(true)) {
@@ -171,47 +95,41 @@ void BluetoothHci::SigtermHandler(int signum) {
     return;
   }
 
-  BluetoothHci::GetHci().close();
+  Close();
   kill(getpid(), SIGKILL);
 }
 
-ScopedAStatus BluetoothHci::initialize(
-    const std::shared_ptr<IBluetoothHciCallbacks>& cb) {
+void BluetoothHci::HandleServiceDied() {
+  ANCHOR_LOG(AnchorType::kServiceDied) << __func__;
+  if (bluetooth_hci_callback_ == nullptr) {
+    HAL_LOG(ERROR) << __func__ << ": called but callback is null";
+    return;
+  }
+  HAL_LOG(ERROR) << __func__ << ": Bluetooth service died!";
+  Close();
+}
+
+bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
   DURATION_TRACKER(AnchorType::kInitialize, __func__);
   ScopedWakelock wakelock(WakeSource::kInitialize);
 
   LOG(INFO) << "Initializing Bluetooth HAL.";
   if (bluetooth_hci_callback_ != nullptr) {
     LOG(WARNING) << "The HAL has already been initialized!";
-    cb->initializationComplete(Status::ALREADY_INITIALIZED);
-    return ScopedAStatus::fromServiceSpecificError(STATUS_BAD_VALUE);
+    cb->InitializationComplete(BluetoothHciStatus::kHardwareInitializeError);
+    return false;
   }
 
   is_initializing_ = true;
   bluetooth_hci_callback_ = cb;
 
-  death_recipient_->SetHasDied(false);
-  death_recipient_->LinkToDeath(cb);
-  unlink_cb_ =
-      [cb](std::shared_ptr<BluetoothHalDeathRecipient>& death_recipient) {
-        if (death_recipient->GetHasDied()) {
-          LOG(INFO) << "Skipping unlink call, service died.";
-        } else {
-          death_recipient->UnlinkToDeath(cb);
-        }
-      };
-
   auto callback = std::make_shared<HciCallback>(
       std::bind_front(&BluetoothHci::DispatchPacketToStack, this),
       std::bind_front(&BluetoothHci::HandleHalStateChanged, this));
-  bool status = HciRouter::GetRouter().Initialize(callback);
-  return status ? ScopedAStatus::ok()
-                : ScopedAStatus::fromServiceSpecificError(STATUS_BAD_VALUE);
+  return HciRouter::GetRouter().Initialize(callback);
 }
 
-ScopedAStatus BluetoothHci::sendHciCommand(
-    const std::vector<uint8_t>& command) {
-  HalPacket packet(static_cast<uint8_t>(HciPacketType::kCommand), command);
+bool BluetoothHci::SendHciCommand(const HalPacket& packet) {
   DURATION_TRACKER(
       AnchorType::kSendHciCommand,
       (std::stringstream() << __func__ << ": 0x" << std::hex << std::setw(4)
@@ -219,55 +137,51 @@ ScopedAStatus BluetoothHci::sendHciCommand(
                            << " - " << std::dec << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
-  return ScopedAStatus::ok();
+  return true;
 }
 
-ScopedAStatus BluetoothHci::sendAclData(const std::vector<uint8_t>& data) {
-  HalPacket packet(static_cast<uint8_t>(HciPacketType::kAclData), data);
+bool BluetoothHci::SendAclData(const HalPacket& packet) {
   DURATION_TRACKER(
       AnchorType::kSendAclData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
-  return ScopedAStatus::ok();
+  return true;
 }
 
-ScopedAStatus BluetoothHci::sendScoData(const std::vector<uint8_t>& data) {
-  HalPacket packet(static_cast<uint8_t>(HciPacketType::kScoData), data);
+bool BluetoothHci::SendScoData(const HalPacket& packet) {
   DURATION_TRACKER(
       AnchorType::kSendScoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
-  return ScopedAStatus::ok();
+  return true;
 }
 
-ScopedAStatus BluetoothHci::sendIsoData(const std::vector<uint8_t>& data) {
-  HalPacket packet(static_cast<uint8_t>(HciPacketType::kIsoData), data);
+bool BluetoothHci::SendIsoData(const HalPacket& packet) {
   DURATION_TRACKER(
       AnchorType::kSendIsoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
   SendDataToController(packet);
-  return ScopedAStatus::ok();
+  return true;
 }
 
-ScopedAStatus BluetoothHci::close() {
+bool BluetoothHci::Close() {
   bluetooth_hci_callback_ = nullptr;
   ANCHOR_LOG_INFO(AnchorType::kClose) << __func__;
   ScopedWakelock wakelock(WakeSource::kClose);
   HciRouter::GetRouter().Cleanup();
-  unlink_cb_(death_recipient_);
-  return ScopedAStatus::ok();
+  return true;
 }
 
-binder_status_t BluetoothHci::dump(int fd, const char**, uint32_t) {
-  LOG(INFO) << __func__ << ": Dump debug log";
+bool BluetoothHci::Dump(int fd) {
+  HAL_LOG(INFO) << __func__ << ": Dump debug log";
 #ifndef UNIT_TEST
   DebugCentral::Get().Dump(fd);
 #endif
   fsync(fd);
-  return STATUS_OK;
+  return true;
 }
 
 void BluetoothHci::SendDataToController(const HalPacket& packet) {
@@ -282,35 +196,39 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
   HciPacketType type = packet.GetType();
   switch (type) {
     case HciPacketType::kEvent: {
-      DURATION_TRACKER(AnchorType::kCallbackHciEvent,
-                       (std::stringstream() << "cb->hciEventReceived: "
-                                            << packet.size() << " bytes")
-                           .str());
-      bluetooth_hci_callback_->hciEventReceived(packet.GetBody());
+      DURATION_TRACKER(
+          AnchorType::kCallbackHciEvent,
+          (std::stringstream() << "BluetoothHciCallback->hciEventReceived: "
+                               << packet.size() << " bytes")
+              .str());
+      bluetooth_hci_callback_->HciEventReceived(packet);
       break;
     }
     case HciPacketType::kAclData: {
-      DURATION_TRACKER(AnchorType::kCallbackAclData,
-                       (std::stringstream()
-                        << "cb->aclDataReceived: " << packet.size() << " bytes")
-                           .str());
-      bluetooth_hci_callback_->aclDataReceived(packet.GetBody());
+      DURATION_TRACKER(
+          AnchorType::kCallbackAclData,
+          (std::stringstream() << "BluetoothHciCallback->aclDataReceived: "
+                               << packet.size() << " bytes")
+              .str());
+      bluetooth_hci_callback_->AclDataReceived(packet);
       break;
     }
     case HciPacketType::kScoData: {
-      DURATION_TRACKER(AnchorType::kCallbackScoData,
-                       (std::stringstream()
-                        << "cb->scoDataReceived: " << packet.size() << " bytes")
-                           .str());
-      bluetooth_hci_callback_->scoDataReceived(packet.GetBody());
+      DURATION_TRACKER(
+          AnchorType::kCallbackScoData,
+          (std::stringstream() << "BluetoothHciCallback->scoDataReceived: "
+                               << packet.size() << " bytes")
+              .str());
+      bluetooth_hci_callback_->ScoDataReceived(packet);
       break;
     }
     case HciPacketType::kIsoData: {
-      DURATION_TRACKER(AnchorType::kCallbackIsoData,
-                       (std::stringstream()
-                        << "cb->isoDataReceived: " << packet.size() << " bytes")
-                           .str());
-      bluetooth_hci_callback_->isoDataReceived(packet.GetBody());
+      DURATION_TRACKER(
+          AnchorType::kCallbackIsoData,
+          (std::stringstream() << "BluetoothHciCallback->isoDataReceived: "
+                               << packet.size() << " bytes")
+              .str());
+      bluetooth_hci_callback_->IsoDataReceived(packet);
       break;
     }
     default:
@@ -326,13 +244,14 @@ void BluetoothHci::HandleHalStateChanged(HalState new_state,
       case HalState::kRunning:
         LOG(INFO) << "Initialization Complete!";
         is_initializing_ = false;
-        bluetooth_hci_callback_->initializationComplete(Status::SUCCESS);
+        bluetooth_hci_callback_->InitializationComplete(
+            BluetoothHciStatus::kSuccess);
         break;
       case HalState::kShutdown:
         LOG(ERROR) << "Unexpected state change during initialization!";
         is_initializing_ = false;
-        bluetooth_hci_callback_->initializationComplete(
-            Status::HARDWARE_INITIALIZATION_ERROR);
+        bluetooth_hci_callback_->InitializationComplete(
+            BluetoothHciStatus::kHardwareInitializeError);
         break;
       default:
         break;

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 #include "bluetooth_hal/hal_types.h"
@@ -47,6 +49,9 @@ inline constexpr std::string_view kFirmwareConfigFile =
     "/vendor/etc/bluetooth/firmware_config.json";
 inline constexpr int kDefaultLoadMiniDrvDelayMs = 50;
 inline constexpr int kDefaultLaunchRamDelayMs = 250;
+
+inline constexpr uint16_t kDefaultHciVscLaunchRamOpcode = 0xfc4e;
+inline constexpr size_t kDefaultFixedChunkSize = 200;
 
 }  // namespace constants
 }  // namespace config

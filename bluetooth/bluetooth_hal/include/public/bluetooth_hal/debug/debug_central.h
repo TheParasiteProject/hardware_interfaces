@@ -34,6 +34,9 @@
 enum class AnchorType : uint8_t {
   kNone = 0,
 
+  // HciProxy
+  kStartHci,
+
   // BluetoothHci
   kInitialize,
   kClose,

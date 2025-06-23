@@ -296,18 +296,39 @@ namespace power {
  * signal a wake-up condition. Each enumerator represents a specific source
  * and provides context for why a wake-up might be necessary.
  *
- * kTx: Used in all TX tasks, release after packet is written to transport.
- * kRx: Used in all RX tasks, release when packet is despatched to the client.
- * kHciBusy: Used to cover HCI command and event flow control.
- * kTransport: Used by the transport layer. The use case can be variant based on
- * it's requirement.
- * kInitialize: Used during the initialization of the HAL.
- * kClose: Used during the closing of the HAL.
+ * ╔═══════════════╦═══════════════╦═══════════════════════════════════════╗
+ * ║ WakeSource    ║ Used By       ║ Description                           ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kTx           ║ TX thread     ║ Used in all TX tasks, released after  ║
+ * ║               ║               ║ the packet is written to transport.   ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kRx           ║ RX thread     ║ Used in all RX tasks, released when   ║
+ * ║               ║               ║ the packet is dispatched to the       ║
+ * ║               ║               ║ client.                               ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kHciBusy      ║ TX thread     ║ Used to cover HCI command and event   ║
+ * ║               ║               ║ flow control.                         ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kRouterTask   ║ Binder thread ║ Acquired by the binder thread after   ║
+ * ║               ║ TX thread     ║ posting a task to the TX worker.      ║
+ * ║               ║               ║ Released by the TX thread after       ║
+ * ║               ║               ║ completing the task.                  ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kTransport    ║ Optional      ║ Used by the transport layer. The use  ║
+ * ║               ║               ║ case can vary based on its            ║
+ * ║               ║               ║ requirement.                          ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kInitialize   ║ Binder thread ║ Used during the initialization of the ║
+ * ║               ║               ║ HAL.                                  ║
+ * ╠═══════════════╬═══════════════╬═══════════════════════════════════════╣
+ * ║ kClose        ║ Binder thread ║ Used during the closing of the HAL.   ║
+ * ╚═══════════════╩═══════════════╩═══════════════════════════════════════╝
  */
 enum class WakeSource : uint8_t {
   kTx,
   kRx,
   kHciBusy,
+  kRouterTask,
   kTransport,
   kInitialize,
   kClose,

@@ -30,6 +30,10 @@ class BluetoothHal {
   void RegisterVendorChipProvisioner(
       ::bluetooth_hal::chip::ChipProvisionerInterface::FactoryFn factory);
   void Start();
+  void StartOffloadHal();
+
+ private:
+  void StartExtensions();
 };
 
 }  // namespace bluetooth_hal

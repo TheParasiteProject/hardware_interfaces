@@ -16,37 +16,29 @@
 
 #pragma once
 
-#include <string>
-
-#include "bluetooth_hal/hal_types.h"
+#include "bluetooth_hal/hal_packet.h"
 
 namespace bluetooth_hal {
-namespace util {
-namespace power {
 
-class WakelockUtil {
- public:
-  static std::string WakeSourceToString(WakeSource source) {
-    switch (source) {
-      case WakeSource::kTx:
-        return "TX";
-      case WakeSource::kRx:
-        return "RX";
-      case WakeSource::kHciBusy:
-        return "HciBusy";
-      case WakeSource::kRouterTask:
-        return "RouterTask";
-      case WakeSource::kTransport:
-        return "Transport";
-      case WakeSource::kInitialize:
-        return "Initialize";
-      case WakeSource::kClose:
-        return "Close";
-    }
-    return "Unknown";
-  }
+enum class BluetoothHciStatus : uint8_t {
+  kSuccess = 0,
+  kAlreadyInitialized,
+  kHardwareInitializeError,
 };
 
-}  // namespace power
-}  // namespace util
+class BluetoothHciCallback {
+ public:
+  virtual ~BluetoothHciCallback() = default;
+
+  virtual void InitializationComplete(BluetoothHciStatus status) = 0;
+  virtual void HciEventReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void AclDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void ScoDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  virtual void IsoDataReceived(
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+};
+
 }  // namespace bluetooth_hal
