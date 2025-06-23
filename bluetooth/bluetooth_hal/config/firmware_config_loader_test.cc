@@ -140,6 +140,20 @@ TEST_F(FirmwareConfigLoaderTestBase, GetLaunchRamDelayMsOnInit) {
             cfg_consts::kDefaultLaunchRamDelayMs);
 }
 
+TEST_F(FirmwareConfigLoaderTestBase, GetFirmwareFileCountOnInit) {
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetFirmwareFileCount(), 0);
+}
+
+TEST_F(FirmwareConfigLoaderTestBase, GetFirmwareFileCountAfterLoadingConfig) {
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kMultiTransportValidContent));
+
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetFirmwareFileCount(), 1);
+}
+
 struct SetupCommandValueTestParam {
   SetupCommandType command_type;
   std::vector<uint8_t> expected_command;

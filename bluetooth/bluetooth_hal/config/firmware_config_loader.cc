@@ -99,6 +99,7 @@ class FirmwareConfigLoaderImpl : public FirmwareConfigLoader {
 
   int GetLoadMiniDrvDelayMs() const override;
   int GetLaunchRamDelayMs() const override;
+  size_t GetFirmwareFileCount() const override;
 
   std::string DumpConfigToString() const override;
 
@@ -257,6 +258,13 @@ int FirmwareConfigLoaderImpl::GetLaunchRamDelayMs() const {
   return config.has_launch_ram_delay_ms()
              ? config.launch_ram_delay_ms()
              : cfg_consts::kDefaultLaunchRamDelayMs;
+}
+
+size_t FirmwareConfigLoaderImpl::GetFirmwareFileCount() const {
+  if (!active_config_) {
+    return 0;
+  }
+  return current_firmware_filenames_.size();
 }
 
 std::string FirmwareConfigLoaderImpl::DumpConfigToString() const {

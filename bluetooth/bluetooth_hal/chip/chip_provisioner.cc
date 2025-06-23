@@ -435,12 +435,18 @@ void ChipProvisioner::RunProvisioningSequence() {
 }
 
 bool ChipProvisioner::WriteFwPatchramPacket() {
+  if (config_loader_.GetFirmwareFileCount() == 0) {
+    LOG(INFO) << __func__ << ": No firmware files to write.";
+    return true;
+  }
+
   if (!config_loader_.ResetFirmwareDataLoadingState()) {
-    LOG(ERROR) << __func__ << ": Failed to load firmware data.";
+    LOG(ERROR) << __func__ << ": Failed to open initial firmware file.";
     return false;
   }
 
   std::optional<DataPacket> data_packet;
+  size_t files_completed = 0;
   while ((data_packet = config_loader_.GetNextFirmwareData()).has_value()) {
     if (data_packet->GetDataType() == config::DataType::kDataFragment) {
       if (!SendCommandNoAck(data_packet->GetPayload())) {
@@ -453,7 +459,15 @@ bool ChipProvisioner::WriteFwPatchramPacket() {
                    << ": Failed to send final firmware data packet.";
         return false;
       }
+      files_completed++;
     }
+  }
+
+  if (files_completed != config_loader_.GetFirmwareFileCount()) {
+    LOG(ERROR) << __func__ << ": Incomplete firmware download. Expected "
+               << config_loader_.GetFirmwareFileCount()
+               << " files, but completed " << files_completed;
+    return false;
   }
 
   int launch_ram_delay_ms = config_loader_.GetLaunchRamDelayMs();

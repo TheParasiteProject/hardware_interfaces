@@ -211,6 +211,13 @@ class FirmwareConfigLoader : public ConfigLoader {
    */
   virtual int GetLaunchRamDelayMs() const = 0;
 
+  /**
+   * @brief Retrieves the number of configured firmware files.
+   *
+   * @return The count of firmware files for the active configuration.
+   */
+  virtual size_t GetFirmwareFileCount() const = 0;
+
   static FirmwareConfigLoader& GetLoader();
 
   static void ResetLoader();
