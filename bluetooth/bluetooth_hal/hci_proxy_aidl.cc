@@ -72,7 +72,9 @@ class BluetoothHalDeathRecipient {
                                client_death_recipient_, this);
 
     if (unlink_to_death_return_status != STATUS_OK) {
-      LOG(FATAL) << "Unable to unlink to death recipient";
+      // Do not crash here as the Bluetooth process could just got killed when
+      // the device is shutting down.
+      LOG(ERROR) << "Unable to unlink to death recipient";
     }
   }
 
