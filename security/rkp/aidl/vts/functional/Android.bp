@@ -31,6 +31,7 @@ cc_test {
     shared_libs: [
         "libbinder_ndk",
         "libcrypto",
+        "libvendorsupport",
     ],
     static_libs: [
         "libcppbor",
