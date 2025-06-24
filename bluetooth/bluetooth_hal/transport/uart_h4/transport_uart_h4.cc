@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.transport.uart_h4"
+#define LOG_TAG "bluetooth_hal.transport.uart_h4"
 
 #include "bluetooth_hal/transport/uart_h4/transport_uart_h4.h"
 
