@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.bqr"
+#define LOG_TAG "bluetooth_hal.bqr"
 
 #include "bluetooth_hal/bqr/bqr_handler.h"
 
