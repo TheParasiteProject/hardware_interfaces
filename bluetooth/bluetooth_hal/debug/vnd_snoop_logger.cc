@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.vndsnoop"
+#define LOG_TAG "bluetooth_hal.vndsnoop"
 
 #include "bluetooth_hal/debug/vnd_snoop_logger.h"
 
