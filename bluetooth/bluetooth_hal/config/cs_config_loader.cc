@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.cs_config"
+#define LOG_TAG "bluetooth_hal.cs_config"
 
 #include "bluetooth_hal/config/cs_config_loader.h"
 
