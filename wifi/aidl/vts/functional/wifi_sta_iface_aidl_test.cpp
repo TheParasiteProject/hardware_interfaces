@@ -22,6 +22,7 @@
 #include <aidl/Vintf.h>
 #include <aidl/android/hardware/wifi/BnWifi.h>
 #include <aidl/android/hardware/wifi/BnWifiStaIfaceEventCallback.h>
+#include <android-base/logging.h>
 #include <android/binder_manager.h>
 #include <android/binder_status.h>
 #include <binder/IServiceManager.h>
@@ -54,6 +55,8 @@ namespace {
 const int kTestCmdId = 123;
 const std::array<uint8_t, 6> kTestMacAddr1 = {0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f};
 const std::array<uint8_t, 6> kTestMacAddr2 = {0x4a, 0x5b, 0x6c, 0x7d, 0x8e, 0x9f};
+// Global variable to track whether the Wifi framework should be re-enabled after testing.
+static bool sWifiFrameworkDisabledByTest = false;
 }  // namespace
 
 class WifiStaIfaceAidlTest : public testing::TestWithParam<std::string> {
@@ -61,11 +64,34 @@ class WifiStaIfaceAidlTest : public testing::TestWithParam<std::string> {
     void SetUp() override {
         stopWifiService(getInstanceName());
         wifi_sta_iface_ = getWifiStaIface(getInstanceName());
+        if (wifi_sta_iface_ == nullptr) {
+            // Try retrieving the iface pointer one more time. This call is
+            // a common source of testing flake.
+            wifi_sta_iface_ = getWifiStaIface(getInstanceName());
+        }
         ASSERT_NE(nullptr, wifi_sta_iface_.get());
         ASSERT_TRUE(wifi_sta_iface_->getInterfaceVersion(&interface_version_).isOk());
     }
 
     void TearDown() override { stopWifiService(getInstanceName()); }
+
+    // Runs at the beginning of the test suite.
+    static void SetUpTestSuite() {
+        if (isWifiFrameworkEnabled()) {
+            LOG(INFO) << "Disabling the Wifi framework for testing";
+            setWifiFrameworkEnabled(false);
+            sleep(2);
+            sWifiFrameworkDisabledByTest = true;
+        }
+    }
+
+    // Runs at the end of the test suite.
+    static void TearDownTestSuite() {
+        if (sWifiFrameworkDisabledByTest) {
+            LOG(INFO) << "Re-enabling the Wifi framework after testing";
+            setWifiFrameworkEnabled(true);
+        }
+    }
 
   protected:
     bool isFeatureSupported(IWifiStaIface::FeatureSetMask expected) {
