@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.chip_provisioner"
+#define LOG_TAG "bluetooth_hal.chip_provisioner"
 
 #include "bluetooth_hal/chip/async_chip_provisioner.h"
 
