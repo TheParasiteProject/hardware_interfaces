@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.extensions.sar"
+#define LOG_TAG "bluetooth_hal.extensions.sar"
 
 #include "bluetooth_hal/extensions/sar/bluetooth_sar_handler.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.hci_proxy_ffi"
+#define LOG_TAG "bluetooth_hal.hci_proxy_ffi"
 
 #include "bluetooth_hal/hci_proxy_ffi.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.router_client"
+#define LOG_TAG "bluetooth_hal.router_client"
 
 #include "bluetooth_hal/hci_router_client.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.thread_dispatcher.daemon"
+#define LOG_TAG "bluetooth_hal.thread_dispatcher.daemon"
 
 #include "bluetooth_hal/extensions/thread/thread_daemon.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.wakelock_watchdog"
+#define LOG_TAG "bluetooth_hal.wakelock_watchdog"
 
 #include "bluetooth_hal/util/power/wakelock_watchdog.h"
 

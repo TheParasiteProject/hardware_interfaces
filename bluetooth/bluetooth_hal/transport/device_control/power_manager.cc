@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.device_control"
+#define LOG_TAG "bluetooth_hal.device_control"
 
 #include "bluetooth_hal/transport/device_control/power_manager.h"
 
