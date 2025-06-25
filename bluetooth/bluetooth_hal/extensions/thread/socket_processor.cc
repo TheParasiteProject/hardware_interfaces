@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.thread_dispatcher.socket"
+#define LOG_TAG "bluetooth_hal.thread_dispatcher.socket"
 
 #include "bluetooth_hal/extensions/thread/socket_processor.h"
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.debug_central"
+#define LOG_TAG "bluetooth_hal.debug_central"
 
 #include "bluetooth_hal/debug/debug_central.h"
 

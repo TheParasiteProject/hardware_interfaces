@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.fw_config"
+#define LOG_TAG "bluetooth_hal.fw_config"
 
 #include "bluetooth_hal/config/firmware_config_loader.h"
 

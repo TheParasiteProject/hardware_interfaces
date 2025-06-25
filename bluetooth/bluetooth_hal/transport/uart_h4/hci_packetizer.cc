@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.hci_packetizer"
+#define LOG_TAG "bluetooth_hal.hci_packetizer"
 
 #include "bluetooth_hal/transport/uart_h4/hci_packetizer.h"
 

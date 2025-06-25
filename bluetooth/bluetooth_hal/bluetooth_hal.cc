@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal"
+#define LOG_TAG "bluetooth_hal"
 
 #include "bluetooth_hal/bluetooth_hal.h"
 

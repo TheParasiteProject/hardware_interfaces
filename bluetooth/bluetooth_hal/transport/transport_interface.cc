@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.transport_interface"
+#define LOG_TAG "bluetooth_hal.transport_interface"
 
 #include "bluetooth_hal/transport/transport_interface.h"
 
