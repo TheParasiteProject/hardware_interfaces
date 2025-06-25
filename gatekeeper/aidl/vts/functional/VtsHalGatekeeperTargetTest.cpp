@@ -524,6 +524,49 @@ TEST_P(GatekeeperAidlTest, FailedAttemptDelay) {
     ALOGI("Testing multiple failed verify done");
 }
 
+/**
+ * Test that delays are enforced.
+ **/
+TEST_P(GatekeeperAidlTest, DelayEnforced) {
+    ALOGI("Testing delay enforcement");
+    std::vector<uint8_t> password = generatePassword(0);
+
+    const auto [passwordHandle, sid] = enrollNewPassword(password);
+    GatekeeperVerifyResponse verifyRsp;
+    verifyPasswordSucceeds(password, passwordHandle, 0, sid, verifyRsp);
+
+    std::vector<uint8_t> wrongPassword = generatePassword(1);
+
+    // Repeatedly fail verification until we get a long retry delay.
+    int32_t waitMillis = 0;
+    int failureCount = 0;
+    while (waitMillis < 20000) {
+        waitMillis = verifyPasswordFailDelay(wrongPassword, passwordHandle, 0);
+        ALOGI("Attempt to verify wrong password attempt %d requires %ldms delay", failureCount,
+              (long)waitMillis);
+        failureCount++;
+    }
+
+    // Wait for less than the required time.
+    int32_t shortWaitMillis = waitMillis / 2;
+    ALOGI("Waiting %ld millis (too soon) before retrying", (long)shortWaitMillis);
+    std::this_thread::sleep_for(std::chrono::milliseconds(shortWaitMillis));
+
+    // Presenting the correct password fails because a retry interval is still in force.
+    int32_t remainingMillis = verifyPasswordFailDelay(password, passwordHandle, 0);
+    EXPECT_GT(remainingMillis, 0);
+
+    // Wait for rest of the required time (with some leeway).
+    shortWaitMillis += 1000;
+    ALOGI("Waiting %ld millis before retrying", (long)shortWaitMillis);
+    std::this_thread::sleep_for(std::chrono::milliseconds(shortWaitMillis));
+
+    GatekeeperVerifyResponse laterVerifyRsp;
+    verifyPasswordSucceeds(password, passwordHandle, 0, sid, laterVerifyRsp);
+
+    ALOGI("Testing delay enforcement done");
+}
+
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(GatekeeperAidlTest);
 INSTANTIATE_TEST_SUITE_P(
     PerInstance, GatekeeperAidlTest,
