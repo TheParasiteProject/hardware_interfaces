@@ -3038,6 +3038,14 @@ TEST_P(GraphicsComposerAidlCommandV2Test,
         const auto displayId = display.getDisplayId();
         EXPECT_TRUE(mComposerClient->setPowerMode(displayId, PowerMode::ON).isOk());
 
+        // Get display configurations and check if there's more than one.
+        auto [status, displayConfigs] = mComposerClient->getDisplayConfigs(displayId);
+        ASSERT_TRUE(status.isOk());
+        if (displayConfigs.size() <= 1) {
+            // Nothing to test if there aren't multiple configs to switch between.
+            continue;
+        }
+
         // Enable the callback
         ASSERT_TRUE(mComposerClient
                             ->setRefreshRateChangedCallbackDebugEnabled(displayId, /*enabled*/ true)
