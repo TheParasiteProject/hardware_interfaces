@@ -378,6 +378,10 @@ void DebugCentral::HandleDebugInfoCommand() {
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
 
+void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
+  controller_firmware_info_ = info;
+}
+
 bool DebugCentral::IsHardwareStageSupported() {
   std::string cur_hw_stage = ::android::base::GetProperty(kHwStage, "default");
   std::vector<std::string> not_supported_hw_stages =
@@ -415,8 +419,9 @@ void DebugCentral::DumpBluetoothHalLog(int fd) {
   ss << "=============================================" << std::endl;
   ss << "Controller Firmware Information" << std::endl;
   ss << "=============================================" << std::endl;
-  // TODO: b/373786258 - Print local name into stringstream.
+  ss << controller_firmware_info_ << std::endl;
 
+  ss << std::endl;
   ss << "=============================================" << std::endl;
   ss << "Anchors' Last Appear" << std::endl;
   ss << "=============================================" << std::endl;
@@ -426,6 +431,7 @@ void DebugCentral::DumpBluetoothHalLog(int fd) {
     ss << "Timestamp of " << anchor << ": " << anchor_timestamp << std::endl;
   }
 
+  ss << std::endl;
   ss << "=============================================" << std::endl;
   ss << "Anchors' History" << std::endl;
   ss << "=============================================" << std::endl;
