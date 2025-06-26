@@ -1326,6 +1326,8 @@ NanPairingAkm convertLegacyAkmTypeToAidl(legacy_hal::NanAkm type) {
 
 uint16_t convertAidlBootstrappingMethodToLegacy(NanBootstrappingMethod type) {
     switch (type) {
+        case NanBootstrappingMethod::BOOTSTRAPPING_NONE_MASK:
+            return NAN_PAIRING_BOOTSTRAPPING_NONE_MASK;
         case NanBootstrappingMethod::BOOTSTRAPPING_OPPORTUNISTIC_MASK:
             return NAN_PAIRING_BOOTSTRAPPING_OPPORTUNISTIC_MASK;
         case NanBootstrappingMethod::BOOTSTRAPPING_PIN_CODE_DISPLAY_MASK:
@@ -3704,6 +3706,8 @@ bool convertAidlNanBootstrappingIndicationResponseToLegacy(
     legacy_request->rsp_code = aidl_request.acceptRequest ? NAN_BOOTSTRAPPING_REQUEST_ACCEPT
                                                           : NAN_BOOTSTRAPPING_REQUEST_REJECT;
     legacy_request->publish_subscribe_id = static_cast<uint8_t>(aidl_request.discoverySessionId);
+    legacy_request->response_bootstrapping_method =
+            convertAidlBootstrappingMethodToLegacy(aidl_request.responseBootstrappingMethod);
 
     return true;
 }
