@@ -55,6 +55,31 @@ class HalPacket : public std::vector<uint8_t> {
   }
 
   /**
+   * @brief Set the final destination of the packet. The destination is
+   * PacketDestination::kNone by default.
+   *
+   * @param The final destination of the packet.
+   *
+   * @note It is **not recommended** to use this API as it can change the way
+   * HciMonitor works. The destination of the packet will be set once it is
+   * processed by the HciRouter.
+   *
+   */
+  void SetDestination(PacketDestination direction) const {
+    direction_ = direction;
+  }
+
+  /**
+   * @brief Get the final destination of the packet. By default, the destination
+   * is PacketDestination::kNone before the packet is processed by the
+   * HciRouter.
+   *
+   * @return The final destination of the packet.
+   *
+   */
+  PacketDestination GetDestination() const { return direction_; }
+
+  /**
    * @brief Support getting the byte at an offset with other types.
    *
    * @param offset Template of the offset, can be enum or other numeric types.
@@ -370,6 +395,8 @@ class HalPacket : public std::vector<uint8_t> {
     ss << "]";
     return ss.str();
   }
+
+  mutable PacketDestination direction_ = PacketDestination::kNone;
 };
 
 /**

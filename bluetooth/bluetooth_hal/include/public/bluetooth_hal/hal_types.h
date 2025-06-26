@@ -93,6 +93,12 @@ enum class HciPacketType : uint8_t {
   kHdlcData = 0x7e,    // Vendor-specific.
 };
 
+enum class PacketDestination : uint8_t {
+  kNone,
+  kController,
+  kHost,
+};
+
 enum class MonitorMode : int {
   kNone,
   kMonitor,
