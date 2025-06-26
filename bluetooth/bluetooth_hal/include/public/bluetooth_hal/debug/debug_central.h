@@ -195,6 +195,16 @@ class DebugCentral {
    */
   void HandleDebugInfoCommand();
 
+  /**
+   * @brief Sets controller firmware information for debugging.
+   * This optional API allows OEM vendors to provide additional firmware
+   * details, which will be included in bugreports to aid debugging.
+   *
+   * @param info A string containing the firmware information to be printed in
+   * the bugreport.
+   */
+  void SetControllerFirmwareInformation(const std::string& info);
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
@@ -205,6 +215,7 @@ class DebugCentral {
   std::queue<std::vector<uint8_t>> socdump_;
   std::queue<std::vector<uint8_t>> chredump_;
   // BtHal Logger
+  std::string controller_firmware_info_;
   std::list<std::pair<std::string, std::string>> history_record_;
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
