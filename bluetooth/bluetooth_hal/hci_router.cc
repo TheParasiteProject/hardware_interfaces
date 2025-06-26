@@ -25,6 +25,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 

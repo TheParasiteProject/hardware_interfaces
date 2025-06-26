@@ -18,6 +18,7 @@
 
 #include "bluetooth_hal/chip/async_chip_provisioner.h"
 
+#include <functional>
 #include <memory>
 
 #include "android-base/logging.h"
