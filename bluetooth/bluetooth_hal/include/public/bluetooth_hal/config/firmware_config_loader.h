@@ -42,7 +42,6 @@ enum class SetupCommandType : int {
   kUpdateChipBaudRate,
   kSetFastDownload,
   kDownloadMinidrv,
-  kLaunchRam,
   kReadFwVersion,
   kSetupLowPowerMode,
   kWriteBdAddress,
@@ -61,8 +60,6 @@ inline constexpr std::string_view SetupCommandTypeToString(
       return "SetFastDownload";
     case SetupCommandType::kDownloadMinidrv:
       return "DownloadMinidrv";
-    case SetupCommandType::kLaunchRam:
-      return "LaunchRam";
     case SetupCommandType::kReadFwVersion:
       return "ReadFwVersion";
     case SetupCommandType::kSetupLowPowerMode:
@@ -210,6 +207,13 @@ class FirmwareConfigLoader : public ConfigLoader {
    * @return The delay in milliseconds.
    */
   virtual int GetLaunchRamDelayMs() const = 0;
+
+  /**
+   * @brief Retrieves the number of configured firmware files.
+   *
+   * @return The count of firmware files for the active configuration.
+   */
+  virtual size_t GetFirmwareFileCount() const = 0;
 
   static FirmwareConfigLoader& GetLoader();
 
