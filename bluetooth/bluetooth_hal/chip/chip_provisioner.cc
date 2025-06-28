@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <sstream>
 #include <thread>

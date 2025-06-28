@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <sstream>
 #include <string>

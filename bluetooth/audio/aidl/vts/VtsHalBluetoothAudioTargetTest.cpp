@@ -26,6 +26,7 @@
 #include <cutils/properties.h>
 #include <fmq/AidlMessageQueue.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <future>
 #include <unordered_set>

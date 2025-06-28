@@ -21,7 +21,11 @@
 #include <cstdint>
 #include <list>
 #include <map>
+#include <mutex>
+#include <queue>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/bqr/bqr_handler.h"
