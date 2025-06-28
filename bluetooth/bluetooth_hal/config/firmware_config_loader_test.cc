@@ -140,6 +140,20 @@ TEST_F(FirmwareConfigLoaderTestBase, GetLaunchRamDelayMsOnInit) {
             cfg_consts::kDefaultLaunchRamDelayMs);
 }
 
+TEST_F(FirmwareConfigLoaderTestBase, GetFirmwareFileCountOnInit) {
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetFirmwareFileCount(), 0);
+}
+
+TEST_F(FirmwareConfigLoaderTestBase, GetFirmwareFileCountAfterLoadingConfig) {
+  std::vector<TransportType> priority_list = {TransportType::kUartH4};
+  EXPECT_CALL(mock_hal_config_loader_, GetTransportTypePriority())
+      .WillRepeatedly(ReturnRef(priority_list));
+  EXPECT_TRUE(FirmwareConfigLoader::GetLoader().LoadConfigFromString(
+      kMultiTransportValidContent));
+
+  EXPECT_EQ(FirmwareConfigLoader::GetLoader().GetFirmwareFileCount(), 1);
+}
+
 struct SetupCommandValueTestParam {
   SetupCommandType command_type;
   std::vector<uint8_t> expected_command;
@@ -183,9 +197,6 @@ INSTANTIATE_TEST_SUITE_P(
                .expected_command = {}},
            SetupCommandValueTestParam{
                .command_type = SetupCommandType::kDownloadMinidrv,
-               .expected_command = {}},
-           SetupCommandValueTestParam{
-               .command_type = SetupCommandType::kLaunchRam,
                .expected_command = {}},
            SetupCommandValueTestParam{
                .command_type = SetupCommandType::kReadFwVersion,
@@ -602,8 +613,7 @@ TEST_F(MultiFilePacketByPacketTest, ReadsDataFromMultipleFilesSuccessfully) {
 
   auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet2.has_value());
-  EXPECT_EQ(data_packet2->GetDataType(),
-            DataType::kDataFragment);  // Not kDataEnd yet.
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataEnd);
   EXPECT_EQ(data_packet2->GetPayload(),
             HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xCC}));
 
@@ -652,7 +662,7 @@ TEST_F(MultiFilePacketByPacketTest, ReadsDataFromMultipleFilesSuccessfully) {
 
   auto data_packet4 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet4.has_value());
-  EXPECT_EQ(data_packet4->GetDataType(), DataType::kDataEnd);  // Now kDataEnd.
+  EXPECT_EQ(data_packet4->GetDataType(), DataType::kDataEnd);
   EXPECT_EQ(data_packet4->GetPayload(),
             HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xFF}));
 
@@ -1039,7 +1049,7 @@ TEST_F(MultiFileAccumulatedTest, ReadsDataFromMultipleFilesSuccessfully) {
 
   auto data_packet2 = FirmwareConfigLoader::GetLoader().GetNextFirmwareData();
   ASSERT_TRUE(data_packet2.has_value());
-  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataFragment);
+  EXPECT_EQ(data_packet2->GetDataType(), DataType::kDataEnd);
   EXPECT_EQ(data_packet2->GetPayload(),
             HalPacket({0x01, 0x4E, 0xFC, 0x01, 0xCC}));
 

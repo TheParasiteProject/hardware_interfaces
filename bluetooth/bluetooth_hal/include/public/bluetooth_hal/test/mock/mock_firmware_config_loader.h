@@ -43,6 +43,8 @@ class MockFirmwareConfigLoader : public FirmwareConfigLoader {
 
   MOCK_METHOD(int, GetLaunchRamDelayMs, (), (const, override));
 
+  MOCK_METHOD(size_t, GetFirmwareFileCount, (), (const, override));
+
   MOCK_METHOD(std::string, DumpConfigToString, (), (const, override));
 
   static FirmwareConfigLoader& GetLoader();
