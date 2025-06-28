@@ -32,7 +32,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android/binder_auto_utils.h"
-#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_algorithm.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_util.h"
 #include "bluetooth_hal/hal_types.h"
 
@@ -58,16 +58,12 @@ using ::ndk::ScopedAStatus;
 constexpr uint8_t kOneSidePct = 0x01;
 constexpr uint8_t kMode0ChannelMap = 0x02;
 
-static std::unique_ptr<ChannelSoundingAlgorithm> channel_sounding_algorithm =
-    nullptr;
-
 BluetoothChannelSoundingSession::BluetoothChannelSoundingSession(
     std::shared_ptr<IBluetoothChannelSoundingSessionCallback> callback,
-    Reason /* reason */) {
+    Reason /* reason */)
+    : distance_estimator_(
+          std::make_unique<ChannelSoundingDistanceEstimator>()) {
   callback_ = callback;
-  if (channel_sounding_algorithm == nullptr) {
-    channel_sounding_algorithm = std::make_unique<ChannelSoundingAlgorithm>();
-  }
 }
 
 ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
@@ -129,11 +125,11 @@ ScopedAStatus BluetoothChannelSoundingSession::writeRawData(
   }
 
   RangingResult ranging_result;
-  channel_sounding_algorithm->reset_variables();
+  distance_estimator_->ResetVariables();
   ranging_result.resultMeters =
-      channel_sounding_algorithm->estimate_distance(in_rawData);
+      distance_estimator_->EstimateDistance(in_rawData);
   ranging_result.confidenceLevel =
-      channel_sounding_algorithm->get_confidence_level() * 100;
+      distance_estimator_->GetConfidenceLevel() * 100;
   callback_->onResult(ranging_result);
   return ScopedAStatus::ok();
 }

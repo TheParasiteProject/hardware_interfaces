@@ -18,15 +18,14 @@
 
 #include "aidl/android/hardware/bluetooth/ranging/ChannelSoudingRawData.h"
 
-using ::aidl::android::hardware::bluetooth::ranging::ChannelSoudingRawData;
-
-class ChannelSoundingAlgorithm {
+class ChannelSoundingDistanceEstimator {
  public:
-  void reset_variables() {};
+  void ResetVariables() {};
 
-  double estimate_distance([[maybe_unused]] const ChannelSoudingRawData&) {
+  double EstimateDistance([[maybe_unused]] const ::aidl::android::hardware::
+                              bluetooth::ranging::ChannelSoudingRawData&) {
     return 0;
   }
 
-  double get_confidence_level() { return 0; }
+  double GetConfidenceLevel() { return 0; }
 };
