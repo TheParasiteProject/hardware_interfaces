@@ -32,7 +32,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android/binder_auto_utils.h"
-#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_util.h"
 #include "bluetooth_hal/hal_types.h"
 
@@ -61,8 +61,7 @@ constexpr uint8_t kMode0ChannelMap = 0x02;
 BluetoothChannelSoundingSession::BluetoothChannelSoundingSession(
     std::shared_ptr<IBluetoothChannelSoundingSessionCallback> callback,
     Reason /* reason */)
-    : distance_estimator_(
-          std::make_unique<ChannelSoundingDistanceEstimator>()) {
+    : distance_estimator_(ChannelSoundingDistanceEstimatorInterface::Create()) {
   callback_ = callback;
 }
 

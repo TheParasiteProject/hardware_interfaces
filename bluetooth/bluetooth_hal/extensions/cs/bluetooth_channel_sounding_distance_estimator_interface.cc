@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 The Android Open Source Project
+ * Copyright 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,32 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include "aidl/android/hardware/bluetooth/ranging/ChannelSoudingRawData.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
+
+#include <memory>
+
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
 
 namespace bluetooth_hal {
 namespace extensions {
 namespace cs {
 
-class ChannelSoundingDistanceEstimator
-    : public ChannelSoundingDistanceEstimatorInterface {
- public:
-  void ResetVariables() override;
+ChannelSoundingDistanceEstimatorInterface::FactoryFn
+    ChannelSoundingDistanceEstimatorInterface::vendor_factory_ = nullptr;
 
-  double EstimateDistance(const ::aidl::android::hardware::bluetooth::ranging::
-                              ChannelSoudingRawData& raw_data) override;
+std::unique_ptr<ChannelSoundingDistanceEstimatorInterface>
+ChannelSoundingDistanceEstimatorInterface::Create() {
+  if (vendor_factory_) {
+    return vendor_factory_();
+  }
+  return std::make_unique<ChannelSoundingDistanceEstimator>();
+}
 
-  double GetConfidenceLevel() override;
-};
+void ChannelSoundingDistanceEstimatorInterface::
+    RegisterVendorChannelSoundingDistanceEstimator(FactoryFn factory) {
+  vendor_factory_ = std::move(factory);
+}
+
 }  // namespace cs
 }  // namespace extensions
 }  // namespace bluetooth_hal

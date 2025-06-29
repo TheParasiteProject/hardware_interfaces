@@ -17,6 +17,7 @@
 #include <memory>
 
 #include "bluetooth_hal/chip/chip_provisioner_interface.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 
 namespace bluetooth_hal {
@@ -29,6 +30,9 @@ class BluetoothHal {
           transport);
   void RegisterVendorChipProvisioner(
       ::bluetooth_hal::chip::ChipProvisionerInterface::FactoryFn factory);
+  void RegisterVendorChannelSoundingDistanceEstimator(
+      ::bluetooth_hal::extensions::cs::
+          ChannelSoundingDistanceEstimatorInterface::FactoryFn factory);
   void Start();
   void StartOffloadHal();
 

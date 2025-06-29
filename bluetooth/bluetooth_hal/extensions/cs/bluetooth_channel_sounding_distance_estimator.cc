@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
 
 #include "aidl/android/hardware/bluetooth/ranging/ChannelSoudingRawData.h"
-#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 
 namespace bluetooth_hal {
 namespace extensions {
 namespace cs {
 
-class ChannelSoundingDistanceEstimator
-    : public ChannelSoundingDistanceEstimatorInterface {
- public:
-  void ResetVariables() override;
+using ::aidl::android::hardware::bluetooth::ranging::ChannelSoudingRawData;
 
-  double EstimateDistance(const ::aidl::android::hardware::bluetooth::ranging::
-                              ChannelSoudingRawData& raw_data) override;
+void ChannelSoundingDistanceEstimator::ResetVariables() {};
 
-  double GetConfidenceLevel() override;
-};
+double ChannelSoundingDistanceEstimator::EstimateDistance(
+    [[maybe_unused]] const ChannelSoudingRawData& raw_data) {
+  return 0;
+}
+
+double ChannelSoundingDistanceEstimator::GetConfidenceLevel() { return 0; }
+
 }  // namespace cs
 }  // namespace extensions
 }  // namespace bluetooth_hal
