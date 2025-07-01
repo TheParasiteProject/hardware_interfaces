@@ -234,9 +234,8 @@ class TxHandler {
 
     VndSnoopLogger::GetLogger().Capture(packet,
                                         VndSnoopLogger::Direction::kOutgoing);
-    if (packet.GetType() == HciPacketType::kCommand &&
-        HciRouterClientAgent::GetAgent().DispatchPacketToClients(packet) ==
-            MonitorMode::kIntercept) {
+    if (HciRouterClientAgent::GetAgent().DispatchPacketToClients(packet) ==
+        MonitorMode::kIntercept) {
       // TODO: b/417582927 - Should force the client to provide an event if a
       // command is intercepted.
       HAL_LOG(DEBUG) << __func__ << ": packet intercepted by a client, "
@@ -453,6 +452,7 @@ void HciRouterImpl::Cleanup() {
 }
 
 bool HciRouterImpl::Send(const HalPacket& packet) {
+  packet.SetDestination(PacketDestination::kController);
   if (packet.GetType() == HciPacketType::kCommand) {
     // HCI commands require separate handling to manage command flow control.
     // The events for the commands sent over Send() will be received by the
@@ -467,6 +467,7 @@ bool HciRouterImpl::Send(const HalPacket& packet) {
 
 bool HciRouterImpl::SendCommand(const HalPacket& packet,
                                 const HalPacketCallback& callback) {
+  packet.SetDestination(PacketDestination::kController);
   if (packet.GetCommandOpcode() ==
       static_cast<uint16_t>(CommandOpCode::kGoogleDebugInfo)) {
     // Skip HCI queue for Google Debug Info command, as it is designed to ignore
@@ -480,6 +481,7 @@ bool HciRouterImpl::SendCommand(const HalPacket& packet,
 }
 
 bool HciRouterImpl::SendCommandNoAck(const HalPacket& packet) {
+  packet.SetDestination(PacketDestination::kController);
   tx_handler_->Post(TxTask::SendToTransport(packet));
   return true;
 }
@@ -615,6 +617,7 @@ void HciRouterImpl::OnTransportPacketReady(const HalPacket& packet) {
   ScopedWakelock wakelock(WakeSource::kRx);
   DURATION_TRACKER(AnchorType::kRxTask, __func__);
   HAL_LOG(VERBOSE) << __func__ << ": " << packet.ToString();
+  packet.SetDestination(PacketDestination::kHost);
 
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   if (hal_state_ == HalState::kShutdown) {
