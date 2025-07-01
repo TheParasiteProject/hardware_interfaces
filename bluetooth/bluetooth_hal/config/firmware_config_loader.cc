@@ -55,7 +55,6 @@ using ::bluetooth_hal::util::SystemCallWrapper;
 using ::google::protobuf::RepeatedField;
 using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
-using ::google::protobuf::util::Status;
 
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
@@ -360,7 +359,7 @@ bool FirmwareConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
   JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
-  Status status = JsonStringToMessage(content, &container, options);
+  auto status = JsonStringToMessage(content, &container, options);
   if (!status.ok()) {
     LOG(ERROR) << __func__
                << ": Failed to parse json file, error: " << status.message();
