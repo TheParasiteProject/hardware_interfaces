@@ -34,14 +34,7 @@ cc_defaults {
         "libeigen",
     ],
     whole_static_libs: [
-        "android.hardware.bluetooth-V1-ndk",
-        "android.hardware.bluetooth.finder-V1-ndk",
-        "android.hardware.bluetooth.ranging-V1-ndk",
         "hal_proto_lib",
-        "//hardware/google/interfaces:hardware.google.bluetooth.ccc-V1-ndk",
-        "//hardware/google/interfaces:hardware.google.bluetooth.ext-V1-ndk",
-        "//hardware/google/interfaces:hardware.google.bluetooth.sar-V1-ndk",
-        "//hardware/google/interfaces:hardware.google.bluetooth.bt_channel_avoidance-V1-ndk",
     ],
     static_libs: [
         "libbluetooth_offload_hal",
@@ -55,6 +48,28 @@ cc_defaults {
         "libprotobuf-cpp-full",
         "server_configurable_flags",
         "libaconfig_storage_read_api_cc",
+        "android.hardware.bluetooth-V1-ndk",
+        "android.hardware.bluetooth.finder-V1-ndk",
+        "android.hardware.bluetooth.ranging-V1-ndk",
+    ],
+    conlyflags: [
+        "-std=c99",
+    ],
+}
+
+cc_defaults {
+    name: "libbluetooth_hal_extension_defaults",
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    local_include_dirs: ["include/public/"],
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libhardware_legacy",
+        "libutils",
     ],
     conlyflags: [
         "-std=c99",
@@ -116,18 +131,14 @@ filegroup {
         "extensions/cs/bluetooth_channel_sounding_handler.cc",
         "extensions/cs/bluetooth_channel_sounding_session.cc",
         "extensions/cs/bluetooth_channel_sounding_util.cc",
-        "extensions/channel_avoidance/bluetooth_channel_avoidance.cc",
         "extensions/channel_avoidance/bluetooth_channel_avoidance_handler.cc",
-        "extensions/ext/bluetooth_ext.cc",
         "extensions/ext/bluetooth_ext_handler.cc",
         "extensions/finder/bluetooth_finder.cc",
         "extensions/finder/bluetooth_finder_handler.cc",
-        "extensions/sar/bluetooth_sar.cc",
         "extensions/sar/bluetooth_sar_handler.cc",
         "extensions/thread/socket_processor.cc",
         "extensions/thread/thread_daemon.cc",
         "extensions/thread/thread_handler.cc",
-        "extensions/ccc/bluetooth_ccc.cc",
         "extensions/ccc/bluetooth_ccc_handler.cc",
         "extensions/ccc/bluetooth_ccc_timesync_event.cc",
         "extensions/ccc/bluetooth_ccc_timesync_command.cc",
@@ -174,6 +185,58 @@ cc_library_static {
     name: "libbluetooth_hal",
     vendor_available: true,
     defaults: ["libbluetooth_hal_defaults"],
+    export_include_dirs: ["include/public"],
+}
+
+cc_library_static {
+    name: "libbluetooth_hal_sar",
+    vendor_available: true,
+    defaults: ["libbluetooth_hal_extension_defaults"],
+    srcs: [
+        "extensions/sar/bluetooth_sar.cc",
+    ],
+    static_libs: [
+        "//hardware/google/interfaces:hardware.google.bluetooth.sar-V1-ndk",
+    ],
+    export_include_dirs: ["include/public"],
+}
+
+cc_library_static {
+    name: "libbluetooth_hal_ext",
+    vendor_available: true,
+    defaults: ["libbluetooth_hal_extension_defaults"],
+    srcs: [
+        "extensions/ext/bluetooth_ext.cc",
+    ],
+    static_libs: [
+        "//hardware/google/interfaces:hardware.google.bluetooth.ext-V1-ndk",
+    ],
+    export_include_dirs: ["include/public"],
+}
+
+cc_library_static {
+    name: "libbluetooth_hal_ccc",
+    vendor_available: true,
+    defaults: ["libbluetooth_hal_extension_defaults"],
+    srcs: [
+        "extensions/ccc/bluetooth_ccc.cc",
+    ],
+    static_libs: [
+        "//hardware/google/interfaces:hardware.google.bluetooth.ccc-V1-ndk",
+    ],
+    export_include_dirs: ["include/public"],
+}
+
+cc_library_static {
+    name: "libbluetooth_hal_channel_avoidance",
+    vendor_available: true,
+    defaults: ["libbluetooth_hal_extension_defaults"],
+    srcs: [
+        "extensions/channel_avoidance/bluetooth_channel_avoidance.cc",
+    ],
+    static_libs: [
+        "//hardware/google/interfaces:hardware.google.bluetooth.bt_channel_avoidance-V1-ndk",
+    ],
     export_include_dirs: ["include/public"],
 }
 

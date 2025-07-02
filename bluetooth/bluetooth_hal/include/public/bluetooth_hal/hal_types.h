@@ -35,7 +35,6 @@ class Property {
       "bluetooth.transport.fallback";
   static constexpr char kIsAcceleratedBtOnEnabled[] =
       "persist.bluetooth.accelerate.bt.on.enabled";
-  static constexpr char kCdtHwId[] = "ro.boot.cdt_hwid";
   static constexpr char kProductName[] = "ro.product.name";
   static constexpr char kBuildType[] = "ro.build.type";
   static constexpr char kShutDownAction[] = "sys.shutdown.requested";
