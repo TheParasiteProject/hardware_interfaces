@@ -166,6 +166,7 @@ class HciRouterTest : public Test {
 
   void CompleteFirmwareDownloadAndStackInit() {
     // Mock the chip provisioner firmware download behaivor.
+    router_->UpdateHalState(HalState::kPreFirmwareDownload);
     router_->UpdateHalState(HalState::kFirmwareDownloading);
     router_->UpdateHalState(HalState::kFirmwareDownloadCompleted);
     router_->UpdateHalState(HalState::kFirmwareReady);
@@ -738,7 +739,9 @@ TEST_F(HciRouterTest, HandleUpdateHalState) {
   // A second shutdown is called in the test Cleanup.
   ExpectHalStateChange(HalState::kShutdown, HalState::kRunning, 2);
   ExpectHalStateChange(HalState::kInit, HalState::kShutdown);
-  ExpectHalStateChange(HalState::kFirmwareDownloading, HalState::kInit);
+  ExpectHalStateChange(HalState::kPreFirmwareDownload, HalState::kInit);
+  ExpectHalStateChange(HalState::kFirmwareDownloading,
+                       HalState::kPreFirmwareDownload);
   ExpectHalStateChange(HalState::kFirmwareDownloadCompleted,
                        HalState::kFirmwareDownloading);
   ExpectHalStateChange(HalState::kFirmwareReady,
@@ -747,6 +750,7 @@ TEST_F(HciRouterTest, HandleUpdateHalState) {
   ExpectHalStateChange(HalState::kRunning, HalState::kBtChipReady);
   router_->UpdateHalState(HalState::kShutdown);
   router_->UpdateHalState(HalState::kInit);
+  router_->UpdateHalState(HalState::kPreFirmwareDownload);
   router_->UpdateHalState(HalState::kFirmwareDownloading);
   router_->UpdateHalState(HalState::kFirmwareDownloadCompleted);
   router_->UpdateHalState(HalState::kFirmwareReady);

@@ -335,6 +335,9 @@ class HciRouterImpl : virtual public HciRouter,
  *        kInit ════════════╣             kBtChipReady <════> kRunning
  *          ║               ║                  ^
  *          v               ║                  ║
+ *  kPreFirmwareDownload════║                  ║
+ *          ║               ║                  ║
+ *          v               ║                  ║
  *  kFirmwareDownloading════╬══════════ kFirmwareReady
  *          ║               ║                  ^
  *          ║               ║                  ║
@@ -346,6 +349,8 @@ const std::unordered_map<HalState, std::unordered_set<HalState>>
     HciRouterImpl::kHalStateMachine = {
         {HalState::kShutdown, {HalState::kShutdown, HalState::kInit}},
         {HalState::kInit,
+         {HalState::kShutdown, HalState::kPreFirmwareDownload}},
+        {HalState::kPreFirmwareDownload,
          {HalState::kShutdown, HalState::kFirmwareDownloading}},
         {HalState::kFirmwareDownloading,
          {HalState::kShutdown, HalState::kFirmwareDownloadCompleted}},
