@@ -45,7 +45,7 @@ using ::bluetooth_hal::hci::HalPacket;
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
 TEST(TransportInterfaceTest, GetTransportTypeReturnDefaultType) {
-  EXPECT_EQ(TransportInterface::GetTransportType(), TransportType::kUartH4);
+  EXPECT_EQ(TransportInterface::GetTransportType(), TransportType::kUnknown);
 }
 
 TEST(TransportInterfaceTest, HalStateNotChangeAndNotNotifySubscriber) {

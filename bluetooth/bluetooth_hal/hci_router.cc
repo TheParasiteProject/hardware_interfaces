@@ -441,10 +441,7 @@ void HciRouterImpl::Cleanup() {
     ThreadHandler::Cleanup();
   }
 
-  // Cleanup transport.
-  if (TransportInterface::GetTransport().IsTransportActive()) {
-    TransportInterface::GetTransport().Cleanup();
-  }
+  TransportInterface::CleanupTransport();
 
   // Set HAL state back to the default state (kShutdown).
   UpdateHalState(HalState::kShutdown);
