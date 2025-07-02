@@ -57,6 +57,7 @@ constexpr char kRandGenBdaddrPath[] =
 constexpr char kEvbDefaultBdaddrProp[] = "ro.vendor.bluetooth.evb_bdaddr";
 constexpr uint16_t kHciVscWriteBdAddress = 0xfc01;
 constexpr uint16_t kHciVscWriteBdAddressLength = 0x0A;
+constexpr int kCommandTimeoutMs = 2000;
 
 }  // namespace
 
@@ -122,8 +123,8 @@ bool ChipProvisioner::SendCommandAndWait(const HalPacket& packet) {
     return false;
   }
 
-  std::future_status status =
-      command_promise_.get_future().wait_for(std::chrono::milliseconds(1000));
+  std::future_status status = command_promise_.get_future().wait_for(
+      std::chrono::milliseconds(kCommandTimeoutMs));
   if (status != std::future_status::ready) {
     LOG(ERROR) << __func__ << ": Command timeout during download firmware.";
     return false;
