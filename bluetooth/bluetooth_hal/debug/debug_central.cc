@@ -609,5 +609,7 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
   close(crashinfo_fd);
 }
 
+void DebugCentral::ResetCoredumpGenerator() { crash_timestamp_.clear(); }
+
 }  // namespace debug
 }  // namespace bluetooth_hal

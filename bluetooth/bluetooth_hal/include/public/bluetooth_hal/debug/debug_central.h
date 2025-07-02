@@ -226,6 +226,13 @@ class DebugCentral {
                               const std::vector<uint8_t>& data,
                               bool silent_coredump = true);
 
+  /**
+   * @brief The debug central only keeps one coredump per Bluetooth cycle.
+   * Invoking this function forces a reset to the coredump generator in case
+   * more coredumps are needed.
+   */
+  void ResetCoredumpGenerator();
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
