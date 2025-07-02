@@ -78,6 +78,7 @@ const std::string kDumpReasonControllerRootInflammed =
 const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
     "ControllerDebugInfoDataDumpWithoutRootInflammed";
 const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
+const std::string kDumpReasonVendor = "Vendor triggered coredump";
 
 const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
 const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
@@ -380,6 +381,39 @@ void DebugCentral::HandleDebugInfoCommand() {
 
 void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
   controller_firmware_info_ = info;
+}
+
+void DebugCentral::GenerateVendorDumpFile(const std::string& file_path,
+                                          const std::vector<uint8_t>& data,
+                                          bool silent_coredump) {
+  if (file_path.empty()) {
+    LOG(ERROR) << "File name is empty!";
+    return;
+  }
+  GenerateCrashDump(silent_coredump, kDumpReasonVendor);
+
+  std::stringstream fname_stream;
+  fname_stream << file_path << crash_timestamp_ << ".bin";
+
+  int fd;
+  std::string full_path = fname_stream.str();
+  if ((fd = open(full_path.c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
+                 S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
+    LOG(ERROR) << "Failed to open bluetooth hal dump file: " << full_path
+               << ", failed: " << strerror(errno) << " (" << errno << ")";
+    return;
+  }
+
+  if (chmod(full_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
+    LOG(ERROR) << "Unable to change file permissions " << full_path;
+  }
+
+  ssize_t ret = 0;
+  if ((ret = TEMP_FAILURE_RETRY(write(fd, data.data(), data.size()))) < 0) {
+    LOG(ERROR) << "Error writing to dest file: " << ret << " ("
+               << strerror(errno) << ")";
+  }
+  close(fd);
 }
 
 bool DebugCentral::IsHardwareStageSupported() {

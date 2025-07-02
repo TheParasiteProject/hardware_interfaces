@@ -209,6 +209,23 @@ class DebugCentral {
    */
   void SetControllerFirmwareInformation(const std::string& info);
 
+  /**
+   * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
+   * triggers the Bluetoth HAL core dump and prepare for a crash.
+   *
+   * The generated file name contains the timestamp of the first dump request in
+   * this Bluetooth cycle.
+   *
+   * @param file_path The path and the prefix of the file, for example
+   * "/path/file" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
+   * @param data The data to write into the file.
+   * @param silent_coredump Optional, default is false. It determines whether
+   * to trigger transport layer dump with it.
+   */
+  void GenerateVendorDumpFile(const std::string& file_path,
+                              const std::vector<uint8_t>& data,
+                              bool silent_coredump = true);
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
