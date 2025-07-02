@@ -193,7 +193,6 @@ class MockVendorTransport : public TransportInterface {
 class VendorTransportTest : public Test {
  protected:
   void SetUp() override {
-    TransportInterface::UpdateTransportType(TransportType::kUartH4);
     MockHalConfigLoader::SetMockLoader(&mock_hal_config_loader_);
 
     ON_CALL(mock_hal_config_loader_, GetRfkillFolderPrefix())
@@ -201,6 +200,9 @@ class VendorTransportTest : public Test {
   }
 
   void TearDown() override {
+    TransportInterface::CleanupTransport();
+    // No transport is active.
+    EXPECT_EQ(TransportInterface::GetTransportType(), TransportType::kUnknown);
     TransportInterface::UnregisterVendorTransport(kVendorType1);
     TransportInterface::UnregisterVendorTransport(kVendorType2);
   }
@@ -388,6 +390,9 @@ TEST_F(VendorTransportTest, UnregisterInactiveVendorTransportSuccessfully) {
 
   Mock::VerifyAndClearExpectations(&mock_hal_config_loader_);
 
+  // Cleanup active transport and load transprot again
+  TransportInterface::CleanupTransport();
+
   // Verify vendor transport 1 is gone.
   std::vector<TransportType> priorities_1_then_default = {
       kVendorType1, TransportType::kUartH4};
@@ -438,7 +443,7 @@ TEST_F(VendorTransportTest, SwitchToNonExistentVendorFailsAndPreservesCurrent) {
   MockVendorTransport* vendor_transport2_raw_ptr = vendor_transport2.get();
   EXPECT_TRUE(TransportInterface::RegisterVendorTransport(
       std::move(vendor_transport2)));
-  ASSERT_EQ(TransportInterface::GetTransportType(), TransportType::kUartH4);
+  ASSERT_EQ(TransportInterface::GetTransportType(), TransportType::kUnknown);
 
   // Vendor transport 2 should not cleanup.
   EXPECT_CALL(*vendor_transport2_raw_ptr, MockedCleanup()).Times(0);
@@ -474,18 +479,18 @@ TEST_F(VendorTransportTest, RegisterTransportAfterInitSuccessfully) {
   EXPECT_TRUE(TransportInterface::RegisterVendorTransport(
       std::move(vendor_transport1)));
 
-  // Cleanup and moved back to the map.
-  EXPECT_CALL(*vendor_transport2_raw_ptr, MockedCleanup()).Times(1);
-  EXPECT_EQ(&TransportInterface::GetTransport(), vendor_transport1_raw_ptr);
-  EXPECT_EQ(TransportInterface::GetTransportType(), kVendorType1);
+  // Transport is still kVendorType2 as it is active.
+  EXPECT_CALL(*vendor_transport2_raw_ptr, MockedCleanup()).Times(0);
+  EXPECT_EQ(&TransportInterface::GetTransport(), vendor_transport2_raw_ptr);
+  EXPECT_EQ(TransportInterface::GetTransportType(), kVendorType2);
 
   Mock::VerifyAndClearExpectations(vendor_transport2_raw_ptr);
 
   // Cleanup and moved back to the map.
-  EXPECT_CALL(*vendor_transport1_raw_ptr, MockedCleanup()).Times(1);
+  EXPECT_CALL(*vendor_transport2_raw_ptr, MockedCleanup()).Times(1);
   TransportInterface::UpdateTransportType(TransportType::kUartH4);
 
-  Mock::VerifyAndClearExpectations(vendor_transport1_raw_ptr);
+  Mock::VerifyAndClearExpectations(vendor_transport2_raw_ptr);
 }
 
 TEST_F(VendorTransportTest, GetVendorTransportReturnSameInstance) {

@@ -52,6 +52,10 @@ std::vector<std::reference_wrapper<Subscriber>>
 TransportInterface& TransportInterface::GetTransport() {
   std::lock_guard<std::recursive_mutex> lock(transport_mutex_);
 
+  if (current_transport_) {
+    return *current_transport_;
+  }
+
   const std::vector<TransportType>& current_transport_type_priorities =
       HalConfigLoader::GetLoader().GetTransportTypePriority();
 
