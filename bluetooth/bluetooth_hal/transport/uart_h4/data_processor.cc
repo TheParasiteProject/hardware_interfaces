@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "bthal.data_processor"
+#define LOG_TAG "bluetooth_hal.transport.data_processor"
 
 #include "bluetooth_hal/transport/uart_h4/data_processor.h"
 
