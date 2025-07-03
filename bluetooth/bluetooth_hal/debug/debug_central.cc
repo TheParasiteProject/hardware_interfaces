@@ -289,6 +289,40 @@ DebugCentral& DebugCentral::Get() {
   return debug_central;
 }
 
+bool DebugCentral::RegisterCoredumpCallback(
+    const std::shared_ptr<CoredumpCallback> callback) {
+  if (!callback) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+
+  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
+                      callback);
+  if (it != coredump_callbacks_.end()) {
+    return false;
+  }
+
+  coredump_callbacks_.emplace(callback);
+  return true;
+}
+
+bool DebugCentral::UnregisterCoredumpCallback(
+    const std::shared_ptr<CoredumpCallback> callback) {
+  if (!callback) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+
+  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
+                      callback);
+  if (it == coredump_callbacks_.end()) {
+    return false;
+  }
+
+  coredump_callbacks_.erase(it);
+  return true;
+}
+
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
   DumpBluetoothHalLog(fd);
@@ -544,6 +578,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
 
 void DebugCentral::GenerateCrashDump(bool silent_report,
                                      const std::string& reason) {
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
   if (!crash_timestamp_.empty()) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
@@ -577,39 +612,46 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
 
   DumpBluetoothHalLog(coredump_fd);
   LOG(INFO) << __func__ << ": Request to get Transport Layer Debug Dump.";
-  // TODO: b/373786258 - Need to dump debug info.
   close(coredump_fd);
 
-  if (silent_report) {
-    return;
-  }
-  // generate crashinfo file
-  std::stringstream crashinfo_fname;
-  crashinfo_fname << kCrashInfoFilePath << kCrashInfoFilePrefix
-                  << crash_timestamp_ << ".txt";
+  if (!silent_report) {
+    // generate crashinfo file
+    std::stringstream crashinfo_fname;
+    crashinfo_fname << kCrashInfoFilePath << kCrashInfoFilePrefix
+                    << crash_timestamp_ << ".txt";
 
-  int crashinfo_fd;
-  if ((crashinfo_fd =
-           open(crashinfo_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-    LOG(ERROR) << __func__
-               << ": Failed to open crashinfo file: " << crashinfo_fname.str()
-               << ", failed: " << strerror(errno) << " (" << errno << ").";
-    return;
-  }
-  fchmod(crashinfo_fd, S_IRUSR | S_IRGRP | S_IROTH);
+    int crashinfo_fd;
+    if ((crashinfo_fd =
+             open(crashinfo_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
+                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
+      LOG(ERROR) << __func__
+                 << ": Failed to open crashinfo file: " << crashinfo_fname.str()
+                 << ", failed: " << strerror(errno) << " (" << errno << ").";
+      return;
+    }
+    fchmod(crashinfo_fd, S_IRUSR | S_IRGRP | S_IROTH);
 
-  std::stringstream crashinfo_ss;
-  static int crash_count = 0;
-  crashinfo_ss << "crash_reason: " << std::string(reason) << std::endl;
-  crash_count++;
-  crashinfo_ss << "crash_count: " << std::to_string(crash_count) << std::endl;
-  crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
-  write(crashinfo_fd, crashinfo_ss.str().c_str(), crashinfo_ss.str().length());
-  close(crashinfo_fd);
+    std::stringstream crashinfo_ss;
+    static int crash_count = 0;
+    crashinfo_ss << "crash_reason: " << std::string(reason) << std::endl;
+    crash_count++;
+    crashinfo_ss << "crash_count: " << std::to_string(crash_count) << std::endl;
+    crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
+    write(crashinfo_fd, crashinfo_ss.str().c_str(),
+          crashinfo_ss.str().length());
+    close(crashinfo_fd);
+  }
+
+  // Inform vendor implementations that the dump has started.
+  for (auto& callback_ptr : coredump_callbacks_) {
+    (*callback_ptr)(std::string(reason));
+  }
 }
 
-void DebugCentral::ResetCoredumpGenerator() { crash_timestamp_.clear(); }
+void DebugCentral::ResetCoredumpGenerator() {
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  crash_timestamp_.clear();
+}
 
 }  // namespace debug
 }  // namespace bluetooth_hal
