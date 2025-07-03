@@ -385,7 +385,7 @@ void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
 bool DebugCentral::IsHardwareStageSupported() {
   std::string cur_hw_stage = ::android::base::GetProperty(kHwStage, "default");
   std::vector<std::string> not_supported_hw_stages =
-      HalConfigLoader::GetLoader().GetFwUnsupportedHwStages();
+      HalConfigLoader::GetLoader().GetUnsupportedHwStages();
   return std::find_if(not_supported_hw_stages.begin(),
                       not_supported_hw_stages.end(),
                       [&](std::string& not_supported_hw_stage) {

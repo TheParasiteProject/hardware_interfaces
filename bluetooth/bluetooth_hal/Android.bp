@@ -529,6 +529,7 @@ cc_test {
         "config/firmware_config_loader.cc",
         "config/firmware_config_loader_test.cc",
         ":test_mock_util_srcs",
+        ":test_mock_transport_srcs",
     ],
     static_libs: [
         "libgmock",

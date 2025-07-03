@@ -35,6 +35,8 @@ class MockTransportInterface : public TransportInterface {
 
   MOCK_METHOD(TransportType, GetTransportType, (), ());
 
+  MOCK_METHOD(void, CleanupTransport, (), ());
+
   MOCK_METHOD(bool, RegisterVendorTransport,
               (std::unique_ptr<TransportInterface> transport), ());
 

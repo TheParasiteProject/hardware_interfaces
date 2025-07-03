@@ -126,6 +126,14 @@ class TransportInterface {
   static TransportInterface& GetTransport();
 
   /**
+   * @brief Cleans up the currently active transport instance.
+   *
+   * After this function is called, transport type will be set to default value.
+   *
+   */
+  static void CleanupTransport();
+
+  /**
    * Updates the current transport type for the TransportInterface.
    *
    * This method allows switching the transport type used by the

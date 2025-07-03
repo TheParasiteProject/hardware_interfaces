@@ -54,7 +54,7 @@ class MockHalConfigLoader : public HalConfigLoader {
   MOCK_METHOD(const std::vector<std::string>&,
               GetHwStagesWithoutLppControlBtPowerPin, (), (const, override));
 
-  MOCK_METHOD(const std::vector<std::string>&, GetFwUnsupportedHwStages, (),
+  MOCK_METHOD(const std::vector<std::string>&, GetUnsupportedHwStages, (),
               (const, override));
 
   MOCK_METHOD(int, GetVendorTransportCrashIntervalSec, (), (const, override));

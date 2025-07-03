@@ -38,6 +38,7 @@
 #include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/hal_types.h"
+#include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
 #include "firmware_config.pb.h"
 #include "google/protobuf/util/json_util.h"
@@ -49,6 +50,7 @@ namespace {
 using ::bluetooth_hal::config::proto::FirmwareConfigForTransport;
 using ::bluetooth_hal::config::proto::FirmwareConfigsContainer;
 using ::bluetooth_hal::hci::HciPacketType;
+using ::bluetooth_hal::transport::TransportInterface;
 using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::SystemCallWrapper;
 
@@ -373,13 +375,19 @@ bool FirmwareConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
     transport_specific_configs_[type] = config_entry;
   }
 
-  const auto& transport_type_priorities =
-      HalConfigLoader::GetLoader().GetTransportTypePriority();
-  for (auto& type : transport_type_priorities) {
-    if (transport_specific_configs_.find(type) !=
-        transport_specific_configs_.end()) {
-      SelectFirmwareConfiguration(type);
-      break;
+  const TransportType active_transport_type =
+      TransportInterface::GetTransportType();
+  if (active_transport_type != TransportType::kUnknown) {
+    SelectFirmwareConfiguration(active_transport_type);
+  } else {
+    const auto& transport_type_priorities =
+        HalConfigLoader::GetLoader().GetTransportTypePriority();
+    for (auto type : transport_type_priorities) {
+      if (transport_specific_configs_.find(type) !=
+          transport_specific_configs_.end()) {
+        SelectFirmwareConfiguration(type);
+        break;
+      }
     }
   }
 

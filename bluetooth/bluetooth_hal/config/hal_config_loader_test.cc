@@ -81,7 +81,7 @@ constexpr std::string_view kValidContent = R"({
     "stage1",
     "stage2"
   ],
-  "fw_unsupported_hw_stages": [
+  "unsupported_hw_stages": [
     "stage1",
     "stage2"
   ],
@@ -164,8 +164,8 @@ TEST_F(ConfigLoaderTestBase, GetHwStagesWithoutLppControlBtPowerPinOnInit) {
                   .empty());
 }
 
-TEST_F(ConfigLoaderTestBase, GetFwUnsupportedHwStagesOnInit) {
-  EXPECT_TRUE(HalConfigLoader::GetLoader().GetFwUnsupportedHwStages().empty());
+TEST_F(ConfigLoaderTestBase, GetUnsupportedHwStagesOnInit) {
+  EXPECT_TRUE(HalConfigLoader::GetLoader().GetUnsupportedHwStages().empty());
 }
 
 TEST_F(ConfigLoaderTestBase, GetVendorTransportCrashIntervalSecOnInit) {
@@ -270,8 +270,8 @@ TEST_F(ConfigLoaderProtoTest, GetHwStagesWithoutLppControlBtPowerPin) {
       (std::vector<std::string>{"stage1", "stage2"}));
 }
 
-TEST_F(ConfigLoaderProtoTest, GetFwUnsupportedHwStages) {
-  EXPECT_EQ(HalConfigLoader::GetLoader().GetFwUnsupportedHwStages(),
+TEST_F(ConfigLoaderProtoTest, GetUnsupportedHwStages) {
+  EXPECT_EQ(HalConfigLoader::GetLoader().GetUnsupportedHwStages(),
             (std::vector<std::string>{"stage1", "stage2"}));
 }
 
