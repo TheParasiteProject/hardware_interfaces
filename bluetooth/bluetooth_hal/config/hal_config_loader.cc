@@ -95,7 +95,7 @@ class HalConfigLoaderImpl : public HalConfigLoader {
   bool IsBtPowerControlledByLpp() const override;
   const std::vector<std::string>& GetHwStagesWithoutLppControlBtPowerPin()
       const override;
-  const std::vector<std::string>& GetFwUnsupportedHwStages() const override;
+  const std::vector<std::string>& GetUnsupportedHwStages() const override;
   int GetVendorTransportCrashIntervalSec() const override;
   bool IsHpUartSkipSuspendSupported() const override;
   bool IsEnergyControllerLoggingSupported() const override;
@@ -127,7 +127,7 @@ class HalConfigLoaderImpl : public HalConfigLoader {
   std::vector<TransportType> transport_priority_list_{
       cfg_consts::kDefaultBtTransportType};
   std::vector<std::string> hw_stages_without_lpp_control_bt_power_pin_;
-  std::vector<std::string> fw_unsupported_hw_stages_;
+  std::vector<std::string> unsupported_hw_stages_;
   TransportType transport_fallback_type_{cfg_consts::kDefaultBtTransportType};
   bool is_fast_download_enabled_{false};
   bool is_sar_backoff_high_resolution_enabled_{false};
@@ -191,9 +191,9 @@ HalConfigLoaderImpl::GetHwStagesWithoutLppControlBtPowerPin() const {
   return hw_stages_without_lpp_control_bt_power_pin_;
 }
 
-const std::vector<std::string>& HalConfigLoaderImpl::GetFwUnsupportedHwStages()
+const std::vector<std::string>& HalConfigLoaderImpl::GetUnsupportedHwStages()
     const {
-  return fw_unsupported_hw_stages_;
+  return unsupported_hw_stages_;
 }
 
 int HalConfigLoaderImpl::GetVendorTransportCrashIntervalSec() const {
@@ -375,10 +375,10 @@ bool HalConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
         config.hw_stages_without_lpp_control_bt_power_pin().end());
   }
 
-  if (config.fw_unsupported_hw_stages_size()) {
-    fw_unsupported_hw_stages_.clear();
-    fw_unsupported_hw_stages_.assign(config.fw_unsupported_hw_stages().begin(),
-                                     config.fw_unsupported_hw_stages().end());
+  if (config.unsupported_hw_stages_size()) {
+    unsupported_hw_stages_.clear();
+    unsupported_hw_stages_.assign(config.unsupported_hw_stages().begin(),
+                                  config.unsupported_hw_stages().end());
   }
 
   if (config.has_vendor_transport_crash_interval_sec()) {
@@ -470,8 +470,8 @@ std::string HalConfigLoaderImpl::DumpConfigToString() const {
   ss << "IsBtPowerControlledByLpp: " << IsBtPowerControlledByLpp() << "\n";
   ss << "GetHwStagesWithoutLppControlBtPowerPin: "
      << VectorToString(GetHwStagesWithoutLppControlBtPowerPin()) << "\n";
-  ss << "GetFwUnsupportedHwStages: "
-     << VectorToString(GetFwUnsupportedHwStages()) << "\n";
+  ss << "GetUnsupportedHwStages: " << VectorToString(GetUnsupportedHwStages())
+     << "\n";
   ss << "GetVendorTransportCrashIntervalSec: "
      << GetVendorTransportCrashIntervalSec() << "\n";
   ss << "IsHpUartSkipSuspendSupported: " << IsHpUartSkipSuspendSupported()
