@@ -134,7 +134,7 @@ class HciRouterTest : public Test {
   }
 
   void CleanupHciRouter() {
-    EXPECT_CALL(mock_transport_interface_, Cleanup()).Times(1);
+    EXPECT_CALL(mock_transport_interface_, CleanupTransport()).Times(1);
     router_->Cleanup();
     ASSERT_EQ(new_state_, HalState::kShutdown);
     ASSERT_EQ(router_->GetHalState(), HalState::kShutdown);

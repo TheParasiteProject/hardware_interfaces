@@ -28,7 +28,6 @@
 #include <vector>
 
 #include "android-base/logging.h"
-#include "bluetooth_hal/config/config_constants.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/transport/uart_h4/transport_uart_h4.h"
@@ -38,10 +37,9 @@ namespace transport {
 
 using ::bluetooth_hal::HalState;
 using ::bluetooth_hal::config::HalConfigLoader;
-namespace cfg_consts = ::bluetooth_hal::config::constants;
 
 TransportType TransportInterface::current_transport_type_ =
-    cfg_consts::kDefaultBtTransportType;
+    TransportType::kUnknown;
 std::unique_ptr<TransportInterface> TransportInterface::current_transport_;
 std::unordered_map<TransportType, std::unique_ptr<TransportInterface>>
     TransportInterface::vendor_transports_;
@@ -53,6 +51,10 @@ std::vector<std::reference_wrapper<Subscriber>>
 
 TransportInterface& TransportInterface::GetTransport() {
   std::lock_guard<std::recursive_mutex> lock(transport_mutex_);
+
+  if (current_transport_) {
+    return *current_transport_;
+  }
 
   const std::vector<TransportType>& current_transport_type_priorities =
       HalConfigLoader::GetLoader().GetTransportTypePriority();
@@ -126,15 +128,7 @@ bool TransportInterface::UpdateTransportType(TransportType requested_type) {
 
   // New transport is ready. Now, cleanup and replace the old one.
   if (current_transport_) {
-    current_transport_->Cleanup();
-    if (current_transport_type_ >= TransportType::kVendorStart &&
-        current_transport_type_ <= TransportType::kVendorEnd) {
-      // Move the old vendor transport back to the map.
-      vendor_transports_[current_transport_type_] =
-          std::move(current_transport_);
-      LOG(INFO) << __func__ << ": Moved back old vendor transport type: "
-                << static_cast<int>(current_transport_type_);
-    }
+    CleanupTransport();
   }
 
   // Activate the new transport.
@@ -148,6 +142,22 @@ bool TransportInterface::UpdateTransportType(TransportType requested_type) {
   }
 
   return current_transport_ != nullptr;
+}
+
+void TransportInterface::CleanupTransport() {
+  if (current_transport_) {
+    current_transport_->Cleanup();
+    if (current_transport_type_ >= TransportType::kVendorStart &&
+        current_transport_type_ <= TransportType::kVendorEnd) {
+      // Move the old vendor transport back to the map.
+      vendor_transports_[current_transport_type_] =
+          std::move(current_transport_);
+      LOG(INFO) << __func__ << ": Moved back old vendor transport type: "
+                << static_cast<int>(current_transport_type_);
+    }
+    current_transport_.reset();
+    current_transport_type_ = TransportType::kUnknown;
+  }
 }
 
 bool TransportInterface::RegisterVendorTransport(

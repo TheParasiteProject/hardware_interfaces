@@ -38,6 +38,10 @@ TransportType TransportInterface::GetTransportType() {
   return mock_transport_interface->GetTransportType();
 }
 
+void TransportInterface::CleanupTransport() {
+  mock_transport_interface->CleanupTransport();
+}
+
 bool TransportInterface::RegisterVendorTransport(
     std::unique_ptr<TransportInterface> transport) {
   return mock_transport_interface->RegisterVendorTransport(
