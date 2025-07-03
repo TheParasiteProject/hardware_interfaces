@@ -39,6 +39,7 @@
 #include <aidl/Gtest.h>
 #include <aidl/Vintf.h>
 #include <aidl/android/hardware/audio/core/BnStreamCallback.h>
+#include <aidl/android/hardware/audio/core/BnStreamOutEventCallback.h>
 #include <aidl/android/hardware/audio/core/IModule.h>
 #include <aidl/android/hardware/audio/core/ITelephony.h>
 #include <aidl/android/hardware/audio/core/sounddose/ISoundDose.h>
@@ -124,6 +125,11 @@ using android::hardware::audio::common::StreamWorker;
 using android::hardware::audio::common::testing::detail::TestExecutionTracer;
 using ndk::enum_range;
 using ndk::ScopedAStatus;
+
+using OpenInputStreamArguments =
+        aidl::android::hardware::audio::core::IModule::OpenInputStreamArguments;
+using OpenOutputStreamArguments =
+        aidl::android::hardware::audio::core::IModule::OpenOutputStreamArguments;
 
 static constexpr int32_t kAidlVersion1 = 1;
 static constexpr int32_t kAidlVersion2 = 2;
@@ -1447,6 +1453,23 @@ class StreamWriterLogic : public StreamCommonLogic {
     size_t mCompressedMediaSize = 0;
     size_t mCompressedMediaPos = 0;
 };
+
+class DefaultStreamEventCallback
+    : public ::aidl::android::hardware::audio::core::BnStreamOutEventCallback {
+    ndk::ScopedAStatus onCodecFormatChanged(const std::vector<uint8_t>& in_audioMetadata) override {
+        LOG(DEBUG) << __func__ << " called with in_audioMetadata parameter value: "
+                   << ::android::internal::ToString(in_audioMetadata);
+        return ndk::ScopedAStatus::ok();
+    }
+
+    ndk::ScopedAStatus onRecommendedLatencyModeChanged(
+            const std::vector<AudioLatencyMode>& in_modes) override {
+        LOG(DEBUG) << __func__ << " called with in_modes parameter value: "
+                   << ::android::internal::ToString(in_modes);
+        return ndk::ScopedAStatus::ok();
+    }
+};
+
 using StreamWriter = StreamWorker<StreamWriterLogic>;
 
 class DefaultStreamCallback : public ::aidl::android::hardware::audio::core::BnStreamCallback,
@@ -1658,17 +1681,26 @@ SinkMetadata GenerateSinkMetadata(const AudioPortConfig& portConfig,
     return metadata;
 }
 
+OpenInputStreamArguments fillInputStreamArgs(
+        const AudioPortConfig& portConfig, long bufferSizeFrames,
+        const std::shared_ptr<DefaultStreamCallback> outCallback = nullptr) {
+    OpenInputStreamArguments args;
+    args.portConfigId = portConfig.id;
+    args.sinkMetadata = GenerateSinkMetadata(portConfig);
+    args.bufferSizeFrames = bufferSizeFrames;
+    if (outCallback != nullptr) {
+        // TODO: Uncomment when support for asynchronous input is implemented.
+        // args.callback = outCallback;
+    }
+    return args;
+}
+
 template <>
 ScopedAStatus WithStream<IStreamIn>::SetUpNoChecks(IModule* module,
                                                    const AudioPortConfig& portConfig,
                                                    long bufferSizeFrames) {
-    aidl::android::hardware::audio::core::IModule::OpenInputStreamArguments args;
-    args.portConfigId = portConfig.id;
-    args.sinkMetadata = GenerateSinkMetadata(portConfig);
-    args.bufferSizeFrames = bufferSizeFrames;
     auto callback = ndk::SharedRefBase::make<DefaultStreamCallback>();
-    // TODO: Uncomment when support for asynchronous input is implemented.
-    // args.callback = callback;
+    OpenInputStreamArguments args = fillInputStreamArgs(portConfig, bufferSizeFrames, callback);
     aidl::android::hardware::audio::core::IModule::OpenInputStreamReturn ret;
     ScopedAStatus status = module->openInputStream(args, &ret);
     if (status.isOk()) {
@@ -1693,17 +1725,26 @@ SourceMetadata GenerateSourceMetadata(const AudioPortConfig& portConfig,
     return metadata;
 }
 
-template <>
-ScopedAStatus WithStream<IStreamOut>::SetUpNoChecks(IModule* module,
-                                                    const AudioPortConfig& portConfig,
-                                                    long bufferSizeFrames) {
-    aidl::android::hardware::audio::core::IModule::OpenOutputStreamArguments args;
+OpenOutputStreamArguments fillOutputStreamArgs(
+        const AudioPortConfig& portConfig, long bufferSizeFrames,
+        const std::shared_ptr<DefaultStreamCallback> outCallback = nullptr) {
+    OpenOutputStreamArguments args;
     args.portConfigId = portConfig.id;
     args.sourceMetadata = GenerateSourceMetadata(portConfig);
     args.offloadInfo = generateOffloadInfoIfNeeded(portConfig);
     args.bufferSizeFrames = bufferSizeFrames;
+    if (outCallback != nullptr) {
+        args.callback = outCallback;
+    }
+    return args;
+}
+
+template <>
+ScopedAStatus WithStream<IStreamOut>::SetUpNoChecks(IModule* module,
+                                                    const AudioPortConfig& portConfig,
+                                                    long bufferSizeFrames) {
     auto callback = ndk::SharedRefBase::make<DefaultStreamCallback>();
-    args.callback = callback;
+    OpenOutputStreamArguments args = fillOutputStreamArgs(portConfig, bufferSizeFrames, callback);
     aidl::android::hardware::audio::core::IModule::OpenOutputStreamReturn ret;
     ScopedAStatus status = module->openOutputStream(args, &ret);
     if (status.isOk()) {
@@ -2039,7 +2080,7 @@ TEST_P(AudioCoreModule, OpenStreamInvalidPortConfigId) {
     ASSERT_NO_FATAL_FAILURE(GetAllPortConfigIds(&portConfigIds));
     for (const auto portConfigId : GetNonExistentIds(portConfigIds)) {
         {
-            aidl::android::hardware::audio::core::IModule::OpenInputStreamArguments args;
+            OpenInputStreamArguments args;
             args.portConfigId = portConfigId;
             args.bufferSizeFrames = kNegativeTestBufferSizeFrames;
             aidl::android::hardware::audio::core::IModule::OpenInputStreamReturn ret;
@@ -2048,7 +2089,7 @@ TEST_P(AudioCoreModule, OpenStreamInvalidPortConfigId) {
             EXPECT_EQ(nullptr, ret.stream);
         }
         {
-            aidl::android::hardware::audio::core::IModule::OpenOutputStreamArguments args;
+            OpenOutputStreamArguments args;
             args.portConfigId = portConfigId;
             args.bufferSizeFrames = kNegativeTestBufferSizeFrames;
             aidl::android::hardware::audio::core::IModule::OpenOutputStreamReturn ret;
@@ -2149,7 +2190,7 @@ TEST_P(AudioCoreModule, SetAudioPortConfigSuggestedConfig) {
 // Note: This test relies on simulation of external device connections by the HAL module.
 TEST_P(AudioCoreModule, SetAudioPortConfigRejectsTemplateDevicePort) {
     if (aidlVersion < kAidlVersion4) {
-        GTEST_SKIP() << "Current HAL version less than " << kAidlVersion4 << " .Skipping the test ";
+        GTEST_SKIP() << "Current HAL version less than " << kAidlVersion4 << ". Skipping the test ";
     }
     ASSERT_NO_FATAL_FAILURE(SetUpModuleConfig());
     // Get template ports
@@ -4131,6 +4172,7 @@ class AudioStream : public AudioCoreModule {
         }
         ExecuteDebugDump([&stream](int fd) { return stream.getStream()->dump(fd, {}, 0); });
     }
+    const std::vector<std::string> invalidTagValues = {{}, "", "INVALID_TAG", "VX_AB"};
 };
 using AudioStreamIn = AudioStream<IStreamIn>;
 using AudioStreamOut = AudioStream<IStreamOut>;
@@ -4320,6 +4362,42 @@ TEST_P(AudioStreamIn, updateSinkMetadata) {
     }
 }
 
+TEST_P(AudioStreamIn, OpenInputStreamWithInvalidTags) {
+    if (aidlVersion < kAidlVersion4) {
+        GTEST_SKIP() << "Current HAL version less than " << kAidlVersion4 << ". Skipping the test.";
+    }
+    const auto ports = moduleConfig->getInputMixPorts(true /*connectedOnly*/);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No input mix ports for attached devices";
+    }
+    bool atLeastOnePort = false;
+    for (const AudioPort& port : ports) {
+        StreamFixture<IStreamIn> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpPortConfigForMixPortOrConfig(
+                module.get(), moduleConfig.get(), port, true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        atLeastOnePort = true;
+        OpenInputStreamArguments args = fillInputStreamArgs(
+                stream.getPortConfig(), stream.getMinimumStreamBufferSizeFrames(),
+                ndk::SharedRefBase::make<DefaultStreamCallback>());
+        for (const std::string& tag : invalidTagValues) {
+            for (auto& each : args.sinkMetadata.tracks) {
+                each.tags = {tag};
+            }
+            aidl::android::hardware::audio::core::IModule::OpenInputStreamReturn ret;
+            EXPECT_STATUS(EX_ILLEGAL_ARGUMENT, module->openInputStream(args, &ret))
+                    << "Opening input streams with invalid tags should be rejected."
+                    << args.toString();
+            if (ret.stream != nullptr) {
+                (void)WithStream<IStreamIn>::callClose(ret.stream);
+            }
+        }
+    }
+    if (!atLeastOnePort) {
+        GTEST_SKIP() << "No input mix ports could be tested.";
+    }
+}
+
 const std::vector<AudioUsage> kAudioUsages = {ndk::enum_range<AudioUsage>().begin(),
                                               ndk::enum_range<AudioUsage>().end()};
 const std::vector<AudioContentType> kAudioContentTypes = {
@@ -4387,7 +4465,7 @@ TEST_P(AudioStreamOut, RequireOffloadInfo) {
     }
     const auto portConfig = stream.getPortConfig();
     StreamDescriptor descriptor;
-    aidl::android::hardware::audio::core::IModule::OpenOutputStreamArguments args;
+    OpenOutputStreamArguments args;
     args.portConfigId = portConfig.id;
     args.sourceMetadata = GenerateSourceMetadata(portConfig);
     args.bufferSizeFrames = kDefaultLargeBufferSizeFrames;
@@ -4415,7 +4493,7 @@ TEST_P(AudioStreamOut, RequireAsyncCallback) {
     }
     const auto portConfig = stream.getPortConfig();
     StreamDescriptor descriptor;
-    aidl::android::hardware::audio::core::IModule::OpenOutputStreamArguments args;
+    OpenOutputStreamArguments args;
     args.portConfigId = portConfig.id;
     args.sourceMetadata = GenerateSourceMetadata(portConfig);
     args.offloadInfo = generateOffloadInfoIfNeeded(portConfig);
@@ -4425,6 +4503,111 @@ TEST_P(AudioStreamOut, RequireAsyncCallback) {
             << "when no async callback is provided for a non-blocking mix port";
     if (ret.stream != nullptr) {
         (void)WithStream<IStreamOut>::callClose(ret.stream);
+    }
+}
+
+TEST_P(AudioStreamOut, OpenOutputStreamWithOptionalParameters) {
+    auto singleInputDevicePort = moduleConfig->getAttachedInputDevicePort();
+    if (!singleInputDevicePort.has_value()) {
+        GTEST_SKIP() << "No attached input device ports found";
+    }
+    const auto ports = moduleConfig->getOutputMixPorts(true /*connectedOnly*/);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No output mix ports for attached devices";
+    }
+    std::vector<std::string> validTagValues = {"VX_TEST_TAG1", "VX_TEST_TAG2"};
+    bool atLeastOnePort = false;
+    for (const AudioPort& port : ports) {
+        StreamFixture<IStreamOut> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpPortConfigForMixPortOrConfig(
+                module.get(), moduleConfig.get(), port, true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        atLeastOnePort = true;
+        OpenOutputStreamArguments args = fillOutputStreamArgs(
+                stream.getPortConfig(), stream.getMinimumStreamBufferSizeFrames(),
+                ndk::SharedRefBase::make<DefaultStreamCallback>());
+        for (auto& each : args.sourceMetadata.tracks) {
+            each.sourceDevice =
+                    singleInputDevicePort.value().ext.get<AudioPortExt::device>().device;
+        }
+        args.eventCallback = ndk::SharedRefBase::make<DefaultStreamEventCallback>();
+        for (auto& each : args.sourceMetadata.tracks) {
+            each.tags = validTagValues;
+        }
+        aidl::android::hardware::audio::core::IModule::OpenOutputStreamReturn ret;
+        EXPECT_IS_OK(module->openOutputStream(args, &ret)) << args.toString();
+        if (ret.stream != nullptr) {
+            (void)WithStream<IStreamOut>::callClose(ret.stream);
+        }
+    }
+    if (!atLeastOnePort) {
+        GTEST_SKIP() << "No output mix ports could be tested.";
+    }
+}
+
+TEST_P(AudioStreamOut, CallbackNotRequiredForSynchronousIoPort) {
+    const auto ports =
+            moduleConfig->getSynchronousMixPorts(true /*connectedOnly*/, false /*singlePort*/);
+    if (ports.empty()) {
+        GTEST_SKIP()
+                << "No mix ports for synchronous output that could be routed to attached devices";
+    }
+    bool atLeastOnePort = false;
+    for (const AudioPort& port : ports) {
+        StreamFixture<IStreamOut> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpPortConfigForMixPortOrConfig(
+                module.get(), moduleConfig.get(), port, true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        atLeastOnePort = true;
+        OpenOutputStreamArguments args = fillOutputStreamArgs(
+                stream.getPortConfig(), stream.getMinimumStreamBufferSizeFrames());
+        aidl::android::hardware::audio::core::IModule::OpenOutputStreamReturn ret;
+        EXPECT_IS_OK(module->openOutputStream(args, &ret))
+                << "Opening synchronous streams must not require providing a callback for "
+                   "non-blocking I/O. "
+                << args.toString();
+        if (ret.stream != nullptr) {
+            (void)WithStream<IStreamOut>::callClose(ret.stream);
+        }
+    }
+    if (!atLeastOnePort) {
+        GTEST_SKIP() << "No output mix ports could be tested.";
+    }
+}
+
+TEST_P(AudioStreamOut, OpenOutputStreamWithInvalidTags) {
+    if (aidlVersion < kAidlVersion4) {
+        GTEST_SKIP() << "Current HAL version less than " << kAidlVersion4 << ". Skipping the test.";
+    }
+    const auto ports = moduleConfig->getOutputMixPorts(true /*connectedOnly*/);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No output mix ports for attached devices";
+    }
+    bool atLeastOnePort = false;
+    for (const AudioPort& port : ports) {
+        StreamFixture<IStreamOut> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpPortConfigForMixPortOrConfig(
+                module.get(), moduleConfig.get(), port, true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        atLeastOnePort = true;
+        OpenOutputStreamArguments args = fillOutputStreamArgs(
+                stream.getPortConfig(), stream.getMinimumStreamBufferSizeFrames(),
+                ndk::SharedRefBase::make<DefaultStreamCallback>());
+        for (const std::string& tag : invalidTagValues) {
+            for (auto& each : args.sourceMetadata.tracks) {
+                each.tags = {tag};
+            }
+            aidl::android::hardware::audio::core::IModule::OpenOutputStreamReturn ret;
+            EXPECT_STATUS(EX_ILLEGAL_ARGUMENT, module->openOutputStream(args, &ret))
+                    << "Opening output streams with invalid tags should be rejected."
+                    << args.toString();
+            if (ret.stream != nullptr) {
+                (void)WithStream<IStreamOut>::callClose(ret.stream);
+            }
+        }
+    }
+    if (!atLeastOnePort) {
+        GTEST_SKIP() << "No output mix ports could be tested.";
     }
 }
 

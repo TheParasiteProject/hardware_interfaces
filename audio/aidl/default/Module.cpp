@@ -982,10 +982,24 @@ ndk::ScopedAStatus Module::getAudioRoutesForAudioPort(int32_t in_portId,
     return ndk::ScopedAStatus::ok();
 }
 
+ndk::ScopedAStatus Module::validateAudioTrackAttributeTags(const std::vector<std::string>& tags) {
+    for (auto& tag : tags) {
+        if (!common::isVendorExtension(tag)) {
+            LOG(ERROR) << __func__ << ": " << mType << ": AudioTrack attribute tag " << tag
+                       << " is invalid.";
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+        }
+    }
+    return ndk::ScopedAStatus::ok();
+}
+
 ndk::ScopedAStatus Module::openInputStream(const OpenInputStreamArguments& in_args,
                                            OpenInputStreamReturn* _aidl_return) {
     LOG(DEBUG) << __func__ << ": " << mType << ": port config id " << in_args.portConfigId
                << ", buffer size " << in_args.bufferSizeFrames << " frames";
+    for (const auto& track : in_args.sinkMetadata.tracks) {
+        RETURN_STATUS_IF_ERROR(validateAudioTrackAttributeTags(track.tags));
+    }
     AudioPort* port = nullptr;
     RETURN_STATUS_IF_ERROR(findPortIdForNewStream(in_args.portConfigId, &port));
     if (port->flags.getTag() != AudioIoFlags::Tag::input) {
@@ -1018,6 +1032,9 @@ ndk::ScopedAStatus Module::openOutputStream(const OpenOutputStreamArguments& in_
     LOG(DEBUG) << __func__ << ": " << mType << ": port config id " << in_args.portConfigId
                << ", has offload info? " << (in_args.offloadInfo.has_value()) << ", buffer size "
                << in_args.bufferSizeFrames << " frames";
+    for (const auto& track : in_args.sourceMetadata.tracks) {
+        RETURN_STATUS_IF_ERROR(validateAudioTrackAttributeTags(track.tags));
+    }
     AudioPort* port = nullptr;
     RETURN_STATUS_IF_ERROR(findPortIdForNewStream(in_args.portConfigId, &port));
     if (port->flags.getTag() != AudioIoFlags::Tag::output) {

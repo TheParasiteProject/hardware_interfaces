@@ -46,6 +46,8 @@ class ModuleConfig {
     std::string getError() const { return mStatus.getMessage(); }
 
     std::vector<aidl::android::media::audio::common::AudioPort> getAttachedDevicePorts() const;
+    std::optional<aidl::android::media::audio::common::AudioPort> getAttachedInputDevicePort()
+            const;
     std::vector<aidl::android::media::audio::common::AudioPort> getAudioPortsForDeviceTypes(
             const std::vector<aidl::android::media::audio::common::AudioDeviceType>& deviceTypes,
             const std::string& connection = "") const;
@@ -67,6 +69,9 @@ class ModuleConfig {
         return isInput ? getInputMixPorts(connectedOnly) : getOutputMixPorts(connectedOnly);
     }
     std::vector<aidl::android::media::audio::common::AudioPort> getNonBlockingMixPorts(
+            bool connectedOnly /*Permanently attached and connected external devices*/,
+            bool singlePort) const;
+    std::vector<aidl::android::media::audio::common::AudioPort> getSynchronousMixPorts(
             bool connectedOnly /*Permanently attached and connected external devices*/,
             bool singlePort) const;
     std::vector<aidl::android::media::audio::common::AudioPort> getOffloadMixPorts(
