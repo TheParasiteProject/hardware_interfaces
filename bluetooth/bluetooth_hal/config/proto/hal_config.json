@@ -15,7 +15,7 @@
     "stage1",
     "stage2"
   ],
-  "fw_unsupported_hw_stages": [
+  "unsupported_hw_stages": [
     "stage1",
     "stage2"
   ],
