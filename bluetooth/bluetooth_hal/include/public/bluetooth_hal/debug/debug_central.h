@@ -135,7 +135,17 @@ enum class AnchorType : uint8_t {
 namespace bluetooth_hal {
 namespace debug {
 
-using CoredumpCallback = std::function<void(const std::string& reason)>;
+enum class CoredumpErrorCode : uint8_t {
+  kForceCollectCoredump,
+  kControllerHwError,
+  kControllerRootInflammed,
+  kControllerDebugDumpWithoutRootInflammed,
+  kControllerDebugInfo,
+  kVendor = 0xFF,
+};
+
+using CoredumpCallback =
+    std::function<void(CoredumpErrorCode error_code, uint8_t sub_error_code)>;
 
 class DurationTracker {
  public:
@@ -237,7 +247,9 @@ class DebugCentral {
 
   /**
    * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
-   * triggers the Bluetoth HAL core dump and prepare for a crash.
+   * triggers the Bluetoth HAL core dump and prepare for a crash. It can trigger
+   * a CoredumpCallback to the caller if the coredump procedure was initiated by
+   * the vendor implementation.
    *
    * The generated file name contains the timestamp of the first dump request in
    * this Bluetooth cycle.
@@ -245,12 +257,13 @@ class DebugCentral {
    * @param file_path The path and the prefix of the file, for example
    * "/path/file" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
    * @param data The data to write into the file.
-   * @param silent_coredump Optional, default is false. It determines whether
-   * to trigger transport layer dump with it.
+   * @param vendor_error_code The vendor specific error code to record in the
+   * coredump file. If the coredump was initiated by the vendor implementation,
+   * this vendor erroc code is also sent back to the caller as sub_error_code.
    */
   void GenerateVendorDumpFile(const std::string& file_path,
                               const std::vector<uint8_t>& data,
-                              bool silent_coredump = true);
+                              uint8_t vendor_error_code = 0);
 
   /**
    * @brief The debug central only keeps one coredump per Bluetooth cycle.
@@ -259,15 +272,34 @@ class DebugCentral {
    */
   void ResetCoredumpGenerator();
 
+  /**
+   * @brief Get the timestamp of the coredump generated recently. The timestamp
+   * string is used as the suffix of the coredump files.
+   *
+   * @return The coredump timestamp in std::string, with the format of
+   * YYYY-MM-DD-MM-SS. Returns an empty string if no coredump was generated
+   * recently.
+   */
+  std::string& GetCoredumpTimestampString();
+
+  /**
+   * @brief A helper function that returns the std::string format of
+   * CoredumpErrorCode.
+   *
+   * @param error_code The CoredumpErrorCode to transform to string.
+   * @param sub_error_code An optional sub error code that is used by some of
+   * the CoredumpErrorCodes.
+   * @return The CoredumpErrorCode in std::string.
+   */
+  static std::string CoredumpErrorCodeToString(CoredumpErrorCode error_code,
+                                               uint8_t sub_error_code);
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  // std::vector<std::unique_ptr<hci::HciEventWatcher>> event_watchers_;
-  std::queue<std::vector<uint8_t>> socdump_;
-  std::queue<std::vector<uint8_t>> chredump_;
   // BtHal Logger
   std::string controller_firmware_info_;
   std::list<std::pair<std::string, std::string>> history_record_;
@@ -279,7 +311,8 @@ class DebugCentral {
   std::mutex coredump_mutex_;
 
   void DumpBluetoothHalLog(int fd);
-  void GenerateCrashDump(bool slient_report, const std::string& reason);
+  void GenerateCoredump(CoredumpErrorCode error_code,
+                        uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
 };

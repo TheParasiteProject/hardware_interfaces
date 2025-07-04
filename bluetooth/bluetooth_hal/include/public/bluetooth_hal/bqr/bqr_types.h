@@ -132,6 +132,7 @@ inline constexpr std::string BqrReportIdToString(BqrReportId id) {
 
 // BQR root inflammation vendor error codes
 enum class BqrErrorCode : uint8_t {
+  kNone = 0x00,
   kUartParsing = 0x01,
   kUartIncompletePacket = 0x02,
   kFirmwareChecksum = 0x03,

@@ -71,18 +71,7 @@ constexpr int kDebugInfoLastBlockOffset = 5;
 constexpr int kHwCodeOffset = 2;
 
 constexpr int kHandleDebugInfoCommandMs = 1000;
-const std::string kDumpReasonForceCollectCoredump = "Force Collect Coredump";
-const std::string kDumpReasonControllerHwError = "ControllerHwError";
-const std::string kDumpReasonControllerRootInflammed =
-    "ControllerRootInflammed";
-const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
-    "ControllerDebugInfoDataDumpWithoutRootInflammed";
-const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
-const std::string kDumpReasonVendor = "Vendor triggered coredump";
-
-const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
 const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
-const std::string kCrashInfoFilePrefix = "crashinfo_bt_";
 const std::string kSsrdumpFilePrefix = "coredump_bt_";
 const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
 const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
@@ -331,8 +320,6 @@ void DebugCentral::Dump(int fd) {
     DumpDebugfs(fd, serial_debug_port_);
     DumpDebugfs(fd, kDebugNodeBtLpm);
   }
-  // Dump all crashinfo_bt files in ssrdump folder
-  GetStringLogFromStorage(fd, kCrashInfoFilePrefix, kCrashInfoFilePath);
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
@@ -384,11 +371,8 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   HciRouter::GetRouter().SendPacketToStack(bqr_event);
 
   if (OkToGenerateCrashDump(static_cast<uint8_t>(error))) {
-    GenerateCrashDump(
-        false, kDumpReasonControllerRootInflammed + " (" +
-                   StringPrintf("error_code: 0x%02hhX",
-                                static_cast<unsigned char>(error)) +
-                   ")" + " - " + std::string(BqrErrorToStringView(error)));
+    GenerateCoredump(CoredumpErrorCode::kControllerRootInflammed,
+                     static_cast<uint8_t>(error));
     LogFatal(error, extra_info);
   } else {
     LOG(ERROR) << __func__ << ": Silent recover!";
@@ -407,7 +391,7 @@ void DebugCentral::HandleDebugInfoCommand() {
           LOG(ERROR) << __func__
                      << ": Force a coredump to be generated if it has not been "
                         "generated for 1 second.";
-          GenerateCrashDump(true, kDumpReasonForceCollectCoredump + " (BtFw)");
+          GenerateCoredump(CoredumpErrorCode::kForceCollectCoredump);
         }
       },
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
@@ -419,12 +403,12 @@ void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
 
 void DebugCentral::GenerateVendorDumpFile(const std::string& file_path,
                                           const std::vector<uint8_t>& data,
-                                          bool silent_coredump) {
+                                          uint8_t vendor_error_code) {
   if (file_path.empty()) {
     LOG(ERROR) << "File name is empty!";
     return;
   }
-  GenerateCrashDump(silent_coredump, kDumpReasonVendor);
+  GenerateCoredump(CoredumpErrorCode::kVendor, vendor_error_code);
 
   std::stringstream fname_stream;
   fname_stream << file_path << crash_timestamp_ << ".bin";
@@ -528,12 +512,8 @@ void DebugCentral::HandleRootInflammationEvent(
              << ").";
   // For some vendor error codes that we do not generate a crash dump.
   if (OkToGenerateCrashDump(vendor_error_code)) {
-    GenerateCrashDump(
-        false, kDumpReasonControllerRootInflammed + " (" +
-                   StringPrintf("vendor_error: 0x%02hhX", vendor_error_code) +
-                   ")" + " - " +
-                   std::string(BqrErrorToStringView(
-                       static_cast<BqrErrorCode>(vendor_error_code))));
+    GenerateCoredump(CoredumpErrorCode::kControllerRootInflammed,
+                     vendor_error_code);
   }
 }
 
@@ -545,8 +525,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 
   if (crash_timestamp_.empty()) {
-    GenerateCrashDump(IsHardwareStageSupported() ? false : true,
-                      kDumpReasonControllerDebugInfo + " (BtFw)");
+    GenerateCoredump(CoredumpErrorCode::kControllerDebugInfo);
   }
 
   // the Last soc dump debug info packet has been received
@@ -576,8 +555,8 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 }
 
-void DebugCentral::GenerateCrashDump(bool silent_report,
-                                     const std::string& reason) {
+void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
+                                    uint8_t sub_error_code) {
   std::lock_guard<std::mutex> lock(coredump_mutex_);
   if (!crash_timestamp_.empty()) {
     // coredump has already been generated, avoid duplicated dump in one crash
@@ -585,8 +564,8 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
     return;
   }
 
-  LOG(ERROR) << __func__ << ": Reason: " << reason.c_str()
-             << ", silent_report:" << silent_report << ".";
+  LOG(ERROR) << __func__ << ": Reason: "
+             << CoredumpErrorCodeToString(error_code, sub_error_code);
   crash_timestamp_ = GetTimestampString();
   std::stringstream coredump_fname;
   coredump_fname << kSsrdumpFilePath << kSsrdumpFilePrefix << crash_timestamp_
@@ -606,51 +585,55 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
   fchmod(coredump_fd, S_IRUSR | S_IRGRP | S_IROTH);
 
   std::stringstream ss;
-  ss << "DUMP REASON: " << std::string(reason) << " - occurred at "
-     << crash_timestamp_ << std::endl;
+  ss << "DUMP REASON: " << CoredumpErrorCodeToString(error_code, sub_error_code)
+     << " - occurred at " << crash_timestamp_ << std::endl;
   write(coredump_fd, ss.str().c_str(), ss.str().length());
 
   DumpBluetoothHalLog(coredump_fd);
-  LOG(INFO) << __func__ << ": Request to get Transport Layer Debug Dump.";
   close(coredump_fd);
-
-  if (!silent_report) {
-    // generate crashinfo file
-    std::stringstream crashinfo_fname;
-    crashinfo_fname << kCrashInfoFilePath << kCrashInfoFilePrefix
-                    << crash_timestamp_ << ".txt";
-
-    int crashinfo_fd;
-    if ((crashinfo_fd =
-             open(crashinfo_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
-                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-      LOG(ERROR) << __func__
-                 << ": Failed to open crashinfo file: " << crashinfo_fname.str()
-                 << ", failed: " << strerror(errno) << " (" << errno << ").";
-      return;
-    }
-    fchmod(crashinfo_fd, S_IRUSR | S_IRGRP | S_IROTH);
-
-    std::stringstream crashinfo_ss;
-    static int crash_count = 0;
-    crashinfo_ss << "crash_reason: " << std::string(reason) << std::endl;
-    crash_count++;
-    crashinfo_ss << "crash_count: " << std::to_string(crash_count) << std::endl;
-    crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
-    write(crashinfo_fd, crashinfo_ss.str().c_str(),
-          crashinfo_ss.str().length());
-    close(crashinfo_fd);
-  }
 
   // Inform vendor implementations that the dump has started.
   for (auto& callback_ptr : coredump_callbacks_) {
-    (*callback_ptr)(std::string(reason));
+    (*callback_ptr)(error_code, sub_error_code);
   }
 }
 
 void DebugCentral::ResetCoredumpGenerator() {
   std::lock_guard<std::mutex> lock(coredump_mutex_);
   crash_timestamp_.clear();
+}
+
+std::string& DebugCentral::GetCoredumpTimestampString() {
+  return crash_timestamp_;
+}
+
+std::string DebugCentral::CoredumpErrorCodeToString(
+    CoredumpErrorCode error_code, uint8_t sub_error_code) {
+  switch (error_code) {
+    case CoredumpErrorCode::kForceCollectCoredump:
+      return "Force Collect Coredump (BtFw)";
+    case CoredumpErrorCode::kControllerHwError:
+      return "Controller Hw Error (BtFw)";
+    case CoredumpErrorCode::kControllerRootInflammed: {
+      std::stringstream ss;
+      ss << "Controller Root Inflammed (vendor_error: 0x" << std::hex
+         << std::setw(2) << std::setfill('0')
+         << static_cast<int>(sub_error_code) << ") - "
+         << BqrErrorToStringView(static_cast<BqrErrorCode>(sub_error_code));
+      return ss.str();
+    }
+    case CoredumpErrorCode::kControllerDebugDumpWithoutRootInflammed:
+      return "Controller Debug Info Data Dump Without Root Inflammed (BtFw)";
+    case CoredumpErrorCode::kControllerDebugInfo:
+      return "Debug Info Event (BtFw)";
+    case CoredumpErrorCode::kVendor:
+      return "Vendor Error";
+    default: {
+      std::stringstream ss;
+      ss << "Unknown Error Code <" << static_cast<int>(error_code) << ">";
+      return ss.str();
+    }
+  }
 }
 
 }  // namespace debug
