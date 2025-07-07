@@ -78,6 +78,7 @@ const std::string kDumpReasonControllerRootInflammed =
 const std::string kDumpReasonControllerDebugDumpWithoutRootInflammed =
     "ControllerDebugInfoDataDumpWithoutRootInflammed";
 const std::string kDumpReasonControllerDebugInfo = "Debug Info Event";
+const std::string kDumpReasonVendor = "Vendor triggered coredump";
 
 const std::string kCrashInfoFilePath = "/data/vendor/ssrdump/";
 const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
@@ -288,6 +289,40 @@ DebugCentral& DebugCentral::Get() {
   return debug_central;
 }
 
+bool DebugCentral::RegisterCoredumpCallback(
+    const std::shared_ptr<CoredumpCallback> callback) {
+  if (!callback) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+
+  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
+                      callback);
+  if (it != coredump_callbacks_.end()) {
+    return false;
+  }
+
+  coredump_callbacks_.emplace(callback);
+  return true;
+}
+
+bool DebugCentral::UnregisterCoredumpCallback(
+    const std::shared_ptr<CoredumpCallback> callback) {
+  if (!callback) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+
+  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
+                      callback);
+  if (it == coredump_callbacks_.end()) {
+    return false;
+  }
+
+  coredump_callbacks_.erase(it);
+  return true;
+}
+
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
   DumpBluetoothHalLog(fd);
@@ -380,6 +415,39 @@ void DebugCentral::HandleDebugInfoCommand() {
 
 void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
   controller_firmware_info_ = info;
+}
+
+void DebugCentral::GenerateVendorDumpFile(const std::string& file_path,
+                                          const std::vector<uint8_t>& data,
+                                          bool silent_coredump) {
+  if (file_path.empty()) {
+    LOG(ERROR) << "File name is empty!";
+    return;
+  }
+  GenerateCrashDump(silent_coredump, kDumpReasonVendor);
+
+  std::stringstream fname_stream;
+  fname_stream << file_path << crash_timestamp_ << ".bin";
+
+  int fd;
+  std::string full_path = fname_stream.str();
+  if ((fd = open(full_path.c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
+                 S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
+    LOG(ERROR) << "Failed to open bluetooth hal dump file: " << full_path
+               << ", failed: " << strerror(errno) << " (" << errno << ")";
+    return;
+  }
+
+  if (chmod(full_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
+    LOG(ERROR) << "Unable to change file permissions " << full_path;
+  }
+
+  ssize_t ret = 0;
+  if ((ret = TEMP_FAILURE_RETRY(write(fd, data.data(), data.size()))) < 0) {
+    LOG(ERROR) << "Error writing to dest file: " << ret << " ("
+               << strerror(errno) << ")";
+  }
+  close(fd);
 }
 
 bool DebugCentral::IsHardwareStageSupported() {
@@ -510,6 +578,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
 
 void DebugCentral::GenerateCrashDump(bool silent_report,
                                      const std::string& reason) {
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
   if (!crash_timestamp_.empty()) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
@@ -543,36 +612,45 @@ void DebugCentral::GenerateCrashDump(bool silent_report,
 
   DumpBluetoothHalLog(coredump_fd);
   LOG(INFO) << __func__ << ": Request to get Transport Layer Debug Dump.";
-  // TODO: b/373786258 - Need to dump debug info.
   close(coredump_fd);
 
-  if (silent_report) {
-    return;
-  }
-  // generate crashinfo file
-  std::stringstream crashinfo_fname;
-  crashinfo_fname << kCrashInfoFilePath << kCrashInfoFilePrefix
-                  << crash_timestamp_ << ".txt";
+  if (!silent_report) {
+    // generate crashinfo file
+    std::stringstream crashinfo_fname;
+    crashinfo_fname << kCrashInfoFilePath << kCrashInfoFilePrefix
+                    << crash_timestamp_ << ".txt";
 
-  int crashinfo_fd;
-  if ((crashinfo_fd =
-           open(crashinfo_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-    LOG(ERROR) << __func__
-               << ": Failed to open crashinfo file: " << crashinfo_fname.str()
-               << ", failed: " << strerror(errno) << " (" << errno << ").";
-    return;
-  }
-  fchmod(crashinfo_fd, S_IRUSR | S_IRGRP | S_IROTH);
+    int crashinfo_fd;
+    if ((crashinfo_fd =
+             open(crashinfo_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
+                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
+      LOG(ERROR) << __func__
+                 << ": Failed to open crashinfo file: " << crashinfo_fname.str()
+                 << ", failed: " << strerror(errno) << " (" << errno << ").";
+      return;
+    }
+    fchmod(crashinfo_fd, S_IRUSR | S_IRGRP | S_IROTH);
 
-  std::stringstream crashinfo_ss;
-  static int crash_count = 0;
-  crashinfo_ss << "crash_reason: " << std::string(reason) << std::endl;
-  crash_count++;
-  crashinfo_ss << "crash_count: " << std::to_string(crash_count) << std::endl;
-  crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
-  write(crashinfo_fd, crashinfo_ss.str().c_str(), crashinfo_ss.str().length());
-  close(crashinfo_fd);
+    std::stringstream crashinfo_ss;
+    static int crash_count = 0;
+    crashinfo_ss << "crash_reason: " << std::string(reason) << std::endl;
+    crash_count++;
+    crashinfo_ss << "crash_count: " << std::to_string(crash_count) << std::endl;
+    crashinfo_ss << "timestamp: " << crash_timestamp_ << std::endl;
+    write(crashinfo_fd, crashinfo_ss.str().c_str(),
+          crashinfo_ss.str().length());
+    close(crashinfo_fd);
+  }
+
+  // Inform vendor implementations that the dump has started.
+  for (auto& callback_ptr : coredump_callbacks_) {
+    (*callback_ptr)(std::string(reason));
+  }
+}
+
+void DebugCentral::ResetCoredumpGenerator() {
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  crash_timestamp_.clear();
 }
 
 }  // namespace debug

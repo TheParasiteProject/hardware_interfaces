@@ -72,5 +72,13 @@ bool DebugMonitor::IsBluetoothEnabled() {
   return HciRouterClient::IsBluetoothEnabled();
 }
 
+void DebugMonitor::OnBluetoothEnabled() {
+  DebugCentral::Get().ResetCoredumpGenerator();
+}
+
+void DebugMonitor::OnBluetoothDisabled() {
+  DebugCentral::Get().ResetCoredumpGenerator();
+}
+
 }  //  namespace debug
 }  //  namespace bluetooth_hal
