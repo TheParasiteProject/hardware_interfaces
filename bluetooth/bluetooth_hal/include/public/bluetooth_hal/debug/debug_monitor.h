@@ -37,8 +37,8 @@ class DebugMonitor : public ::bluetooth_hal::hci::HciRouterClient {
       const ::bluetooth_hal::hci::HalPacket& packet) override;
   void OnBluetoothChipReady() override {};
   void OnBluetoothChipClosed() override {};
-  void OnBluetoothEnabled() override {};
-  void OnBluetoothDisabled() override {};
+  void OnBluetoothEnabled() override;
+  void OnBluetoothDisabled() override;
 
  private:
   ::bluetooth_hal::hci::HciCommandMonitor debug_info_command_monitor_;

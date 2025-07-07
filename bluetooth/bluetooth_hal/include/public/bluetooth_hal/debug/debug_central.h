@@ -25,6 +25,7 @@
 #include <queue>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "android-base/logging.h"
@@ -134,6 +135,8 @@ enum class AnchorType : uint8_t {
 namespace bluetooth_hal {
 namespace debug {
 
+using CoredumpCallback = std::function<void(const std::string& reason)>;
+
 class DurationTracker {
  public:
   DurationTracker(AnchorType type, const std::string& log);
@@ -152,6 +155,29 @@ class DebugCentral {
    * Get a singleton static instance of the debug central.
    */
   static DebugCentral& Get();
+
+  /**
+   * @brief Register a callback function which is invoked when the DebugCentral
+   * is generating a coredump. This is used for vendor customized debug code to
+   * react to the coerdump procedure.
+   *
+   * This method supports multiple callback registry.
+   *
+   * @param callback The callback function to be registered.
+   * @return return true if success, otherwise false.
+   */
+  bool RegisterCoredumpCallback(
+      const std::shared_ptr<CoredumpCallback> callback);
+
+  /**
+   * @brief Unregister the callback that was registered via
+   * RegisterCoredumpCallback.
+   *
+   * @param callback The callback function to be unregistered.
+   * @return return true if success, otherwise false.
+   */
+  bool UnregisterCoredumpCallback(
+      const std::shared_ptr<CoredumpCallback> callback);
 
   /*
    * Invokes when bugreport is triggered, dump all information to the debug fd.
@@ -209,6 +235,30 @@ class DebugCentral {
    */
   void SetControllerFirmwareInformation(const std::string& info);
 
+  /**
+   * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
+   * triggers the Bluetoth HAL core dump and prepare for a crash.
+   *
+   * The generated file name contains the timestamp of the first dump request in
+   * this Bluetooth cycle.
+   *
+   * @param file_path The path and the prefix of the file, for example
+   * "/path/file" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
+   * @param data The data to write into the file.
+   * @param silent_coredump Optional, default is false. It determines whether
+   * to trigger transport layer dump with it.
+   */
+  void GenerateVendorDumpFile(const std::string& file_path,
+                              const std::vector<uint8_t>& data,
+                              bool silent_coredump = true);
+
+  /**
+   * @brief The debug central only keeps one coredump per Bluetooth cycle.
+   * Invoking this function forces a reset to the coredump generator in case
+   * more coredumps are needed.
+   */
+  void ResetCoredumpGenerator();
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
@@ -225,6 +275,8 @@ class DebugCentral {
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
   DebugMonitor debug_monitor_;
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
+  std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
+  std::mutex coredump_mutex_;
 
   void DumpBluetoothHalLog(int fd);
   void GenerateCrashDump(bool slient_report, const std::string& reason);
