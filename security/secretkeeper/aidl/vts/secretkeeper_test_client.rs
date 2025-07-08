@@ -79,8 +79,10 @@ const SECRET_EXAMPLE: Secret = Secret([
 // Note that this is the identity of the `default` instance (and not `nonsecure`)!
 fn get_secretkeeper_identity(instance: &str) -> Option<CoseKey> {
     let sk = get_connection(instance);
-    let key_material = if sk.getInterfaceVersion().expect("Error getting sk interface version") >= 2 {
-        let PublicKey { keyMaterial } = sk.getSecretkeeperIdentity().expect("Error calling getSecretkeeperIdentity");
+    let key_material = if sk.getInterfaceVersion().expect("Error getting sk interface version") >= 2
+    {
+        let PublicKey { keyMaterial } =
+            sk.getSecretkeeperIdentity().expect("Error calling getSecretkeeperIdentity");
         Some(keyMaterial)
     } else {
         let path = Path::new(SECRETKEEPER_KEY_HOST_DT);
@@ -93,7 +95,8 @@ fn get_secretkeeper_identity(instance: &str) -> Option<CoseKey> {
     };
 
     key_material.map(|km| {
-        let mut cose_key = CoseKey::from_slice(&km).expect("Error deserializing CoseKey from key material");
+        let mut cose_key =
+            CoseKey::from_slice(&km).expect("Error deserializing CoseKey from key material");
         cose_key.canonicalize(CborOrdering::Lexicographic);
         cose_key
     })
@@ -615,6 +618,16 @@ fn secretkeeper_many_sessions_parallel(instance: String) {
         }));
     }
 
+    // Remove any IDs that might have been stored in the test - when _guard goes out of scope
+    let _guard = scopeguard::guard((), |_| {
+        let sk_client = SkClient::new(&instance).unwrap();
+        for idx in 0..SESSION_COUNT {
+            let mut id = ID_EXAMPLE.clone();
+            id.0[0] = idx as u8;
+            sk_client.delete(&[&id]);
+        }
+    });
+
     // Wait for all activity to quiesce.
     for handle in handles {
         let _result = handle.join();
@@ -625,13 +638,6 @@ fn secretkeeper_many_sessions_parallel(instance: String) {
     let mut sk_client = SkClient::new(&instance).unwrap();
     sk_client.store(&ID_EXAMPLE, &SECRET_EXAMPLE).unwrap();
     assert_eq!(sk_client.get(&ID_EXAMPLE).unwrap(), SECRET_EXAMPLE);
-
-    // Remove any IDs that might have been stored in the test.
-    for idx in 0..SESSION_COUNT {
-        let mut id = ID_EXAMPLE.clone();
-        id.0[0] = idx as u8;
-        sk_client.delete(&[&id]);
-    }
 }
 
 fn use_sk_may_fail(instance: String, idx: usize) -> Result<(), Error> {
