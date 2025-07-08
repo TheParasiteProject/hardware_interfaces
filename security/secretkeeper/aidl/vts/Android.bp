@@ -57,6 +57,7 @@ rust_test {
         "libdice_policy_builder",
         "libexplicitkeydice",
         "liblog_rust",
+        "libscopeguard",
         "libsecretkeeper_client",
         "libsecretkeeper_comm",
         "libsecretkeeper_core",
