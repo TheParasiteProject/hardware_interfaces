@@ -36,6 +36,62 @@
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
 
+/*
+ * SCOPED_ANCHOR is used to log the Enter and Exit of a HAL function and
+ * send to DebugCentral.
+ */
+#ifdef UNIT_TEST
+#define SCOPED_ANCHOR(type, log)
+#else
+#define SCOPED_ANCHOR(type, log)                                  \
+  ::bluetooth_hal::debug::DurationTracker duration_##__COUNTER__( \
+      ::bluetooth_hal::debug::type, log);
+#endif
+
+/*
+ * ANCHOR_LOG* is used to log a message with a specific severity level
+ * and send it to DebugCentral. It takes an anchor type as input.
+ */
+#define ANCHOR_LOG(type)                                              \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::VERBOSE, LOG_TAG))
+#define ANCHOR_LOG_DEBUG(type)                                        \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::DEBUG, LOG_TAG))
+#define ANCHOR_LOG_INFO(type)                                         \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::INFO, LOG_TAG))
+#define ANCHOR_LOG_WARNING(type)                                      \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::WARNING, LOG_TAG))
+#define ANCHOR_LOG_ERROR(type)                                        \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::ERROR, LOG_TAG))
+
+/*
+ * HAL_LOG pinrts system log, as well as stores it in the DebugCentral for
+ * Dump()
+ */
+#define HAL_LOG(severity)                           \
+  ([](auto&& logger) -> auto&& { return logger; })( \
+      ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
+
+/*
+ * Helper mecro for LogHelper to print system log with a specific tag.
+ */
+#define LOG_WITH_TAG(severity, tag)                                          \
+  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
+                              tag, -1)                                       \
+      .stream()
+
+namespace bluetooth_hal {
+namespace debug {
+
 enum class AnchorType : uint8_t {
   kNone = 0,
 
@@ -80,60 +136,6 @@ enum class AnchorType : uint8_t {
   // WakelockWatchdog
   kWatchdog,
 };
-
-/*
- * DURATION_TRACKER is used to log the Enter and Exit of a HAL function and
- * send to DebugCentral.
- */
-#ifdef UNIT_TEST
-#define DURATION_TRACKER(type, log)
-#else
-#define DURATION_TRACKER(type, log) \
-  ::bluetooth_hal::debug::DurationTracker duration_##__COUNTER__(type, log);
-#endif
-
-/*
- * ANCHOR_LOG* is used to log a message with a specific severity level
- * and send it to DebugCentral. It takes an anchor type as input.
- */
-#define ANCHOR_LOG(type)                                                \
-  ([](auto&& logger) -> auto&& { return logger; })(                     \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::VERBOSE, \
-                                        LOG_TAG))
-#define ANCHOR_LOG_DEBUG(type)   \
-  ([](auto&& logger) -> auto&& { \
-    return logger;               \
-  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::DEBUG, LOG_TAG))
-#define ANCHOR_LOG_INFO(type)                       \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::INFO, LOG_TAG))
-#define ANCHOR_LOG_WARNING(type)                                        \
-  ([](auto&& logger) -> auto&& { return logger; })(                     \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::WARNING, \
-                                        LOG_TAG))
-#define ANCHOR_LOG_ERROR(type)   \
-  ([](auto&& logger) -> auto&& { \
-    return logger;               \
-  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::ERROR, LOG_TAG))
-
-/*
- * HAL_LOG pinrts system log, as well as stores it in the DebugCentral for
- * Dump()
- */
-#define HAL_LOG(severity)                           \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
-
-/*
- * Helper mecro for LogHelper to print system log with a specific tag.
- */
-#define LOG_WITH_TAG(severity, tag)                                          \
-  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
-                              tag, -1)                                       \
-      .stream()
-
-namespace bluetooth_hal {
-namespace debug {
 
 enum class CoredumpErrorCode : uint8_t {
   kForceCollectCoredump,
