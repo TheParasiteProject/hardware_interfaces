@@ -106,6 +106,11 @@ void BluetoothHci::HandleServiceDied() {
     return;
   }
   HAL_LOG(ERROR) << __func__ << ": Bluetooth service died!";
+  if (DebugCentral::Get().IsCoredumpGenerated()) {
+    LOG(ERROR) << __func__
+               << ": Restart Bluetooth HAL after coredump is generated";
+    kill(getpid(), SIGKILL);
+  }
   Close();
 }
 

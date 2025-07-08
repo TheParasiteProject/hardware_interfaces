@@ -275,6 +275,13 @@ class DebugCentral {
   void ResetCoredumpGenerator();
 
   /**
+   * @brief Check if the DebugCentral is generating a coredump.
+   *
+   * @return true if the DebugCentral is generating a coredump, otherwise false.
+   */
+  bool IsCoredumpGenerated();
+
+  /**
    * @brief Get the timestamp of the coredump generated recently. The timestamp
    * string is used as the suffix of the coredump files.
    *
@@ -311,6 +318,7 @@ class DebugCentral {
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
   std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
   std::mutex coredump_mutex_;
+  bool is_coredump_generated_;
 
   void DumpBluetoothHalLog(int fd);
   void GenerateCoredump(CoredumpErrorCode error_code,

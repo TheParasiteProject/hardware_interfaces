@@ -69,6 +69,8 @@ class WakelockWatchdogImpl : public WakelockWatchdog {
  public:
   void Start(WakeSource source) override;
   void Stop(WakeSource source) override;
+  void Pause() override;
+  void Resume() override;
 
  private:
   void WatchdogTimerExpired();
@@ -80,6 +82,7 @@ class WakelockWatchdogImpl : public WakelockWatchdog {
   std::unordered_map<WakeSource, int> watchdog_map_;
   static constexpr int kWatchdogBarkMs = 1000;
   static const std::unordered_map<WakeSource, int> kWatchdogMs;
+  bool watchdog_paused_;
 };
 
 const std::unordered_map<WakeSource, int> WakelockWatchdogImpl::kWatchdogMs = {
@@ -111,6 +114,18 @@ void WakelockWatchdogImpl::Stop(WakeSource source) {
   }
 }
 
+void WakelockWatchdogImpl::Pause() {
+  std::scoped_lock<std::recursive_mutex> lock(mutex_);
+  HAL_LOG(WARNING) << __func__ << ": Watchdog is paused!";
+  watchdog_paused_ = true;
+}
+
+void WakelockWatchdogImpl::Resume() {
+  std::scoped_lock<std::recursive_mutex> lock(mutex_);
+  HAL_LOG(INFO) << __func__ << ": Watchdog is resumed";
+  watchdog_paused_ = false;
+}
+
 void WakelockWatchdogImpl::WatchdogTimerExpired() {
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   if (watchdog_map_.empty()) {
@@ -118,6 +133,7 @@ void WakelockWatchdogImpl::WatchdogTimerExpired() {
   }
 
   for (auto& it : watchdog_map_) {
+    if (watchdog_paused_) break;
     WakeSource source = it.first;
     it.second -= kWatchdogBarkMs;
     int remain_time = it.second;

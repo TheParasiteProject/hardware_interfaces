@@ -43,6 +43,7 @@
 #include "bluetooth_hal/hci_router.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/util/logging.h"
+#include "bluetooth_hal/util/power/wakelock_watchdog.h"
 
 namespace bluetooth_hal {
 namespace debug {
@@ -59,6 +60,7 @@ using ::bluetooth_hal::thread::ThreadHandler;
 using ::bluetooth_hal::transport::TransportInterface;
 using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::Logger;
+using ::bluetooth_hal::util::power::WakelockWatchdog;
 
 constexpr int kVseSubEventCodeOffset = 2;
 constexpr int kBqrReportIdOffset = 3;
@@ -558,11 +560,16 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
 void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
                                     uint8_t sub_error_code) {
   std::lock_guard<std::mutex> lock(coredump_mutex_);
-  if (!crash_timestamp_.empty()) {
+  if (is_coredump_generated_) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
     return;
   }
+
+  // Pause the watchdog to prevent it from biting before coredump is completed.
+  // The HAL will be restarted when the router state exits from Running state.
+  WakelockWatchdog::GetWatchdog().Pause();
+  is_coredump_generated_ = true;
 
   LOG(ERROR) << __func__ << ": Reason: "
              << CoredumpErrorCodeToString(error_code, sub_error_code);
@@ -598,9 +605,18 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
   }
 }
 
+bool DebugCentral::IsCoredumpGenerated() {
+  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  return is_coredump_generated_;
+}
+
 void DebugCentral::ResetCoredumpGenerator() {
   std::lock_guard<std::mutex> lock(coredump_mutex_);
   crash_timestamp_.clear();
+  if (is_coredump_generated_) {
+    HAL_LOG(ERROR) << "Reset Bluetooth HAL after generating coredump!";
+    kill(getpid(), SIGKILL);
+  }
 }
 
 std::string& DebugCentral::GetCoredumpTimestampString() {
