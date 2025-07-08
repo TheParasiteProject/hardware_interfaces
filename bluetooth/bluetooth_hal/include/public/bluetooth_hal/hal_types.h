@@ -203,6 +203,8 @@ class HciConstants {
 // Event codes as defined in Bluetooth Core Specification 5.4 Volume 4,
 // Part E, section 7.7.
 enum class EventCode : uint8_t {
+  kConnectionComplete = 0x03,
+  kDisconnectionComplete = 0x05,
   kCommandComplete = 0x0e,
   kCommandStatus = 0x0f,
   kBleMeta = 0x3e,

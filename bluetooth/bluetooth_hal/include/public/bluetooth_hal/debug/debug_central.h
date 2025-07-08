@@ -32,6 +32,7 @@
 #include "bluetooth_hal/bqr/bqr_handler.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
+#include "bluetooth_hal/debug/bluetooth_activities.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
@@ -315,6 +316,7 @@ class DebugCentral {
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
   DebugMonitor debug_monitor_;
+  BluetoothActivities bluetooth_activities_;
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
   std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
   std::mutex coredump_mutex_;
