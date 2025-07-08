@@ -22,26 +22,59 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <sstream>
+#include <string>
 
+#include "android-base/logging.h"
+#include "bluetooth_hal/bluetooth_address.h"
+#include "bluetooth_hal/debug/command_error_code.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
+#include "bluetooth_hal/hci_monitor.h"
+#include "bluetooth_hal/util/logging.h"
 
 namespace bluetooth_hal {
 namespace debug {
 namespace {
 
+using ::bluetooth_hal::hci::BleMetaEventSubCode;
 using ::bluetooth_hal::hci::EventCode;
+using ::bluetooth_hal::hci::EventResultCode;
 using ::bluetooth_hal::hci::HalPacket;
+using ::bluetooth_hal::hci::HciBleMetaEventMonitor;
 using ::bluetooth_hal::hci::HciEventMonitor;
 using ::bluetooth_hal::hci::MonitorMode;
+using ::bluetooth_hal::util::Logger;
 
-constexpr uint16_t kBtMaxConnectHistoryRecord = 1024;
+constexpr uint16_t kBtMaxConnectHistoryRecord = 64;
+constexpr size_t kBleConnectionEventStatusOffset = 4;
+constexpr size_t kBleConnectionHandleOffset = 5;
+constexpr size_t kBleConnectionBdAddressOffset = 9;
+constexpr size_t kConnectionEventStatusOffset = 3;
+constexpr size_t kConnectionHandleOffset = 4;
+constexpr size_t kConnectionBdAddressOffset = 6;
+constexpr size_t kDisconnectionEventStatusOffset = 3;
+constexpr size_t kDisconnectionHandleOffset = 4;
+constexpr int kUint8HexStringDigit = 2;
+constexpr int kUint16HexStringDigit = 4;
+
+std::string ToHexString(uint16_t value, int num_of_digits) {
+  std::stringstream ss;
+  ss << std::hex << std::setw(num_of_digits) << std::setfill('0') << value;
+  return "0x" + ss.str();
+}
 
 }  // namespace
 
 BluetoothActivities::BluetoothActivities()
-    : ble_connection_complete_event_monitor_(
-          HciEventMonitor(static_cast<uint8_t>(EventCode::kBleMeta))),
+    : ble_connection_complete_event_monitor_(HciBleMetaEventMonitor(
+          static_cast<uint8_t>(BleMetaEventSubCode::kConnectionComplete))),
+      ble_enhanced_connection_complete_v1_event_monitor_(
+          HciBleMetaEventMonitor(static_cast<uint8_t>(
+              BleMetaEventSubCode::kEnhancedConnectionCompleteV1))),
+      ble_enhanced_connection_complete_v2_event_monitor_(
+          HciBleMetaEventMonitor(static_cast<uint8_t>(
+              BleMetaEventSubCode::kEnhancedConnectionCompleteV2))),
       connection_complete_event_monitor_(HciEventMonitor(
           static_cast<uint8_t>(EventCode::kConnectionComplete))),
       disconnection_complete_event_monitor_(HciEventMonitor(
@@ -72,16 +105,66 @@ void BluetoothActivities::OnMonitorPacketCallback(
 }
 
 void BluetoothActivities::HandleBleMetaEvent(const HalPacket& event) {
-  (void)event;
+  uint8_t event_status = event.At(kBleConnectionEventStatusOffset);
+  ConnectionActivity activity{
+      .connection_handle =
+          event.AtUint16LittleEndian(kBleConnectionHandleOffset),
+      .bd_address = event.GetBluetoothAddressAt(kBleConnectionBdAddressOffset),
+      .event = "LE Connection Complete " +
+               ToHexString(event.GetBleSubEventCode(), kUint8HexStringDigit),
+      .status = std::string(GetResultString(event_status)),
+      .timestamp = Logger::GetLogFormatTimestamp(),
+  };
+  UpdateConnectionHistory(activity);
+
+  if (event_status == static_cast<uint8_t>(EventResultCode::kSuccess)) {
+    connected_device_address_[activity.connection_handle] = activity.bd_address;
+    LOG(INFO) << __func__ << ": " << activity.event << ", connection handle: "
+              << ToHexString(activity.connection_handle, kUint16HexStringDigit)
+              << ", BD address: " << activity.bd_address.ToString() << ".";
+  }
 }
 
 void BluetoothActivities::HandleConnectCompleteEvent(const HalPacket& event) {
-  (void)event;
+  uint8_t event_status = event.At(kConnectionEventStatusOffset);
+  ConnectionActivity activity{
+      .connection_handle = event.AtUint16LittleEndian(kConnectionHandleOffset),
+      .bd_address = event.GetBluetoothAddressAt(kConnectionBdAddressOffset),
+      .event = "Connect Complete " +
+               ToHexString(event.GetEventCode(), kUint8HexStringDigit),
+      .status = std::string(GetResultString(event_status)),
+      .timestamp = Logger::GetLogFormatTimestamp(),
+  };
+  UpdateConnectionHistory(activity);
+
+  if (event_status == static_cast<uint8_t>(EventResultCode::kSuccess)) {
+    connected_device_address_[activity.connection_handle] = activity.bd_address;
+    LOG(INFO) << __func__ << ": " << activity.event << ", connection handle: "
+              << ToHexString(activity.connection_handle, kUint16HexStringDigit)
+              << ", BD address: " << activity.bd_address.ToString() << ".";
+  }
 }
 
 void BluetoothActivities::HandleDisconnectCompleteEvent(
     const HalPacket& event) {
-  (void)event;
+  uint8_t event_status = event.At(kDisconnectionEventStatusOffset);
+  ConnectionActivity activity{
+      .connection_handle =
+          event.AtUint16LittleEndian(kDisconnectionHandleOffset),
+      .bd_address = connected_device_address_[activity.connection_handle],
+      .event = "Disconnect Complete " +
+               ToHexString(event.GetEventCode(), kUint8HexStringDigit),
+      .status = std::string(GetResultString(event_status)),
+      .timestamp = Logger::GetLogFormatTimestamp(),
+  };
+  UpdateConnectionHistory(activity);
+
+  if (event_status == static_cast<uint8_t>(EventResultCode::kSuccess)) {
+    connected_device_address_.erase(activity.connection_handle);
+    LOG(INFO) << __func__ << ": " << activity.event << ", connection handle: "
+              << ToHexString(activity.connection_handle, kUint16HexStringDigit)
+              << ", BD address: " << activity.bd_address.ToString() << ".";
+  }
 }
 
 void BluetoothActivities::UpdateConnectionHistory(

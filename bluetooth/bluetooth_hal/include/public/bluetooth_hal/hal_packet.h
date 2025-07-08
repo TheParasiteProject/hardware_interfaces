@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/hal_types.h"
 
 namespace bluetooth_hal {
@@ -376,6 +377,26 @@ class HalPacket : public std::vector<uint8_t> {
     return size() > HciConstants::kHciBleEventSubCodeOffset
                ? at(HciConstants::kHciBleEventSubCodeOffset)
                : 0;
+  }
+
+  /**
+   * @brief Get the Bluetooth address from the packet at a given offset.
+   *
+   * @param offset Template for the offset, which can be an enum or other
+   * numeric types, indicating the starting position of the address.
+   * @return The extracted BluetoothAddress. Returns an empty,
+   * default-constructed BluetoothAddress if the read would be out of bounds.
+   *
+   */
+  template <typename T>
+  BluetoothAddress GetBluetoothAddressAt(T offset) const {
+    size_t start_index = static_cast<size_t>(offset);
+    if (start_index + kBluetoothAddressLength > size()) {
+      return BluetoothAddress();
+    }
+    std::array<uint8_t, kBluetoothAddressLength> addr{};
+    std::copy_n(begin() + start_index, kBluetoothAddressLength, addr.begin());
+    return BluetoothAddress(addr);
   }
 
  private:

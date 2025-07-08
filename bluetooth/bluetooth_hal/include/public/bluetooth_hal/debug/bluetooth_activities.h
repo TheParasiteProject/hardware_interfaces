@@ -23,6 +23,7 @@
 
 #include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hci_monitor.h"
 #include "bluetooth_hal/hci_router_client.h"
 
 namespace bluetooth_hal {
@@ -66,7 +67,12 @@ class BluetoothActivities : public ::bluetooth_hal::hci::HciRouterClient {
   void HandleDisconnectCompleteEvent(
       const ::bluetooth_hal::hci::HalPacket& event);
 
-  ::bluetooth_hal::hci::HciEventMonitor ble_connection_complete_event_monitor_;
+  ::bluetooth_hal::hci::HciBleMetaEventMonitor
+      ble_connection_complete_event_monitor_;
+  ::bluetooth_hal::hci::HciBleMetaEventMonitor
+      ble_enhanced_connection_complete_v1_event_monitor_;
+  ::bluetooth_hal::hci::HciBleMetaEventMonitor
+      ble_enhanced_connection_complete_v2_event_monitor_;
   ::bluetooth_hal::hci::HciEventMonitor connection_complete_event_monitor_;
   ::bluetooth_hal::hci::HciEventMonitor disconnection_complete_event_monitor_;
   std::list<ConnectionActivity> connection_history_;

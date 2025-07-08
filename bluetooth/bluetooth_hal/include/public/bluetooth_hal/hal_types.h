@@ -216,6 +216,14 @@ enum class GoogleEventSubCode : uint8_t {
   kBqrEvent = 0x58,
 };
 
+enum class BleMetaEventSubCode : uint8_t {
+  // SubCode of BLE Meta Events as defined in Bluetooth Core Specification 6.0
+  // Volume 4, Part E, section 7.7.65.
+  kConnectionComplete = 0x01,
+  kEnhancedConnectionCompleteV1 = 0x0a,
+  kEnhancedConnectionCompleteV2 = 0x29,
+};
+
 enum class CommandOpCode : uint16_t {
   // Command opcodes as defined in Bluetooth Core Specification 5.4 Volume 4,
   // Part E, section 7.
