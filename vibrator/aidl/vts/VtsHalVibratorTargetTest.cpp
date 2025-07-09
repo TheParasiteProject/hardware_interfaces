@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/vibrator/IVibrator.h>
 #include <aidl/android/hardware/vibrator/IVibratorManager.h>
 
+#include <android-base/properties.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
 #include <android/persistable_bundle_aidl.h>
@@ -87,7 +88,8 @@ const std::vector<CompositePrimitive> kInvalidPrimitives = {
 };
 
 // Timeout to wait for vibration callback completion.
-static constexpr std::chrono::milliseconds VIBRATION_CALLBACK_TIMEOUT = 200ms;
+static const std::chrono::milliseconds VIBRATION_CALLBACK_TIMEOUT =
+        300ms * android::base::HwTimeoutMultiplier();
 
 static constexpr int32_t VENDOR_EFFECTS_MIN_VERSION = 3;
 static constexpr int32_t PWLE_V2_MIN_VERSION = 3;
