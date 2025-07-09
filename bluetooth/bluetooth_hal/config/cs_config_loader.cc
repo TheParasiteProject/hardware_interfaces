@@ -38,7 +38,6 @@ using ::bluetooth_hal::hci::HalPacket;
 
 using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
-using ::google::protobuf::util::Status;
 
 constexpr std::string_view kCsConfigFile =
     "/vendor/etc/bluetooth/bluetooth_channel_sounding_calibration.json";
@@ -87,7 +86,7 @@ bool CsConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
   JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
-  Status status = JsonStringToMessage(content, &calibration_commands, options);
+  auto status = JsonStringToMessage(content, &calibration_commands, options);
   if (!status.ok()) {
     LOG(ERROR) << __func__
                << ": Failed to parse json content, error: " << status.message();

@@ -226,8 +226,7 @@ class LoggerHandler {
   }
 
   void StartNewRecording() {
-    LOG(INFO) << __func__ << ": Start Recording bluetooth.";
-    log_file_path_ = GetLogPathWithTimeStamp(kBtLogPathPrefix);
+    LOG(INFO) << __func__ << ": Start recording vendor btsnoop log.";
     max_packets_per_file_ = GetMaxPacketsPerFile();
 
     const bool enabled = IsVndSnoopLogEnabled();
@@ -242,8 +241,7 @@ class LoggerHandler {
   }
 
   void StopRecording() {
-    LOG(INFO) << __func__ << ": Close btsnoop log data at " << log_file_path_
-              << ".";
+    LOG(INFO) << __func__ << ": Stop recording vendor btsnoop log.";
     CloseCurrentLogFile();
     state_ = State::kStoppedOrDisabled;
   }
@@ -325,26 +323,29 @@ class LoggerHandler {
   }
 
   void CloseCurrentLogFile() {
+    LOG(INFO) << __func__ << ": Close btsnoop log file.";
     os::CloseLogFileStream(log_ostream_);
     packet_counter_ = 0;
   }
 
   void OpenNewLogFile() {
+    const std::string log_file_path = GetLogPathWithTimeStamp(kBtLogPathPrefix);
     const mode_t previous_umask = umask(0);
+
     // Open file in binary write mode, without append, to overwrite existing
     // data.
-    log_ostream_.open(log_file_path_, std::ios::binary | std::ios::out);
+    log_ostream_.open(log_file_path, std::ios::binary | std::ios::out);
 
     // Set file permissions to OWNER Read/Write, GROUP Read, OTHER Read.
-    if (chmod(log_file_path_.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) !=
+    if (chmod(log_file_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) !=
         0) {
       LOG(ERROR) << __func__ << ": Unable to change file permissions for "
-                 << log_file_path_ << ".";
+                 << log_file_path << ".";
     }
 
     if (!log_ostream_.is_open()) {
       LOG(ERROR) << __func__ << ": Unable to open snoop log at \""
-                 << log_file_path_ << "\", error: \"" << strerror(errno)
+                 << log_file_path << "\", error: \"" << strerror(errno)
                  << "\".";
     }
 
@@ -353,7 +354,7 @@ class LoggerHandler {
     if (!log_ostream_.write(reinterpret_cast<const char*>(&kBtSnoopFileHeader),
                             sizeof(FileHeaderType))) {
       LOG(ERROR) << __func__ << ": Unable to write file header to \""
-                 << log_file_path_ << "\", error: \"" << strerror(errno)
+                 << log_file_path << "\", error: \"" << strerror(errno)
                  << "\".";
     }
 
@@ -362,7 +363,7 @@ class LoggerHandler {
                  << strerror(errno) << "\".";
     }
 
-    LOG(INFO) << __func__ << ": Open new btsnoop log file at " << log_file_path_
+    LOG(INFO) << __func__ << ": Open new btsnoop log file at " << log_file_path
               << ".";
   }
 
@@ -373,7 +374,6 @@ class LoggerHandler {
   }
 
   std::ofstream log_ostream_;
-  std::string log_file_path_;
   State state_{State::kStoppedOrDisabled};
   size_t max_packets_per_file_{0};
   size_t packet_counter_{0};
