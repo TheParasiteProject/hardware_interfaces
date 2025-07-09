@@ -22,12 +22,15 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <chrono>
+#include <cstddef>
 #include <fstream>
 #include <iomanip>
 #include <mutex>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -75,12 +78,8 @@ constexpr int kHwCodeOffset = 2;
 constexpr int kHandleDebugInfoCommandMs = 1000;
 const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
 const std::string kSsrdumpFilePrefix = "coredump_bt_";
-const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
-const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
 const std::string kSocdumpFilePath =
     "/data/vendor/ssrdump/coredump/coredump_bt_socdump_";
-const std::string kChredumpFilePath =
-    "/data/vendor/ssrdump/coredump/coredump_bt_chredump_";
 
 const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
@@ -120,78 +119,75 @@ void DumpDebugfs(int fd, const std::string& debugfs) {
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
-void read_as_hex(std::ifstream& file, std::stringstream& content) {
-  std::array<char, 64> memblock{};
-  while (!file.eof()) {
-    file.read(memblock.data(), memblock.size());
-    size_t len = file.gcount();
-    if (len == 0) continue;
-
-    for (size_t i = 0; i < len; i++) {
-      content << std::setbase(16) << std::setw(2) << std::setfill('0')
-              << (memblock[i] & 0xff);
-    }
-    content << "\n";
-  }
-}
-
-void GetStringLogFromStorage(int fd, const std::string& prefix,
-                             const std::string& dir) {
-  std::unique_ptr<DIR, decltype(&closedir)> dir_dump(opendir(dir.c_str()),
-                                                     closedir);
-
-  if (!dir_dump) {
-    LOG(WARNING) << __func__ << ": Failed to open directory, skip " << prefix
-                 << ".";
+void FlushCoredumpToFd(int fd) {
+  std::unique_ptr<DIR, decltype(&closedir)> dir(
+      opendir(kSsrdumpFilePath.c_str()), closedir);
+  if (!dir) {
+    LOG(WARNING) << __func__
+                 << ": Failed to open directory: " << kSsrdumpFilePath;
     return;
   }
 
-  std::stringstream content;
-  struct dirent* dp;
-  while ((dp = readdir(dir_dump.get()))) {
-    std::ifstream file;
-    std::string file_name;
-    std::stringstream path;
+  const std::regex target_file_regex(
+      R"(coredump_bt_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.bin)");
+  std::stringstream ss;
+  struct dirent* entry;
 
-    if (dp->d_type != DT_REG) {
+  while ((entry = readdir(dir.get())) != nullptr) {
+    if (std::string(entry->d_name) == "." ||
+        std::string(entry->d_name) == "..") {
       continue;
     }
-    file_name = dp->d_name;
-    size_t pos = file_name.find(prefix);
-    if (pos != 0) {
+    std::string file_name = entry->d_name;
+    std::string full_path = kSsrdumpFilePath + file_name;
+
+    if (!std::regex_match(file_name, target_file_regex)) {
+      LOG(INFO) << __func__ << "Skipping file: " << file_name;
       continue;
     }
 
-    path << dir << file_name;
-    LOG(DEBUG) << __func__ << ": Dumping " << path.str() << ".";
-
-    // for coredump_bt_socdump_[timestamp].bin
-    std::size_t last_dot = file_name.rfind('.');
-    bool is_bin = (last_dot != std::string::npos &&
-                   file_name.substr(last_dot + 1) == "bin" &&
-                   (file_name.find(kSsrdumpSocFilePrefix) == 0 ||
-                    file_name.find(kSsrdumpChreFilePrefix) == 0));
-    if (is_bin)
-      file.open(path.str(), std::ifstream::binary);
-    else
-      file.open(path.str());
-    content << "*********************************************\n\n";
-    content << "BEGIN of LogFile: " << file_name << "\n\n";
-    content << "*********************************************\n";
-    if (file_name.length() != 0 && file.is_open()) {
-      if (is_bin) {
-        read_as_hex(file, content);
-      } else {
-        content << file.rdbuf() << std::endl;
-      }
-    } else {
-      content << "File open failed: " << prefix << std::endl;
+    struct stat file_stat;
+    if (stat(full_path.c_str(), &file_stat) == -1 ||
+        !S_ISREG(file_stat.st_mode)) {
+      continue;
     }
-    content << "*********************************************\n\n";
-    content << "END of LogFile: " << file_name << "\n\n";
-    content << "*********************************************\n\n";
+
+    LOG(INFO) << __func__ << ": Dumping " << full_path << ".";
+
+    std::ifstream input_file(full_path, std::ios::binary);
+    if (!input_file.is_open()) {
+      ss << "*********************************************\n";
+      ss << "ERROR: Failed to open file: " << full_path << "\n";
+      ss << "*********************************************\n\n";
+      LOG(ERROR) << __func__ << ": Failed to open file: " << full_path;
+      continue;
+    }
+
+    ss << "*********************************************\n";
+    ss << "BEGIN of LogFile: " << file_name << "\n";
+    ss << "*********************************************\n\n";
+    ss << input_file.rdbuf();
+    ss << "\n*********************************************\n";
+    ss << "END of LogFile: " << file_name << "\n";
+    ss << "*********************************************\n\n";
+    input_file.close();
   }
-  write(fd, content.str().c_str(), content.str().length());
+
+  std::string final_output = ss.str();
+  if (!final_output.empty()) {
+    ssize_t bytes_written =
+        write(fd, final_output.c_str(), final_output.length());
+    if (bytes_written == -1) {
+      LOG(ERROR) << __func__ << ": Failed to write to file descriptor " << fd
+                 << ". Error: " << strerror(errno);
+    } else if (static_cast<size_t>(bytes_written) != final_output.length()) {
+      LOG(WARNING) << __func__ << ": Incomplete write to file descriptor " << fd
+                   << ". Wrote " << bytes_written << " of "
+                   << final_output.length() << " bytes.";
+    }
+  } else {
+    LOG(INFO) << __func__ << ": No coredump files found to dump.";
+  }
 }
 
 int OpenFileWithTimestamp(const std::string& crash_timestamp) {
@@ -325,7 +321,7 @@ void DebugCentral::Dump(int fd) {
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  GetStringLogFromStorage(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
+  FlushCoredumpToFd(fd);
   // Dump Controller BT Activities Statistics
   BtActivitiesLogger::GetInstacne()->ForceUpdating();
   BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
