@@ -25,7 +25,10 @@
 
 #include <tinyxml2.h>
 
+#include <condition_variable>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <type_traits>
