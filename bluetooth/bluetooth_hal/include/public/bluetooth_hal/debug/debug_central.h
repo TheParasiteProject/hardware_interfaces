@@ -257,7 +257,7 @@ class DebugCentral {
    * this Bluetooth cycle.
    *
    * @param file_path The path and the prefix of the file, for example
-   * "/path/file" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
+   * "/path/file-" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
    * @param data The data to write into the file.
    * @param vendor_error_code The vendor specific error code to record in the
    * coredump file. If the coredump was initiated by the vendor implementation,
@@ -325,6 +325,8 @@ class DebugCentral {
                         uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
+  std::string GetOrCreateCoredumpTimestampString();
+  int OpenOrCreateCoredumpBin(const std::string& file_prefix);
 };
 
 class LogHelper {
