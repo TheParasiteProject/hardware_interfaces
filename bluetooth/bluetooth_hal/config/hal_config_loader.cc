@@ -48,7 +48,6 @@ using ::bluetooth_hal::util::AndroidBaseWrapper;
 
 using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
-using ::google::protobuf::util::Status;
 
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
@@ -325,7 +324,7 @@ bool HalConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
   JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
-  Status status = JsonStringToMessage(content, &config, options);
+  auto status = JsonStringToMessage(content, &config, options);
   if (!status.ok()) {
     LOG(ERROR) << __func__
                << ": Failed to parse json file, error: " << status.message();
