@@ -95,16 +95,16 @@ void DumpDebugfs(int fd, const std::string& debugfs) {
   std::stringstream ss;
   std::ifstream file;
 
-  ss << "=============================================" << std::endl;
-  ss << "Debugfs:" << debugfs << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t  Debugfs:" << debugfs << std::endl;
+  ss << "║\t=============================================" << std::endl;
   file.open(debugfs);
   if (file.is_open()) {
-    ss << file.rdbuf() << std::endl;
+    ss << "║\t\t" << file.rdbuf() << std::endl;
   } else {
-    ss << "Fail to read debugfs: " << debugfs << std::endl;
+    ss << "║\t\tFail to read debugfs: " << debugfs << std::endl;
   }
-  ss << std::endl;
+  ss << "║" << std::endl;
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
@@ -189,20 +189,22 @@ void FlushCoredumpToFd(int fd) {
 
     std::ifstream input_file(full_path, std::ios::binary);
     if (!input_file.is_open()) {
-      ss << "*********************************************\n";
-      ss << "ERROR: Failed to open file: " << full_path << "\n";
-      ss << "*********************************************\n\n";
+      ss << "╔══════════════════════════════════════════════════════════\n";
+      ss << "║ ERROR: Failed to open file: " << full_path << "\n";
+      ss << "╚══════════════════════════════════════════════════════════\n";
       LOG(ERROR) << __func__ << ": Failed to open file: " << full_path;
       continue;
     }
 
-    ss << "*********************************************\n";
-    ss << "BEGIN of LogFile: " << file_name << "\n";
-    ss << "*********************************************\n\n";
+    ss << "╔══════════════════════════════════════════════════════════\n";
+    ss << "║ BEGIN of LogFile: " << file_name << "\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║\n";
     ss << input_file.rdbuf();
-    ss << "\n*********************************************\n";
-    ss << "END of LogFile: " << file_name << "\n";
-    ss << "*********************************************\n\n";
+    ss << "║\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║ END of LogFile: " << file_name << "\n";
+    ss << "╚══════════════════════════════════════════════════════════\n";
     input_file.close();
   }
 
@@ -284,7 +286,7 @@ bool DebugCentral::UnregisterCoredumpCallback(
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
-  DumpBluetoothHalLog(fd);
+  DumpBluetoothHalLog(fd, true /*add_header*/);
   if (TransportInterface::GetTransportType() == TransportType::kUartH4) {
     // Dump Kernel driver debugfs log
     DumpDebugfs(fd, serial_debug_port_);
@@ -293,10 +295,10 @@ void DebugCentral::Dump(int fd) {
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  FlushCoredumpToFd(fd);
   // Dump Controller BT Activities Statistics
   BtActivitiesLogger::GetInstacne()->ForceUpdating();
   BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
+  FlushCoredumpToFd(fd);
 }
 
 void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
@@ -421,33 +423,48 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-void DebugCentral::DumpBluetoothHalLog(int fd) {
+void DebugCentral::DumpBluetoothHalLog(int fd, bool add_header) {
   std::stringstream ss;
 
-  ss << "=============================================" << std::endl;
-  ss << "Controller Firmware Information" << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << controller_firmware_info_ << std::endl;
+  if (add_header) {
+    ss << "╔══════════════════════════════════════════════════════════\n";
+    ss << "║ START of Bluetooth HAL DUMP\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║\n";
+  }
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t  Controller Firmware Information" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t\t" << controller_firmware_info_ << std::endl;
 
-  ss << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << "Anchors' Last Appear" << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\tAnchors' Last Appear" << std::endl;
+  ss << "║\t=============================================" << std::endl;
   for (auto it = lasttime_record_.begin(); it != lasttime_record_.end(); ++it) {
     std::string anchor = it->second.first;
     std::string anchor_timestamp = it->second.second;
-    ss << "Timestamp of " << anchor << ": " << anchor_timestamp << std::endl;
+    ss << "║\t\tTimestamp of " << anchor << ": " << anchor_timestamp
+       << std::endl;
   }
 
-  ss << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << "Anchors' History" << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\tAnchors' History" << std::endl;
+  ss << "║\t=============================================" << std::endl;
   for (auto it = history_record_.begin(); it != history_record_.end(); ++it) {
     std::string anchor = it->first;
     std::string anchor_timestamp = it->second;
-    ss << anchor_timestamp << ": " << anchor << std::endl;
+    ss << "║\t\t" << anchor_timestamp << ": " << anchor << std::endl;
   }
+
+  if (add_header) {
+    ss << "║\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║ END of Bluetooth HAL DUMP\n";
+    ss << "╚══════════════════════════════════════════════════════════\n";
+  }
+  ss << std::endl;
   write(fd, ss.str().c_str(), ss.str().length());
 }
 

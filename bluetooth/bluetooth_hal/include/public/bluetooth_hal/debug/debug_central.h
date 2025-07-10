@@ -320,7 +320,7 @@ class DebugCentral {
   std::mutex coredump_mutex_;
   bool is_coredump_generated_;
 
-  void DumpBluetoothHalLog(int fd);
+  void DumpBluetoothHalLog(int fd, bool add_header = false);
   void GenerateCoredump(CoredumpErrorCode error_code,
                         uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
