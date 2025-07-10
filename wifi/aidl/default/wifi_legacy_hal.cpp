@@ -20,6 +20,7 @@
 #include <cutils/properties.h>
 #include <net/if.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 

@@ -18,6 +18,7 @@
 #include <aidl/android/hardware/radio/config/IRadioConfig.h>
 #include <aidl/android/hardware/radio/network/IndicationFilter.h>
 #include <android/binder_manager.h>
+#include <algorithm>
 
 #include "radio_network_utils.h"
 
