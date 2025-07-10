@@ -200,8 +200,8 @@ bool ThreadDaemon::NotifyDaemonToStop() {
 }
 
 bool ThreadDaemon::AcceptClient() {
-  DURATION_TRACKER(AnchorType::kThreadAcceptClient,
-                   ::android::base::StringPrintf("Accept Thread client"));
+  SCOPED_ANCHOR(AnchorType::kThreadAcceptClient,
+                ::android::base::StringPrintf("Accept Thread client"));
   LOG(DEBUG) << __func__ << ": Start processing connect request from client.";
 
   int new_client_socket = socket_processor_->AcceptClient();

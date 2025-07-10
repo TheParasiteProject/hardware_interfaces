@@ -36,6 +36,62 @@
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
 
+/*
+ * SCOPED_ANCHOR is used to log the Enter and Exit of a HAL function and
+ * send to DebugCentral.
+ */
+#ifdef UNIT_TEST
+#define SCOPED_ANCHOR(type, log)
+#else
+#define SCOPED_ANCHOR(type, log)                                  \
+  ::bluetooth_hal::debug::DurationTracker duration_##__COUNTER__( \
+      ::bluetooth_hal::debug::type, log);
+#endif
+
+/*
+ * ANCHOR_LOG* is used to log a message with a specific severity level
+ * and send it to DebugCentral. It takes an anchor type as input.
+ */
+#define ANCHOR_LOG(type)                                              \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::VERBOSE, LOG_TAG))
+#define ANCHOR_LOG_DEBUG(type)                                        \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::DEBUG, LOG_TAG))
+#define ANCHOR_LOG_INFO(type)                                         \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::INFO, LOG_TAG))
+#define ANCHOR_LOG_WARNING(type)                                      \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::WARNING, LOG_TAG))
+#define ANCHOR_LOG_ERROR(type)                                        \
+  ([](auto&& logger) -> auto&& { return logger; })(                   \
+      ::bluetooth_hal::debug::LogHelper(::bluetooth_hal::debug::type, \
+                                        ::android::base::ERROR, LOG_TAG))
+
+/*
+ * HAL_LOG pinrts system log, as well as stores it in the DebugCentral for
+ * Dump()
+ */
+#define HAL_LOG(severity)                           \
+  ([](auto&& logger) -> auto&& { return logger; })( \
+      ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
+
+/*
+ * Helper mecro for LogHelper to print system log with a specific tag.
+ */
+#define LOG_WITH_TAG(severity, tag)                                          \
+  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
+                              tag, -1)                                       \
+      .stream()
+
+namespace bluetooth_hal {
+namespace debug {
+
 enum class AnchorType : uint8_t {
   kNone = 0,
 
@@ -81,61 +137,17 @@ enum class AnchorType : uint8_t {
   kWatchdog,
 };
 
-/*
- * DURATION_TRACKER is used to log the Enter and Exit of a HAL function and
- * send to DebugCentral.
- */
-#ifdef UNIT_TEST
-#define DURATION_TRACKER(type, log)
-#else
-#define DURATION_TRACKER(type, log) \
-  ::bluetooth_hal::debug::DurationTracker duration_##__COUNTER__(type, log);
-#endif
+enum class CoredumpErrorCode : uint8_t {
+  kForceCollectCoredump,
+  kControllerHwError,
+  kControllerRootInflammed,
+  kControllerDebugDumpWithoutRootInflammed,
+  kControllerDebugInfo,
+  kVendor = 0xFF,
+};
 
-/*
- * ANCHOR_LOG* is used to log a message with a specific severity level
- * and send it to DebugCentral. It takes an anchor type as input.
- */
-#define ANCHOR_LOG(type)                                                \
-  ([](auto&& logger) -> auto&& { return logger; })(                     \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::VERBOSE, \
-                                        LOG_TAG))
-#define ANCHOR_LOG_DEBUG(type)   \
-  ([](auto&& logger) -> auto&& { \
-    return logger;               \
-  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::DEBUG, LOG_TAG))
-#define ANCHOR_LOG_INFO(type)                       \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::INFO, LOG_TAG))
-#define ANCHOR_LOG_WARNING(type)                                        \
-  ([](auto&& logger) -> auto&& { return logger; })(                     \
-      ::bluetooth_hal::debug::LogHelper(type, ::android::base::WARNING, \
-                                        LOG_TAG))
-#define ANCHOR_LOG_ERROR(type)   \
-  ([](auto&& logger) -> auto&& { \
-    return logger;               \
-  })(::bluetooth_hal::debug::LogHelper(type, ::android::base::ERROR, LOG_TAG))
-
-/*
- * HAL_LOG pinrts system log, as well as stores it in the DebugCentral for
- * Dump()
- */
-#define HAL_LOG(severity)                           \
-  ([](auto&& logger) -> auto&& { return logger; })( \
-      ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
-
-/*
- * Helper mecro for LogHelper to print system log with a specific tag.
- */
-#define LOG_WITH_TAG(severity, tag)                                          \
-  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
-                              tag, -1)                                       \
-      .stream()
-
-namespace bluetooth_hal {
-namespace debug {
-
-using CoredumpCallback = std::function<void(const std::string& reason)>;
+using CoredumpCallback =
+    std::function<void(CoredumpErrorCode error_code, uint8_t sub_error_code)>;
 
 class DurationTracker {
  public:
@@ -237,7 +249,9 @@ class DebugCentral {
 
   /**
    * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
-   * triggers the Bluetoth HAL core dump and prepare for a crash.
+   * triggers the Bluetoth HAL core dump and prepare for a crash. It can trigger
+   * a CoredumpCallback to the caller if the coredump procedure was initiated by
+   * the vendor implementation.
    *
    * The generated file name contains the timestamp of the first dump request in
    * this Bluetooth cycle.
@@ -245,12 +259,13 @@ class DebugCentral {
    * @param file_path The path and the prefix of the file, for example
    * "/path/file" generates a dump file of "/path/file-YYYY-MM-DD-SS.bin".
    * @param data The data to write into the file.
-   * @param silent_coredump Optional, default is false. It determines whether
-   * to trigger transport layer dump with it.
+   * @param vendor_error_code The vendor specific error code to record in the
+   * coredump file. If the coredump was initiated by the vendor implementation,
+   * this vendor erroc code is also sent back to the caller as sub_error_code.
    */
   void GenerateVendorDumpFile(const std::string& file_path,
                               const std::vector<uint8_t>& data,
-                              bool silent_coredump = true);
+                              uint8_t vendor_error_code = 0);
 
   /**
    * @brief The debug central only keeps one coredump per Bluetooth cycle.
@@ -259,15 +274,41 @@ class DebugCentral {
    */
   void ResetCoredumpGenerator();
 
+  /**
+   * @brief Check if the DebugCentral is generating a coredump.
+   *
+   * @return true if the DebugCentral is generating a coredump, otherwise false.
+   */
+  bool IsCoredumpGenerated();
+
+  /**
+   * @brief Get the timestamp of the coredump generated recently. The timestamp
+   * string is used as the suffix of the coredump files.
+   *
+   * @return The coredump timestamp in std::string, with the format of
+   * YYYY-MM-DD-MM-SS. Returns an empty string if no coredump was generated
+   * recently.
+   */
+  std::string& GetCoredumpTimestampString();
+
+  /**
+   * @brief A helper function that returns the std::string format of
+   * CoredumpErrorCode.
+   *
+   * @param error_code The CoredumpErrorCode to transform to string.
+   * @param sub_error_code An optional sub error code that is used by some of
+   * the CoredumpErrorCodes.
+   * @return The CoredumpErrorCode in std::string.
+   */
+  static std::string CoredumpErrorCodeToString(CoredumpErrorCode error_code,
+                                               uint8_t sub_error_code);
+
  private:
   static constexpr int kMaxHistory = 400;
   // Determine if we should hijack the vendor debug event or not
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  // std::vector<std::unique_ptr<hci::HciEventWatcher>> event_watchers_;
-  std::queue<std::vector<uint8_t>> socdump_;
-  std::queue<std::vector<uint8_t>> chredump_;
   // BtHal Logger
   std::string controller_firmware_info_;
   std::list<std::pair<std::string, std::string>> history_record_;
@@ -277,9 +318,11 @@ class DebugCentral {
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
   std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
   std::mutex coredump_mutex_;
+  bool is_coredump_generated_;
 
   void DumpBluetoothHalLog(int fd);
-  void GenerateCrashDump(bool slient_report, const std::string& reason);
+  void GenerateCoredump(CoredumpErrorCode error_code,
+                        uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
 };

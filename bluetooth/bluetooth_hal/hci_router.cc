@@ -149,7 +149,7 @@ class TxHandler {
   };
 
   void TxTaskDispatcher(TxTask task) {
-    DURATION_TRACKER(AnchorType::kTxTask, __func__);
+    SCOPED_ANCHOR(AnchorType::kTxTask, __func__);
     HAL_LOG(VERBOSE) << "TxHandler: dispatching TxTask type:"
                      << task.ToString();
     switch (task.type) {
@@ -369,7 +369,7 @@ HciRouterImpl::HciRouterImpl() {
 
 bool HciRouterImpl::Initialize(
     const std::shared_ptr<HciRouterCallback>& callback) {
-  DURATION_TRACKER(AnchorType::kRouterInitialize, __func__);
+  SCOPED_ANCHOR(AnchorType::kRouterInitialize, __func__);
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   HAL_LOG(INFO) << "Initializing Bluetooth HCI Router.";
   hci_callback_ = callback;
@@ -612,7 +612,7 @@ void HciRouterImpl::HandleCommandCompleteOrCommandStatusEvent(
 
 void HciRouterImpl::OnTransportPacketReady(const HalPacket& packet) {
   ScopedWakelock wakelock(WakeSource::kRx);
-  DURATION_TRACKER(AnchorType::kRxTask, __func__);
+  SCOPED_ANCHOR(AnchorType::kRxTask, __func__);
   HAL_LOG(VERBOSE) << __func__ << ": " << packet.ToString();
   packet.SetDestination(PacketDestination::kHost);
 

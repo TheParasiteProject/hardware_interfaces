@@ -94,7 +94,7 @@ std::string GetRfkillStatePath() {
 // TODO: b/421766932 - Add battery level query.
 
 bool PowerManager::PowerControl(bool is_enabled) {
-  DURATION_TRACKER(AnchorType::kPowerControl, __func__);
+  SCOPED_ANCHOR(AnchorType::kPowerControl, __func__);
 
   const std::string state_path = GetRfkillStatePath();
   if (state_path.empty()) {
