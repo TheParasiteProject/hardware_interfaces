@@ -287,7 +287,7 @@ bool DebugCentral::UnregisterCoredumpCallback(
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
   DumpBluetoothHalLog(fd, true /*add_header*/);
-  if (TransportInterface::GetTransportType() == TransportType::kUartH4) {
+  if (!serial_debug_port_.empty()) {
     // Dump Kernel driver debugfs log
     DumpDebugfs(fd, serial_debug_port_);
     DumpDebugfs(fd, kDebugNodeBtLpm);
