@@ -14,3 +14,13 @@ flag {
     description: "Flag for using sw offload path to send premium audio"
     bug: "398885696"
 }
+
+flag {
+    name: "leaudio_allow_low_latency_lea_offload"
+    namespace: "pixel_bluetooth"
+    description: "Flag for allowing low-latency mode in le audio hw enc offload session"
+    bug: "425591149"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+  }
+}

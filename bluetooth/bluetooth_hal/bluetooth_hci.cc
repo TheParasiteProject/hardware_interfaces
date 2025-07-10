@@ -106,11 +106,16 @@ void BluetoothHci::HandleServiceDied() {
     return;
   }
   HAL_LOG(ERROR) << __func__ << ": Bluetooth service died!";
+  if (DebugCentral::Get().IsCoredumpGenerated()) {
+    LOG(ERROR) << __func__
+               << ": Restart Bluetooth HAL after coredump is generated";
+    kill(getpid(), SIGKILL);
+  }
   Close();
 }
 
 bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
-  DURATION_TRACKER(AnchorType::kInitialize, __func__);
+  SCOPED_ANCHOR(AnchorType::kInitialize, __func__);
   ScopedWakelock wakelock(WakeSource::kInitialize);
 
   LOG(INFO) << "Initializing Bluetooth HAL.";
@@ -130,7 +135,7 @@ bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
 }
 
 bool BluetoothHci::SendHciCommand(const HalPacket& packet) {
-  DURATION_TRACKER(
+  SCOPED_ANCHOR(
       AnchorType::kSendHciCommand,
       (std::stringstream() << __func__ << ": 0x" << std::hex << std::setw(4)
                            << std::setfill('0') << packet.GetCommandOpcode()
@@ -141,7 +146,7 @@ bool BluetoothHci::SendHciCommand(const HalPacket& packet) {
 }
 
 bool BluetoothHci::SendAclData(const HalPacket& packet) {
-  DURATION_TRACKER(
+  SCOPED_ANCHOR(
       AnchorType::kSendAclData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
@@ -150,7 +155,7 @@ bool BluetoothHci::SendAclData(const HalPacket& packet) {
 }
 
 bool BluetoothHci::SendScoData(const HalPacket& packet) {
-  DURATION_TRACKER(
+  SCOPED_ANCHOR(
       AnchorType::kSendScoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
@@ -159,7 +164,7 @@ bool BluetoothHci::SendScoData(const HalPacket& packet) {
 }
 
 bool BluetoothHci::SendIsoData(const HalPacket& packet) {
-  DURATION_TRACKER(
+  SCOPED_ANCHOR(
       AnchorType::kSendIsoData,
       (std::stringstream() << __func__ << ": " << packet.size() << " bytes")
           .str());
@@ -196,7 +201,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
   HciPacketType type = packet.GetType();
   switch (type) {
     case HciPacketType::kEvent: {
-      DURATION_TRACKER(
+      SCOPED_ANCHOR(
           AnchorType::kCallbackHciEvent,
           (std::stringstream() << "BluetoothHciCallback->hciEventReceived: "
                                << packet.size() << " bytes")
@@ -205,7 +210,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kAclData: {
-      DURATION_TRACKER(
+      SCOPED_ANCHOR(
           AnchorType::kCallbackAclData,
           (std::stringstream() << "BluetoothHciCallback->aclDataReceived: "
                                << packet.size() << " bytes")
@@ -214,7 +219,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kScoData: {
-      DURATION_TRACKER(
+      SCOPED_ANCHOR(
           AnchorType::kCallbackScoData,
           (std::stringstream() << "BluetoothHciCallback->scoDataReceived: "
                                << packet.size() << " bytes")
@@ -223,7 +228,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
       break;
     }
     case HciPacketType::kIsoData: {
-      DURATION_TRACKER(
+      SCOPED_ANCHOR(
           AnchorType::kCallbackIsoData,
           (std::stringstream() << "BluetoothHciCallback->isoDataReceived: "
                                << packet.size() << " bytes")

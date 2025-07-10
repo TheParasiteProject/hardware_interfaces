@@ -83,7 +83,7 @@ bool ConfigureUartPort(int fd) {
 }  // namespace
 
 bool UartManager::Open() {
-  DURATION_TRACKER(AnchorType::kUserialOpen, __func__);
+  SCOPED_ANCHOR(AnchorType::kUserialOpen, __func__);
 
   const std::string bt_uart_port =
       HalConfigLoader::GetLoader().GetBtUartDevicePort();
@@ -118,7 +118,7 @@ bool UartManager::Open() {
 }
 
 void UartManager::Close() {
-  DURATION_TRACKER(AnchorType::kUserialClose, __func__);
+  SCOPED_ANCHOR(AnchorType::kUserialClose, __func__);
   uart_fd_.reset();
 }
 

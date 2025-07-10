@@ -1437,6 +1437,8 @@ ndk::ScopedAStatus Module::resetAudioPatch(int32_t in_patchId) {
 
 ndk::ScopedAStatus Module::resetAudioPortConfig(int32_t in_portConfigId) {
     auto& configs = getConfig().portConfigs;
+    LOG(DEBUG) << __func__ << ": " << mType << ": in_portConfigId " << in_portConfigId
+               << " configs size: " << configs.size();
     auto configIt = findById<AudioPortConfig>(configs, in_portConfigId);
     if (configIt != configs.end()) {
         if (mStreams.count(in_portConfigId) != 0) {
