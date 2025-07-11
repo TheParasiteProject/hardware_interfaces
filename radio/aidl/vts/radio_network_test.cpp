@@ -78,15 +78,6 @@ void RadioNetworkTest::SetUp() {
     ASSERT_NE(nullptr, radio_config.get());
 }
 
-bool RadioNetworkTest::shouldTestCdma() {
-    int32_t aidl_version = 0;
-    ndk::ScopedAStatus aidl_status = radio_network->getInterfaceVersion(&aidl_version);
-    EXPECT_TRUE(aidl_status.isOk());
-    if (aidl_version < 4) return true;  // < RADIO_HAL_VERSION_2_3
-
-    return !telephony_flags::cleanup_cdma();
-}
-
 void RadioNetworkTest::stopNetworkScan() {
     serial = GetRandomSerialNumber();
     radio_network->stopNetworkScan(serial);
@@ -1687,43 +1678,6 @@ TEST_P(RadioNetworkTest, getDataRegistrationState) {
 }
 
 /*
- * Test IRadioNetwork.getAvailableBandModes() for the response returned.
- */
-TEST_P(RadioNetworkTest, getAvailableBandModes) {
-    if (!shouldTestCdma()) {
-        GTEST_SKIP() << "Skipping CDMA testing (deprecated)";
-    }
-    if (!deviceSupportsFeature(FEATURE_TELEPHONY_RADIO_ACCESS)) {
-        GTEST_SKIP() << "Skipping getAvailableBandModes "
-                        "due to undefined FEATURE_TELEPHONY_RADIO_ACCESS";
-    }
-
-    serial = GetRandomSerialNumber();
-
-    ndk::ScopedAStatus res = radio_network->getAvailableBandModes(serial);
-    ASSERT_OK(res);
-    EXPECT_EQ(std::cv_status::no_timeout, wait());
-    EXPECT_EQ(RadioResponseType::SOLICITED, radioRsp_network->rspInfo.type);
-    EXPECT_EQ(serial, radioRsp_network->rspInfo.serial);
-    ALOGI("getAvailableBandModes, rspInfo.error = %s\n",
-          toString(radioRsp_network->rspInfo.error).c_str());
-    ASSERT_TRUE(CheckAnyOfErrors(radioRsp_network->rspInfo.error,
-                                 {RadioError::NONE, RadioError::RADIO_NOT_AVAILABLE,
-                                  RadioError::MODEM_ERR, RadioError::INTERNAL_ERR,
-                                  // If REQUEST_NOT_SUPPORTED is returned, then it should also be
-                                  // returned for setBandMode().
-                                  RadioError::REQUEST_NOT_SUPPORTED}));
-    bool hasUnspecifiedBandMode = false;
-    if (radioRsp_network->rspInfo.error == RadioError::NONE) {
-        for (const RadioBandMode& mode : radioRsp_network->radioBandModes) {
-            // Automatic mode selection must be supported
-            if (mode == RadioBandMode::BAND_MODE_UNSPECIFIED) hasUnspecifiedBandMode = true;
-        }
-        ASSERT_TRUE(hasUnspecifiedBandMode);
-    }
-}
-
-/*
  * Test IRadioNetwork.setIndicationFilter()
  */
 TEST_P(RadioNetworkTest, setIndicationFilter) {
@@ -1912,57 +1866,6 @@ TEST_P(RadioNetworkTest, getAvailableNetworks) {
                 {RadioError::NONE, RadioError::CANCELLED, RadioError::DEVICE_IN_USE,
                  RadioError::MODEM_ERR, RadioError::OPERATION_NOT_ALLOWED},
                 CHECK_GENERAL_ERROR));
-    }
-}
-
-/*
- * Test IRadioNetwork.setBandMode() for the response returned.
- */
-TEST_P(RadioNetworkTest, setBandMode) {
-    if (!shouldTestCdma()) {
-        GTEST_SKIP() << "Skipping CDMA testing (deprecated)";
-    }
-    if (!deviceSupportsFeature(FEATURE_TELEPHONY_RADIO_ACCESS)) {
-        GTEST_SKIP() << "Skipping setBandMode "
-                        "due to undefined FEATURE_TELEPHONY_RADIO_ACCESS";
-    }
-
-    serial = GetRandomSerialNumber();
-
-    radio_network->setBandMode(serial, RadioBandMode::BAND_MODE_USA);
-    EXPECT_EQ(std::cv_status::no_timeout, wait());
-    EXPECT_EQ(RadioResponseType::SOLICITED, radioRsp_network->rspInfo.type);
-    EXPECT_EQ(serial, radioRsp_network->rspInfo.serial);
-
-    if (cardStatus.cardState == CardStatus::STATE_ABSENT) {
-        ASSERT_TRUE(CheckAnyOfErrors(radioRsp_network->rspInfo.error, {RadioError::NONE},
-                                     CHECK_GENERAL_ERROR));
-    }
-}
-
-/*
- * Test IRadioNetwork.setLocationUpdates() for the response returned.
- */
-TEST_P(RadioNetworkTest, setLocationUpdates) {
-    // While setLocationUpdates is not CDMA-related, it's guarded by the same release flag.
-    if (!shouldTestCdma()) {
-        GTEST_SKIP() << "Skipping testing of deprecated setLocationUpdates method";
-    }
-    if (!deviceSupportsFeature(FEATURE_TELEPHONY_RADIO_ACCESS)) {
-        GTEST_SKIP() << "Skipping setLocationUpdates "
-                        "due to undefined FEATURE_TELEPHONY_RADIO_ACCESS";
-    }
-
-    serial = GetRandomSerialNumber();
-
-    radio_network->setLocationUpdates(serial, true);
-    EXPECT_EQ(std::cv_status::no_timeout, wait());
-    EXPECT_EQ(RadioResponseType::SOLICITED, radioRsp_network->rspInfo.type);
-    EXPECT_EQ(serial, radioRsp_network->rspInfo.serial);
-
-    if (cardStatus.cardState == CardStatus::STATE_ABSENT) {
-        ASSERT_TRUE(CheckAnyOfErrors(radioRsp_network->rspInfo.error,
-                                     {RadioError::NONE, RadioError::SIM_ABSENT}));
     }
 }
 

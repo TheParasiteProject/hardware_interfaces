@@ -263,8 +263,6 @@ class RadioNetworkTest : public RadioServiceTest {
   public:
     void SetUp() override;
 
-    bool shouldTestCdma();
-
     /* radio network service handle */
     std::shared_ptr<IRadioNetwork> radio_network;
     /* radio network response handle */
