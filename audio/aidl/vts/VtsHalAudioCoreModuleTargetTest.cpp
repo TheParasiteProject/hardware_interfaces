@@ -1619,10 +1619,11 @@ class WithStream : public StreamWorkerMethods {
     std::optional<bool> mHasCreateMmapBuffer;
 };
 
-SinkMetadata GenerateSinkMetadata(const AudioPortConfig& portConfig) {
+SinkMetadata GenerateSinkMetadata(const AudioPortConfig& portConfig,
+                                  AudioSource source = AudioSource::MIC, float gain = 1) {
     RecordTrackMetadata trackMeta;
-    trackMeta.source = AudioSource::MIC;
-    trackMeta.gain = 1.0;
+    trackMeta.source = source;
+    trackMeta.gain = gain;
     trackMeta.channelMask = portConfig.channelMask.value();
     SinkMetadata metadata;
     metadata.tracks.push_back(trackMeta);
@@ -1650,11 +1651,14 @@ ScopedAStatus WithStream<IStreamIn>::SetUpNoChecks(IModule* module,
     return status;
 }
 
-SourceMetadata GenerateSourceMetadata(const AudioPortConfig& portConfig) {
+SourceMetadata GenerateSourceMetadata(const AudioPortConfig& portConfig,
+                                      AudioUsage usage = AudioUsage::MEDIA,
+                                      AudioContentType contentType = AudioContentType::MUSIC,
+                                      float gain = 1.0) {
     PlaybackTrackMetadata trackMeta;
-    trackMeta.usage = AudioUsage::MEDIA;
-    trackMeta.contentType = AudioContentType::MUSIC;
-    trackMeta.gain = 1.0;
+    trackMeta.usage = usage;
+    trackMeta.contentType = contentType;
+    trackMeta.gain = gain;
     trackMeta.channelMask = portConfig.channelMask.value();
     SourceMetadata metadata;
     metadata.tracks.push_back(trackMeta);
@@ -4185,6 +4189,82 @@ TEST_P(AudioStreamIn, MicrophoneFieldDimension) {
     }
     if (!atLeastOnePort) {
         GTEST_SKIP() << "No input mix ports could be routed to built-in microphone devices";
+    }
+}
+
+const std::vector<float> kTestVolumeLevels = {0.0, 0.5, 1.0};
+const std::vector<AudioSource> kAudioSources = {ndk::enum_range<AudioSource>().begin(),
+                                                ndk::enum_range<AudioSource>().end()};
+
+TEST_P(AudioStreamIn, updateSinkMetadata) {
+    const auto ports = moduleConfig->getInputMixPorts(true /*connectedOnly*/);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No input mix ports for attached devices";
+    }
+    bool hasAtLeastOneStreamUpdatedMetadata = false;
+    for (const auto& port : ports) {
+        SCOPED_TRACE(port.toString());
+        StreamFixture<IStreamIn> stream;
+        AudioPortConfig portConfig;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpStreamForMixPort(module.get(), moduleConfig.get(), port,
+                                                             true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        portConfig = stream.getPortConfig();
+        for (const AudioSource source : kAudioSources) {
+            for (float volume : kTestVolumeLevels) {
+                EXPECT_IS_OK(stream.getStream()->updateMetadata(
+                        GenerateSinkMetadata(portConfig, source, volume)))
+                        << "Source: " << toString(source) << " Volume: " << volume;
+            }
+        }
+        // Set no metadata as if all stream track had stopped
+        EXPECT_IS_OK(stream.getStream()->updateMetadata({}));
+        // Restore default configuration
+        EXPECT_IS_OK(stream.getStream()->updateMetadata(GenerateSinkMetadata(portConfig)));
+        hasAtLeastOneStreamUpdatedMetadata = true;
+    }
+    if (!hasAtLeastOneStreamUpdatedMetadata) {
+        GTEST_SKIP() << "No port configs available to update sink metadata";
+    }
+}
+
+const std::vector<AudioUsage> kAudioUsages = {ndk::enum_range<AudioUsage>().begin(),
+                                              ndk::enum_range<AudioUsage>().end()};
+const std::vector<AudioContentType> kAudioContentTypes = {
+        ndk::enum_range<AudioContentType>().begin(), ndk::enum_range<AudioContentType>().end()};
+
+TEST_P(AudioStreamOut, updateSourceMetadata) {
+    const auto ports = moduleConfig->getOutputMixPorts(true /*connectedOnly*/);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No output mix ports for attached devices";
+    }
+    bool hasAtLeastOneStreamUpdatedMetadata = false;
+    for (const auto& port : ports) {
+        SCOPED_TRACE(port.toString());
+        StreamFixture<IStreamOut> stream;
+        AudioPortConfig portConfig;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpStreamForMixPort(module.get(), moduleConfig.get(), port,
+                                                             true /*connectedOnly*/));
+        if (!stream.skipTestReason().empty()) continue;
+        portConfig = stream.getPortConfig();
+        for (AudioUsage usage : kAudioUsages) {
+            for (AudioContentType contentType : kAudioContentTypes) {
+                for (float volume : kTestVolumeLevels) {
+                    EXPECT_IS_OK(stream.getStream()->updateMetadata(
+                            GenerateSourceMetadata(portConfig, usage, contentType, volume)))
+                            << "Usage: " << toString(usage)
+                            << "Content type: " << toString(contentType) << "Volume: " << volume;
+                }
+            }
+        }
+        // Set no metadata as if all stream track had stopped
+        EXPECT_IS_OK(stream.getStream()->updateMetadata({}));
+        // Restore default configuration
+        EXPECT_IS_OK(stream.getStream()->updateMetadata(GenerateSourceMetadata(portConfig)));
+        hasAtLeastOneStreamUpdatedMetadata = true;
+    }
+    if (!hasAtLeastOneStreamUpdatedMetadata) {
+        GTEST_SKIP() << "No port configs available to update source metadata";
     }
 }
 
