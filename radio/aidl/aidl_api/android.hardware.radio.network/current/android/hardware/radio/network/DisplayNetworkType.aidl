@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,16 +33,8 @@
 
 package android.hardware.radio.network;
 /* @hide */
-@Backing(type="int") @JavaDerive(toString=true) @VintfStability
-enum IndicationFilter {
-  NONE = 0,
-  ALL = (~0) /* -1 */,
-  SIGNAL_STRENGTH = (1 << 0) /* 1 */,
-  FULL_NETWORK_STATE = (1 << 1) /* 2 */,
-  DATA_CALL_DORMANCY_CHANGED = (1 << 2) /* 4 */,
-  LINK_CAPACITY_ESTIMATE = (1 << 3) /* 8 */,
-  PHYSICAL_CHANNEL_CONFIG = (1 << 4) /* 16 */,
-  REGISTRATION_FAILURE = (1 << 5) /* 32 */,
-  BARRING_INFO = (1 << 6) /* 64 */,
-  DISPLAY_NETWORK_TYPE_CHANGED = (1 << 7) /* 128 */,
+@Backing(type="int") @VintfStability
+enum DisplayNetworkType {
+  UNKNOWN = 0,
+  NR_ADVANCED = 1,
 }
