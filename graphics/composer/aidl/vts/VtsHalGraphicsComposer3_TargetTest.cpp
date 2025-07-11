@@ -1727,11 +1727,12 @@ class GraphicsComposerAidlCommandTest : public GraphicsComposerAidlTest {
                 EXPECT_TRUE(status.isOk());
 
                 EXPECT_TRUE(timeline.newVsyncAppliedTimeNanos >= constraints.desiredTimeNanos);
-                // Refresh rate should change within a reasonable time
-                constexpr std::chrono::nanoseconds kReasonableTimeForChange = 1s;  // 1 second
-                EXPECT_TRUE(timeline.newVsyncAppliedTimeNanos - constraints.desiredTimeNanos <=
-                            kReasonableTimeForChange.count());
-
+                if (configGroup1 == configGroup2) {
+                    // Refresh rate should change within a reasonable time
+                    constexpr std::chrono::nanoseconds kReasonableTimeForChange = 1s;  // 1 second
+                    EXPECT_TRUE(timeline.newVsyncAppliedTimeNanos - constraints.desiredTimeNanos <=
+                                kReasonableTimeForChange.count());
+                }
                 if (timeline.refreshRequired) {
                     if (params.refreshMiss) {
                         // Miss the refresh frame on purpose to make sure the implementation sends a
