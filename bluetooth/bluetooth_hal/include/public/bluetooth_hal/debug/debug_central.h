@@ -306,11 +306,9 @@ class DebugCentral {
 
  private:
   static constexpr int kMaxHistory = 400;
-  // Determine if we should hijack the vendor debug event or not
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  // BtHal Logger
   std::string controller_firmware_info_;
   std::list<std::pair<std::string, std::string>> history_record_;
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;

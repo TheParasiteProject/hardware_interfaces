@@ -67,15 +67,8 @@ using ::bluetooth_hal::transport::TransportType;
 using ::bluetooth_hal::util::Logger;
 using ::bluetooth_hal::util::power::WakelockWatchdog;
 
-constexpr int kVseSubEventCodeOffset = 2;
-constexpr int kBqrReportIdOffset = 3;
-constexpr int kBqrInflamedErrorCode = 4;
-constexpr int kBqrInflamedVendorErrCode = 5;
 constexpr int kDebugInfoPayloadOffset = 8;
-constexpr int kChreDebugDumpLastBlockOffsetFisrtByte = 4;
-constexpr int kChreDebugDumpLastBlockOffsetSecondByte = 5;
 constexpr int kDebugInfoLastBlockOffset = 5;
-constexpr int kHwCodeOffset = 2;
 
 constexpr int kHandleDebugInfoCommandMs = 1000;
 constexpr int kMaxCoredumpFiles = 3;
@@ -89,7 +82,6 @@ const std::regex kTimestampPattern(R"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})");
 const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
-constexpr uint8_t kReservedCoredumpFileCount = 2;
 
 void DumpDebugfs(int fd, const std::string& debugfs) {
   std::stringstream ss;
