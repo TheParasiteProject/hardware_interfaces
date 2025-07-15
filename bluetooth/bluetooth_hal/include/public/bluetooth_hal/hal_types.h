@@ -66,6 +66,8 @@ enum class HalState : uint8_t {
   kShutdown = 0,
   // HAL service is initially started.
   kInit,
+  // HAL is about to start firmware download.
+  kPreFirmwareDownload,
   // Firmware is currently being downloaded.
   kFirmwareDownloading,
   // Firmware download is complete, ready to be loaded into RAM.

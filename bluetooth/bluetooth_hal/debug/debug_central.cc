@@ -22,12 +22,17 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <mutex>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -73,185 +78,150 @@ constexpr int kDebugInfoLastBlockOffset = 5;
 constexpr int kHwCodeOffset = 2;
 
 constexpr int kHandleDebugInfoCommandMs = 1000;
-const std::string kSsrdumpFilePath = "/data/vendor/ssrdump/coredump/";
-const std::string kSsrdumpFilePrefix = "coredump_bt_";
-const std::string kSsrdumpSocFilePrefix = "coredump_bt_socdump_";
-const std::string kSsrdumpChreFilePrefix = "coredump_bt_chredump_";
-const std::string kSocdumpFilePath =
-    "/data/vendor/ssrdump/coredump/coredump_bt_socdump_";
-const std::string kChredumpFilePath =
-    "/data/vendor/ssrdump/coredump/coredump_bt_chredump_";
+constexpr int kMaxCoredumpFiles = 3;
+const std::string kCoredumpFilePath = "/data/vendor/ssrdump/coredump/";
+const std::string kCoredumpPrefix = "coredump_bt_";
+const std::string kCoredumpFilePrefix = kCoredumpFilePath + kCoredumpPrefix;
+const std::string kSocdumpFilePrefix =
+    kCoredumpFilePath + "coredump_bt_socdump_";
+const std::regex kTimestampPattern(R"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})");
 
 const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 constexpr uint8_t kReservedCoredumpFileCount = 2;
 
-std::string GetTimestampString() {
-  time_t rawtime;
-  time(&rawtime);
-  struct tm* timeinfo = localtime(&rawtime);
-
-  std::stringstream ss;
-  ss << std::to_string(timeinfo->tm_year + 1900) << "-" << std::setw(2)
-     << std::setfill('0') << std::to_string(timeinfo->tm_mon + 1) << "-"
-     << std::setw(2) << std::setfill('0') << std::to_string(timeinfo->tm_mday)
-     << "_" << std::setw(2) << std::setfill('0')
-     << std::to_string(timeinfo->tm_hour) << "-" << std::setw(2)
-     << std::setfill('0') << std::to_string(timeinfo->tm_min) << "-"
-     << std::setw(2) << std::setfill('0') << std::to_string(timeinfo->tm_sec);
-  return ss.str();
-}
-
 void DumpDebugfs(int fd, const std::string& debugfs) {
   std::stringstream ss;
   std::ifstream file;
 
-  ss << "=============================================" << std::endl;
-  ss << "Debugfs:" << debugfs << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t  Debugfs:" << debugfs << std::endl;
+  ss << "║\t=============================================" << std::endl;
   file.open(debugfs);
   if (file.is_open()) {
-    ss << file.rdbuf() << std::endl;
+    ss << "║\t\t" << file.rdbuf() << std::endl;
   } else {
-    ss << "Fail to read debugfs: " << debugfs << std::endl;
+    ss << "║\t\tFail to read debugfs: " << debugfs << std::endl;
   }
-  ss << std::endl;
+  ss << "║" << std::endl;
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
-void read_as_hex(std::ifstream& file, std::stringstream& content) {
-  std::array<char, 64> memblock{};
-  while (!file.eof()) {
-    file.read(memblock.data(), memblock.size());
-    size_t len = file.gcount();
-    if (len == 0) continue;
+bool IsBinFilePatternMatch(const std::string& filename,
+                           const std::string& base_prefix) {
+  if (!filename.starts_with(base_prefix)) {
+    return false;
+  }
+  std::string remaining_part = filename.substr(base_prefix.length());
 
-    for (size_t i = 0; i < len; i++) {
-      content << std::setbase(16) << std::setw(2) << std::setfill('0')
-              << (memblock[i] & 0xff);
+  if (!remaining_part.ends_with(".bin")) {
+    return false;
+  }
+
+  std::string timestamp_str = remaining_part.substr(
+      0, remaining_part.length() - std::string(".bin").length());
+  return std::regex_match(timestamp_str, kTimestampPattern);
+}
+
+void DeleteOldestBinFiles(const std::string& directory,
+                          const std::string& base_file_prefix,
+                          size_t files_to_keep) {
+  std::vector<std::filesystem::directory_entry> filtered_files;
+
+  for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+    if (!entry.is_regular_file()) {
+      continue;
     }
-    content << "\n";
+    const std::string filename = entry.path().filename().string();
+
+    if (IsBinFilePatternMatch(filename, base_file_prefix)) {
+      filtered_files.emplace_back(entry);
+    }
+  }
+
+  // Sort files by their last write time
+  std::sort(filtered_files.begin(), filtered_files.end(),
+            [](const auto& a, const auto& b) {
+              return std::filesystem::last_write_time(a) >
+                     std::filesystem::last_write_time(b);
+            });
+
+  // Delete files, starting at files_to_keep
+  for (size_t i = files_to_keep; i < filtered_files.size(); ++i) {
+    std::filesystem::remove(filtered_files[i]);
+    LOG(INFO) << "Deleted: " << filtered_files[i].path().c_str();
   }
 }
 
-void GetStringLogFromStorage(int fd, const std::string& prefix,
-                             const std::string& dir) {
-  std::unique_ptr<DIR, decltype(&closedir)> dir_dump(opendir(dir.c_str()),
-                                                     closedir);
-
-  if (!dir_dump) {
-    LOG(WARNING) << __func__ << ": Failed to open directory, skip " << prefix
-                 << ".";
+void FlushCoredumpToFd(int fd) {
+  std::unique_ptr<DIR, decltype(&closedir)> dir(
+      opendir(kCoredumpFilePath.c_str()), closedir);
+  if (!dir) {
+    LOG(WARNING) << __func__
+                 << ": Failed to open directory: " << kCoredumpFilePath;
     return;
   }
 
-  std::stringstream content;
-  struct dirent* dp;
-  while ((dp = readdir(dir_dump.get()))) {
-    std::ifstream file;
-    std::string file_name;
-    std::stringstream path;
+  std::stringstream ss;
+  struct dirent* entry;
 
-    if (dp->d_type != DT_REG) {
-      continue;
-    }
-    file_name = dp->d_name;
-    size_t pos = file_name.find(prefix);
-    if (pos != 0) {
+  while ((entry = readdir(dir.get())) != nullptr) {
+    std::string file_name = entry->d_name;
+
+    if (file_name == "." || file_name == "..") {
       continue;
     }
 
-    path << dir << file_name;
-    LOG(DEBUG) << __func__ << ": Dumping " << path.str() << ".";
+    std::string full_path = kCoredumpFilePath + file_name;
 
-    // for coredump_bt_socdump_[timestamp].bin
-    std::size_t last_dot = file_name.rfind('.');
-    bool is_bin = (last_dot != std::string::npos &&
-                   file_name.substr(last_dot + 1) == "bin" &&
-                   (file_name.find(kSsrdumpSocFilePrefix) == 0 ||
-                    file_name.find(kSsrdumpChreFilePrefix) == 0));
-    if (is_bin)
-      file.open(path.str(), std::ifstream::binary);
-    else
-      file.open(path.str());
-    content << "*********************************************\n\n";
-    content << "BEGIN of LogFile: " << file_name << "\n\n";
-    content << "*********************************************\n";
-    if (file_name.length() != 0 && file.is_open()) {
-      if (is_bin) {
-        read_as_hex(file, content);
-      } else {
-        content << file.rdbuf() << std::endl;
-      }
-    } else {
-      content << "File open failed: " << prefix << std::endl;
+    if (!IsBinFilePatternMatch(file_name, kCoredumpPrefix)) {
+      continue;
     }
-    content << "*********************************************\n\n";
-    content << "END of LogFile: " << file_name << "\n\n";
-    content << "*********************************************\n\n";
-  }
-  write(fd, content.str().c_str(), content.str().length());
-}
 
-int OpenFileWithTimestamp(const std::string& crash_timestamp) {
-  std::stringstream fname;
-  fname << kSocdumpFilePath << crash_timestamp << ".bin";
-  int socdump_fd;
-  if ((socdump_fd =
-           open(fname.str().c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
-                S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
-    LOG(ERROR) << __func__ << ": Failed to open socdump file: " << fname.str()
-               << ", failed: " << strerror(errno) << " (" << errno << ")";
-  }
-  // Change the file's permissions to OWNER Read/Write, GROUP Read, OTHER Read
-  if (chmod(fname.str().c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
-    LOG(ERROR) << __func__ << ": Unable to change file permissions "
-               << fname.str() << ".";
-  }
-  return socdump_fd;
-}
-
-bool IsCoredumpFile(const std::string& filename) {
-  return filename.find("coredump_bt_") == 0 &&
-         filename.find(".bin") == filename.size() - 4;
-}
-
-struct CoredumpFile {
-  std::string filename;
-  time_t timestamp;
-};
-
-bool CompareFileCreatedTime(const CoredumpFile& a, const CoredumpFile& b) {
-  return a.timestamp < b.timestamp;
-}
-
-void DeleteCoredumpFiles(const std::string& dir) {
-  std::vector<CoredumpFile> coredumpfiles;
-  DIR* dir_ptr = opendir(dir.c_str());
-  if (dir_ptr != nullptr) {
-    struct dirent* entry;
-    while ((entry = readdir(dir_ptr)) != nullptr) {
-      if (IsCoredumpFile(entry->d_name)) {
-        struct stat statbuf;
-        stat((dir + "/" + entry->d_name).c_str(), &statbuf);
-        coredumpfiles.push_back({entry->d_name, statbuf.st_mtime});
-      }
+    struct stat file_stat;
+    if (stat(full_path.c_str(), &file_stat) == -1 ||
+        !S_ISREG(file_stat.st_mode)) {
+      continue;
     }
-    closedir(dir_ptr);
+
+    LOG(INFO) << __func__ << ": Dumping " << full_path;
+
+    std::ifstream input_file(full_path, std::ios::binary);
+    if (!input_file.is_open()) {
+      ss << "╔══════════════════════════════════════════════════════════\n";
+      ss << "║ ERROR: Failed to open file: " << full_path << "\n";
+      ss << "╚══════════════════════════════════════════════════════════\n";
+      LOG(ERROR) << __func__ << ": Failed to open file: " << full_path;
+      continue;
+    }
+
+    ss << "╔══════════════════════════════════════════════════════════\n";
+    ss << "║ BEGIN of LogFile: " << file_name << "\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║\n";
+    ss << input_file.rdbuf();
+    ss << "║\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║ END of LogFile: " << file_name << "\n";
+    ss << "╚══════════════════════════════════════════════════════════\n";
+    input_file.close();
   }
 
-  sort(coredumpfiles.begin(), coredumpfiles.end(), CompareFileCreatedTime);
-  LOG(INFO) << __func__ << ": Coredump files count: " << coredumpfiles.size()
-            << ".";
-  if (coredumpfiles.size() > kReservedCoredumpFileCount) {
-    for (int i = 0; i < coredumpfiles.size() - kReservedCoredumpFileCount;
-         i++) {
-      remove((dir + "/" + coredumpfiles[i].filename).c_str());
-      LOG(INFO) << __func__
-                << ": Delete file: " << (dir + "/" + coredumpfiles[i].filename)
-                << ".";
+  std::string final_output = ss.str();
+  if (!final_output.empty()) {
+    ssize_t bytes_written =
+        write(fd, final_output.c_str(), final_output.length());
+    if (bytes_written == -1) {
+      LOG(ERROR) << __func__ << ": Failed to write to file descriptor " << fd
+                 << ". Error: " << strerror(errno);
+    } else if (static_cast<size_t>(bytes_written) != final_output.length()) {
+      LOG(WARNING) << __func__ << ": Incomplete write to file descriptor " << fd
+                   << ". Wrote " << bytes_written << " of "
+                   << final_output.length() << " bytes.";
     }
+  } else {
+    LOG(INFO) << __func__ << ": No coredump files found to dump.";
   }
 }
 
@@ -316,8 +286,8 @@ bool DebugCentral::UnregisterCoredumpCallback(
 
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
-  DumpBluetoothHalLog(fd);
-  if (TransportInterface::GetTransportType() == TransportType::kUartH4) {
+  DumpBluetoothHalLog(fd, true /*add_header*/);
+  if (!serial_debug_port_.empty()) {
     // Dump Kernel driver debugfs log
     DumpDebugfs(fd, serial_debug_port_);
     DumpDebugfs(fd, kDebugNodeBtLpm);
@@ -325,11 +295,10 @@ void DebugCentral::Dump(int fd) {
   // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  GetStringLogFromStorage(fd, kSsrdumpFilePrefix, kSsrdumpFilePath);
   // Dump Controller BT Activities Statistics
   BtActivitiesLogger::GetInstacne()->ForceUpdating();
   BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
-  DeleteCoredumpFiles(kSsrdumpFilePath);
+  FlushCoredumpToFd(fd);
 }
 
 void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
@@ -364,7 +333,7 @@ void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
 
 void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
   HalPacket bqr_event({0xff, 0x04, 0x58, 0x05, 0x00, (uint8_t)error});
-  // collect debug dump and popup ssrdump notification UI
+
   HAL_LOG(ERROR) << extra_info;
   LOG(ERROR) << __func__ << ": Root inflamed event with error_code: ("
              << static_cast<uint8_t>(error) << "), error_info: " << extra_info
@@ -384,17 +353,15 @@ void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
 }
 
 void DebugCentral::HandleDebugInfoCommand() {
-  // It is supported to generate coredump and record crash_timestamp_ when bthal
+  // It is supported to generate coredump and record the timestamp when bthal
   // received root-inflamed event or any fw dump packet, if the controller
   // did not send any response packets, we force to trigger coredump here
   debug_info_command_timer_.Schedule(
       [this]() {
-        if (crash_timestamp_.empty()) {
-          LOG(ERROR) << __func__
-                     << ": Force a coredump to be generated if it has not been "
-                        "generated for 1 second.";
-          GenerateCoredump(CoredumpErrorCode::kForceCollectCoredump);
-        }
+        LOG(ERROR) << __func__
+                   << ": Force a coredump to be generated if it has not been "
+                      "generated for 1 second.";
+        GenerateCoredump(CoredumpErrorCode::kForceCollectCoredump);
       },
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
@@ -412,20 +379,10 @@ void DebugCentral::GenerateVendorDumpFile(const std::string& file_path,
   }
   GenerateCoredump(CoredumpErrorCode::kVendor, vendor_error_code);
 
-  std::stringstream fname_stream;
-  fname_stream << file_path << crash_timestamp_ << ".bin";
-
-  int fd;
-  std::string full_path = fname_stream.str();
-  if ((fd = open(full_path.c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
-                 S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
-    LOG(ERROR) << "Failed to open bluetooth hal dump file: " << full_path
-               << ", failed: " << strerror(errno) << " (" << errno << ")";
+  int fd = OpenOrCreateCoredumpBin(file_path);
+  if (fd < 0) {
+    LOG(ERROR) << "Failed to open vendor dump file: " << file_path;
     return;
-  }
-
-  if (chmod(full_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
-    LOG(ERROR) << "Unable to change file permissions " << full_path;
   }
 
   ssize_t ret = 0;
@@ -448,9 +405,8 @@ bool DebugCentral::IsHardwareStageSupported() {
 }
 
 bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
-  // Report scenario:
-  // 1) report ssr crash when bt is on
-  // 2) report ssr crash when bt is off, thread is enabled, and supports
+  // 1) generate coredump when bt is on
+  // 2) generate coredump when bt is off, thread is enabled, and supports
   // accelerated bt on
 
   bool is_major_fault = (static_cast<BqrErrorCode>(error_code) ==
@@ -467,33 +423,48 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-void DebugCentral::DumpBluetoothHalLog(int fd) {
+void DebugCentral::DumpBluetoothHalLog(int fd, bool add_header) {
   std::stringstream ss;
 
-  ss << "=============================================" << std::endl;
-  ss << "Controller Firmware Information" << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << controller_firmware_info_ << std::endl;
+  if (add_header) {
+    ss << "╔══════════════════════════════════════════════════════════\n";
+    ss << "║ START of Bluetooth HAL DUMP\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║\n";
+  }
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t  Controller Firmware Information" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t\t" << controller_firmware_info_ << std::endl;
 
-  ss << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << "Anchors' Last Appear" << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\tAnchors' Last Appear" << std::endl;
+  ss << "║\t=============================================" << std::endl;
   for (auto it = lasttime_record_.begin(); it != lasttime_record_.end(); ++it) {
     std::string anchor = it->second.first;
     std::string anchor_timestamp = it->second.second;
-    ss << "Timestamp of " << anchor << ": " << anchor_timestamp << std::endl;
+    ss << "║\t\tTimestamp of " << anchor << ": " << anchor_timestamp
+       << std::endl;
   }
 
-  ss << std::endl;
-  ss << "=============================================" << std::endl;
-  ss << "Anchors' History" << std::endl;
-  ss << "=============================================" << std::endl;
+  ss << "║" << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\tAnchors' History" << std::endl;
+  ss << "║\t=============================================" << std::endl;
   for (auto it = history_record_.begin(); it != history_record_.end(); ++it) {
     std::string anchor = it->first;
     std::string anchor_timestamp = it->second;
-    ss << anchor_timestamp << ": " << anchor << std::endl;
+    ss << "║\t\t" << anchor_timestamp << ": " << anchor << std::endl;
   }
+
+  if (add_header) {
+    ss << "║\n";
+    ss << "╠══════════════════════════════════════════════════════════\n";
+    ss << "║ END of Bluetooth HAL DUMP\n";
+    ss << "╚══════════════════════════════════════════════════════════\n";
+  }
+  ss << std::endl;
   write(fd, ss.str().c_str(), ss.str().length());
 }
 
@@ -526,9 +497,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
     return;
   }
 
-  if (crash_timestamp_.empty()) {
-    GenerateCoredump(CoredumpErrorCode::kControllerDebugInfo);
-  }
+  GenerateCoredump(CoredumpErrorCode::kControllerDebugInfo);
 
   // the Last soc dump debug info packet has been received
   if (packet[kDebugInfoLastBlockOffset]) {
@@ -537,7 +506,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
   }
 
   int socdump_fd;
-  if ((socdump_fd = OpenFileWithTimestamp(crash_timestamp_)) < 0) {
+  if ((socdump_fd = OpenOrCreateCoredumpBin(kSocdumpFilePrefix)) < 0) {
     return;
   }
 
@@ -571,29 +540,18 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
   WakelockWatchdog::GetWatchdog().Pause();
   is_coredump_generated_ = true;
 
-  LOG(ERROR) << __func__ << ": Reason: "
-             << CoredumpErrorCodeToString(error_code, sub_error_code);
-  crash_timestamp_ = GetTimestampString();
-  std::stringstream coredump_fname;
-  coredump_fname << kSsrdumpFilePath << kSsrdumpFilePrefix << crash_timestamp_
-                 << ".bin";
-  LOG(WARNING) << __func__ << ": Starting to generate Bluetooth ssrdump files: "
-               << coredump_fname.str().c_str() << ".";
+  HAL_LOG(ERROR) << __func__ << ": Reason: "
+                 << CoredumpErrorCodeToString(error_code, sub_error_code);
+  int coredump_fd = OpenOrCreateCoredumpBin(kCoredumpFilePrefix);
 
-  int coredump_fd;
-  if ((coredump_fd =
-           open(coredump_fname.str().c_str(), O_CREAT | O_SYNC | O_RDWR,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-    LOG(ERROR) << __func__ << ": Failed to open coredump file: "
-               << coredump_fname.str().c_str()
-               << ", failed: " << strerror(errno) << " (" << errno << ").";
+  if (coredump_fd < 0) {
+    LOG(ERROR) << __func__ << ": Failed to open coredump file!";
     return;
   }
-  fchmod(coredump_fd, S_IRUSR | S_IRGRP | S_IROTH);
 
   std::stringstream ss;
   ss << "DUMP REASON: " << CoredumpErrorCodeToString(error_code, sub_error_code)
-     << " - occurred at " << crash_timestamp_ << std::endl;
+     << " - occurred at " << GetCoredumpTimestampString() << std::endl;
   write(coredump_fd, ss.str().c_str(), ss.str().length());
 
   DumpBluetoothHalLog(coredump_fd);
@@ -603,6 +561,60 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
   for (auto& callback_ptr : coredump_callbacks_) {
     (*callback_ptr)(error_code, sub_error_code);
   }
+}
+
+int DebugCentral::OpenOrCreateCoredumpBin(const std::string& file_name_prefix) {
+  std::string file_name =
+      file_name_prefix + GetOrCreateCoredumpTimestampString() + ".bin";
+
+  if (access(file_name.c_str(), F_OK) != 0) {
+    // File does not exist, require to create a new one.
+    HAL_LOG(WARNING) << "Creating coredump file: " << file_name;
+  }
+
+  int fd = open(file_name.c_str(), O_APPEND | O_CREAT | O_SYNC | O_WRONLY,
+                S_IRUSR | S_IWUSR | S_IRGRP);
+
+  if (fd < 0) {
+    LOG(ERROR) << __func__
+               << ": Failed to open or create coredump file: " << file_name
+               << ", error: " << strerror(errno) << " (" << errno << ")";
+    return -1;
+  }
+
+  if (chmod(file_name.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0) {
+    LOG(ERROR) << __func__ << ": Unable to change file permissions for "
+               << file_name << ", error: " << strerror(errno) << " (" << errno
+               << ")";
+  }
+
+  // Delete old files and keep the latest ones.
+  size_t last_slash_pos = file_name_prefix.find_last_of('/');
+  if (last_slash_pos != std::string::npos) {
+    auto file_path = file_name_prefix.substr(0, last_slash_pos + 1);
+    auto prefix = file_name_prefix.substr(last_slash_pos + 1);
+    DeleteOldestBinFiles(file_path, prefix, kMaxCoredumpFiles);
+  }
+  return fd;
+}
+
+std::string DebugCentral::GetOrCreateCoredumpTimestampString() {
+  if (crash_timestamp_.empty()) {
+    time_t rawtime;
+    time(&rawtime);
+    struct tm* timeinfo = localtime(&rawtime);
+
+    std::stringstream ss;
+    ss << std::to_string(timeinfo->tm_year + 1900) << "-" << std::setw(2)
+       << std::setfill('0') << std::to_string(timeinfo->tm_mon + 1) << "-"
+       << std::setw(2) << std::setfill('0') << std::to_string(timeinfo->tm_mday)
+       << "_" << std::setw(2) << std::setfill('0')
+       << std::to_string(timeinfo->tm_hour) << "-" << std::setw(2)
+       << std::setfill('0') << std::to_string(timeinfo->tm_min) << "-"
+       << std::setw(2) << std::setfill('0') << std::to_string(timeinfo->tm_sec);
+    crash_timestamp_ = ss.str();
+  }
+  return crash_timestamp_;
 }
 
 bool DebugCentral::IsCoredumpGenerated() {

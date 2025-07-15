@@ -69,6 +69,7 @@ void ChipProvisioner::Initialize(
 bool ChipProvisioner::DownloadFirmware() {
   LOG(INFO) << __func__;
 
+  UpdateHalState(HalState::kPreFirmwareDownload);
   state_ = ProvisioningState::kInitialReset;
   RunProvisioningSequence();
 
@@ -258,6 +259,9 @@ bool ChipProvisioner::SendCommandNoAck(const HalPacket& packet) {
  *              +-----------------+
  *              |  kInitialReset  |
  *              +-----------------+
+ *                      |
+ *                      v
+ *      (HalState::kPreFirmwareDownload)
  *                      |
  *                      v
  *              +---------------+
