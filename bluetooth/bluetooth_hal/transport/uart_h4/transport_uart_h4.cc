@@ -269,26 +269,30 @@ void TransportUartH4::NotifyHalStateChange(HalState hal_state) {
   LOG(INFO) << __func__ << ": HAL state changed to "
             << static_cast<int>(hal_state);
   switch (hal_state) {
+    case HalState::kPreFirmwareDownload:
+    case HalState::kFirmwareDownloadCompleted: {
+      const auto baud_rate = BaudRate::kRate115200;
+      LOG(DEBUG) << __func__ << ": Updating UART baud rate to "
+                 << static_cast<int>(baud_rate) << " for state "
+                 << static_cast<int>(hal_state);
+      UartManager::UpdateBaudRate(baud_rate);
+      break;
+    }
     case HalState::kFirmwareDownloading:
-      LOG(DEBUG) << __func__
-                 << ": Updating UART baud rate for firmware download.";
-      UartManager::UpdateBaudRate(
-          HalConfigLoader::GetLoader().GetUartBaudRate(TransportType::kUartH4));
+    case HalState::kFirmwareReady: {
+      const auto baud_rate =
+          HalConfigLoader::GetLoader().GetUartBaudRate(TransportType::kUartH4);
+      LOG(DEBUG) << __func__ << ": Updating UART baud rate to "
+                 << static_cast<int>(baud_rate) << " for state "
+                 << static_cast<int>(hal_state);
+      UartManager::UpdateBaudRate(baud_rate);
+      if (hal_state == HalState::kFirmwareReady) {
+        LOG(DEBUG) << __func__ << ": Setting up LPM for FirmwareReady state.";
+        SetupLowPowerMode();
+        ResumeFromLowPowerMode();
+      }
       break;
-    case HalState::kFirmwareDownloadCompleted:
-      LOG(DEBUG) << __func__
-                 << ": Updating UART baud rate after firmware download.";
-      UartManager::UpdateBaudRate(BaudRate::kRate115200);
-      break;
-    case HalState::kFirmwareReady:
-      LOG(DEBUG)
-          << __func__
-          << ": Firmware ready. Updating UART baud rate and setting up LPM.";
-      UartManager::UpdateBaudRate(
-          HalConfigLoader::GetLoader().GetUartBaudRate(TransportType::kUartH4));
-      SetupLowPowerMode();
-      ResumeFromLowPowerMode();
-      break;
+    }
     default:
       LOG(DEBUG) << __func__ << ": No action for HAL state "
                  << static_cast<int>(hal_state);
