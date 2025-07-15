@@ -83,7 +83,7 @@ const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 
-void DumpDebugfs(int fd, const std::string& debugfs) {
+std::string DumpDebugfs(const std::string& debugfs) {
   std::stringstream ss;
   std::ifstream file;
 
@@ -92,12 +92,16 @@ void DumpDebugfs(int fd, const std::string& debugfs) {
   ss << "║\t=============================================" << std::endl;
   file.open(debugfs);
   if (file.is_open()) {
-    ss << "║\t\t" << file.rdbuf() << std::endl;
+    std::string line;
+    while (std::getline(file, line)) {
+      ss << "║\t\t" << line << std::endl;
+    }
   } else {
     ss << "║\t\tFail to read debugfs: " << debugfs << std::endl;
   }
   ss << "║" << std::endl;
-  write(fd, ss.str().c_str(), ss.str().length());
+
+  return ss.str();
 }
 
 bool IsBinFilePatternMatch(const std::string& filename,
@@ -279,12 +283,6 @@ bool DebugCentral::UnregisterCoredumpCallback(
 void DebugCentral::Dump(int fd) {
   // Dump BtHal debug log
   DumpBluetoothHalLog(fd, true /*add_header*/);
-  if (!serial_debug_port_.empty()) {
-    // Dump Kernel driver debugfs log
-    DumpDebugfs(fd, serial_debug_port_);
-    DumpDebugfs(fd, kDebugNodeBtLpm);
-  }
-  // Dump all coredump_bt files in coredump folder
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
   // Dump Controller BT Activities Statistics
@@ -448,6 +446,13 @@ void DebugCentral::DumpBluetoothHalLog(int fd, bool add_header) {
     std::string anchor = it->first;
     std::string anchor_timestamp = it->second;
     ss << "║\t\t" << anchor_timestamp << ": " << anchor << std::endl;
+  }
+
+  if (!serial_debug_port_.empty()) {
+    // Dump Kernel driver debugfs log
+    ss << "║\n";
+    ss << DumpDebugfs(serial_debug_port_);
+    ss << DumpDebugfs(kDebugNodeBtLpm);
   }
 
   if (add_header) {
