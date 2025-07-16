@@ -222,10 +222,13 @@ impl SkClient {
         let store_response = self.secret_management_request(&store_request)?;
         let store_response = ResponsePacket::from_slice(&store_response)?;
 
-        assert_eq!(store_response.response_type()?, ResponseType::Success);
-        // Really just checking that the response is indeed StoreSecretResponse
-        let _ = StoreSecretResponse::deserialize_from_packet(store_response)?;
-        Ok(())
+        if store_response.response_type()? == ResponseType::Success {
+            let _ = *StoreSecretResponse::deserialize_from_packet(store_response)?;
+            Ok(())
+        } else {
+            let err = *SecretkeeperError::deserialize_from_packet(store_response)?;
+            Err(Error::SecretkeeperError(err))
+        }
     }
 
     /// Helper method to get a secret.
