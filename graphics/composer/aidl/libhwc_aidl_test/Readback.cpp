@@ -101,7 +101,7 @@ DisplayProperties ReadbackHelper::setupDisplayProperty(
                             .setEnableProtectedContext(false)
                             .setPrecacheToneMapperShaderOnly(false)
                             .setContextPriority(
-                                    ::android::renderengine::RenderEngine::ContextPriority::HIGH)
+                                    ::android::renderengine::RenderEngine::ContextPriority::High)
                             .build())));
 
     ::android::renderengine::DisplaySettings clientCompositionDisplaySettings;
