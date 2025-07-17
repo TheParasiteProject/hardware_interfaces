@@ -394,9 +394,11 @@ class HalPacket : public std::vector<uint8_t> {
     if (start_index + kBluetoothAddressLength > size()) {
       return BluetoothAddress();
     }
-    std::array<uint8_t, kBluetoothAddressLength> addr{};
-    std::copy_n(begin() + start_index, kBluetoothAddressLength, addr.begin());
-    return BluetoothAddress(addr);
+    std::array<uint8_t, kBluetoothAddressLength> address{};
+    std::copy_n(begin() + start_index, kBluetoothAddressLength,
+                address.begin());
+    std::reverse(address.begin(), address.end());
+    return BluetoothAddress(address);
   }
 
  private:
