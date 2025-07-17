@@ -495,10 +495,10 @@ LayerSettings TestColorLayer::toRenderEngineLayerSettings() {
     return layerSettings;
 }
 
-TestBufferLayer::TestBufferLayer(const std::shared_ptr<ComposerClientWrapper>& client,
-                                 TestRenderEngine& renderEngine, int64_t display, uint32_t width,
-                                 uint32_t height, common::PixelFormat format,
-                                 ComposerClientWriter& writer, Composition composition)
+TestBufferLayer::TestBufferLayer(ComposerClientWrapper& client, TestRenderEngine& renderEngine,
+                                 int64_t display, uint32_t width, uint32_t height,
+                                 common::PixelFormat format, ComposerClientWriter& writer,
+                                 Composition composition)
     : TestLayer{client, display, writer}, mRenderEngine(renderEngine) {
     mComposition = composition;
     mWidth = width;
