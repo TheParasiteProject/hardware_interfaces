@@ -33,6 +33,7 @@
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/debug/bluetooth_activities.h"
+#include "bluetooth_hal/debug/debug_client.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
 #include "bluetooth_hal/debug/debug_types.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -94,9 +95,6 @@
 namespace bluetooth_hal {
 namespace debug {
 
-using CoredumpCallback =
-    std::function<void(CoredumpErrorCode error_code, uint8_t sub_error_code)>;
-
 class DurationTracker {
  public:
   DurationTracker(AnchorType type, const std::string& log);
@@ -117,27 +115,21 @@ class DebugCentral {
   static DebugCentral& Get();
 
   /**
-   * @brief Register a callback function which is invoked when the DebugCentral
-   * is generating a coredump. This is used for vendor customized debug code to
-   * react to the coerdump procedure.
+   * @brief Register a debug client to receive debug callbacks from the
+   * DebugCentral.
    *
-   * This method supports multiple callback registry.
-   *
-   * @param callback The callback function to be registered.
+   * @param debug_client The client resigers for debug information.
    * @return return true if success, otherwise false.
    */
-  bool RegisterCoredumpCallback(
-      const std::shared_ptr<CoredumpCallback> callback);
+  bool RegisterDebugClient(DebugClient* debug_client);
 
   /**
-   * @brief Unregister the callback that was registered via
-   * RegisterCoredumpCallback.
+   * @brief Unregister the debug client that was registered.
    *
-   * @param callback The callback function to be unregistered.
+   * @param callback The debug client to be unregistered.
    * @return return true if success, otherwise false.
    */
-  bool UnregisterCoredumpCallback(
-      const std::shared_ptr<CoredumpCallback> callback);
+  bool UnregisterDebugClient(DebugClient* debug_client);
 
   /*
    * Invokes when bugreport is triggered, dump all information to the debug fd.
@@ -263,17 +255,17 @@ class DebugCentral {
   DebugMonitor debug_monitor_;
   BluetoothActivities bluetooth_activities_;
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
-  std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
-  std::mutex coredump_mutex_;
+  std::unordered_set<DebugClient*> debug_clients_;
   bool is_coredump_generated_;
 
-  void DumpBluetoothHalLog(int fd, bool add_header = false);
+  std::string DumpBluetoothHalLog();
   void GenerateCoredump(CoredumpErrorCode error_code,
                         uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
   std::string GetOrCreateCoredumpTimestampString();
   int OpenOrCreateCoredumpBin(const std::string& file_prefix);
+  std::vector<Coredump> GetCoredumpFromDebugClients();
 };
 
 class LogHelper {

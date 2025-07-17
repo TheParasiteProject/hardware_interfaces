@@ -67,11 +67,14 @@ enum class AnchorType : uint8_t {
 };
 
 enum class CoredumpErrorCode : uint8_t {
+  // Error codes for controller errors.
   kForceCollectCoredump,
   kControllerHwError,
   kControllerRootInflammed,
   kControllerDebugDumpWithoutRootInflammed,
   kControllerDebugInfo,
+
+  // Vendor specific error code for external implementations.
   kVendor = 0xFF,
 };
 

@@ -83,25 +83,82 @@ const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
 
-std::string DumpDebugfs(const std::string& debugfs) {
+std::string GenerateHalLogString(const std::string& title,
+                                 const std::string& log,
+                                 bool format_log = true) {
   std::stringstream ss;
+  ss << "║\t=============================================" << std::endl;
+  ss << "║\t" << title << std::endl;
+  ss << "║\t=============================================" << std::endl;
+  if (format_log) {
+    std::istringstream iss(log);
+    std::string line;
+    while (std::getline(iss, line)) {
+      ss << "║\t\t" << line << std::endl;
+    }
+  } else {
+    ss << log;
+  }
+  ss << "║" << std::endl;
+  return ss.str();
+}
+
+std::string GenerateHalLogStringFrame(const std::string& title,
+                                      const std::string& log,
+                                      bool format_log = true) {
+  std::stringstream ss;
+  ss << "╔══════════════════════════════════════════════════════════\n";
+  ss << "║ BEGIN of " << title << std::endl;
+  ss << "╠══════════════════════════════════════════════════════════\n";
+  ss << "║\n";
+  if (format_log) {
+    std::istringstream iss(log);
+    std::string line;
+    while (std::getline(iss, line)) {
+      ss << "║\t" << line << std::endl;
+    }
+  } else {
+    ss << log;
+  }
+  ss << "║\n";
+  ss << "╠══════════════════════════════════════════════════════════\n";
+  ss << "║ END of " << title << std::endl;
+  ss << "╚══════════════════════════════════════════════════════════\n";
+  ss << std::endl;
+  return ss.str();
+}
+
+std::string CoredumpToStringLog(std::vector<Coredump> coredumps,
+                                CoredumpPosition position) {
+  std::stringstream ss;
+  for (auto dump : coredumps) {
+    if (dump.position == position) {
+      switch (position) {
+        case CoredumpPosition::kBegin:
+        case CoredumpPosition::kEnd:
+          ss << GenerateHalLogString(dump.title, dump.coredump);
+      }
+    }
+  }
+  return ss.str();
+}
+
+std::string DumpDebugfs(const std::string& debugfs) {
+  std::stringstream file_content_ss;
   std::ifstream file;
 
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\t  Debugfs:" << debugfs << std::endl;
-  ss << "║\t=============================================" << std::endl;
   file.open(debugfs);
   if (file.is_open()) {
     std::string line;
     while (std::getline(file, line)) {
-      ss << "║\t\t" << line << std::endl;
+      file_content_ss << line << std::endl;
     }
+    file.close();
   } else {
-    ss << "║\t\tFail to read debugfs: " << debugfs << std::endl;
+    file_content_ss << "Fail to read debugfs: " << debugfs << std::endl;
   }
-  ss << "║" << std::endl;
 
-  return ss.str();
+  return GenerateHalLogString("Debugfs: " + debugfs, file_content_ss.str());
 }
 
 bool IsBinFilePatternMatch(const std::string& filename,
@@ -159,7 +216,7 @@ void FlushCoredumpToFd(int fd) {
     return;
   }
 
-  std::stringstream ss;
+  std::stringstream combined_output_ss;
   struct dirent* entry;
 
   while ((entry = readdir(dir.get())) != nullptr) {
@@ -183,28 +240,23 @@ void FlushCoredumpToFd(int fd) {
 
     LOG(INFO) << __func__ << ": Dumping " << full_path;
 
+    std::stringstream current_file_content_ss;
     std::ifstream input_file(full_path, std::ios::binary);
     if (!input_file.is_open()) {
-      ss << "╔══════════════════════════════════════════════════════════\n";
-      ss << "║ ERROR: Failed to open file: " << full_path << "\n";
-      ss << "╚══════════════════════════════════════════════════════════\n";
+      current_file_content_ss << "ERROR: Failed to open file: " << full_path
+                              << std::endl;
       LOG(ERROR) << __func__ << ": Failed to open file: " << full_path;
-      continue;
+    } else {
+      current_file_content_ss << input_file.rdbuf();
+      input_file.close();
     }
 
-    ss << "╔══════════════════════════════════════════════════════════\n";
-    ss << "║ BEGIN of LogFile: " << file_name << "\n";
-    ss << "╠══════════════════════════════════════════════════════════\n";
-    ss << "║\n";
-    ss << input_file.rdbuf();
-    ss << "║\n";
-    ss << "╠══════════════════════════════════════════════════════════\n";
-    ss << "║ END of LogFile: " << file_name << "\n";
-    ss << "╚══════════════════════════════════════════════════════════\n";
-    input_file.close();
+    std::string formatted_log = GenerateHalLogStringFrame(
+        "LogFile: " + file_name, current_file_content_ss.str(), false);
+    combined_output_ss << formatted_log;
   }
 
-  std::string final_output = ss.str();
+  std::string final_output = combined_output_ss.str();
   if (!final_output.empty()) {
     ssize_t bytes_written =
         write(fd, final_output.c_str(), final_output.length());
@@ -246,48 +298,57 @@ DebugCentral& DebugCentral::Get() {
   return debug_central;
 }
 
-bool DebugCentral::RegisterCoredumpCallback(
-    const std::shared_ptr<CoredumpCallback> callback) {
-  if (!callback) {
-    return false;
-  }
-  std::lock_guard<std::mutex> lock(coredump_mutex_);
-
-  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
-                      callback);
-  if (it != coredump_callbacks_.end()) {
+bool DebugCentral::RegisterDebugClient(DebugClient* client) {
+  if (!client) {
     return false;
   }
 
-  coredump_callbacks_.emplace(callback);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (debug_clients_.count(client) > 0) {
+    LOG(WARNING) << "debug client already registered!";
+    return false;
+  }
+  debug_clients_.insert(client);
   return true;
 }
 
-bool DebugCentral::UnregisterCoredumpCallback(
-    const std::shared_ptr<CoredumpCallback> callback) {
-  if (!callback) {
+bool DebugCentral::UnregisterDebugClient(DebugClient* client) {
+  if (!client) {
     return false;
   }
-  std::lock_guard<std::mutex> lock(coredump_mutex_);
-
-  auto it = std::find(coredump_callbacks_.begin(), coredump_callbacks_.end(),
-                      callback);
-  if (it == coredump_callbacks_.end()) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (debug_clients_.erase(client) == 0) {
+    LOG(WARNING) << "debug client was not registered!";
     return false;
   }
-
-  coredump_callbacks_.erase(it);
   return true;
+}
+
+std::vector<Coredump> DebugCentral::GetCoredumpFromDebugClients() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  std::vector<Coredump> client_dumps;
+  for (auto client : debug_clients_) {
+    if (client == nullptr) {
+      LOG(WARNING) << __func__
+                   << ": null router client in the registration list!";
+      continue;
+    }
+    auto dump = client->Dump();
+    client_dumps.insert(client_dumps.end(), dump.begin(), dump.end());
+  }
+  return client_dumps;
 }
 
 void DebugCentral::Dump(int fd) {
-  // Dump BtHal debug log
-  DumpBluetoothHalLog(fd, true /*add_header*/);
   LOG(INFO) << __func__
             << ": Write bt coredump files to `IBluetoothHci_default.txt`.";
-  // Dump Controller BT Activities Statistics
-  BtActivitiesLogger::GetInstacne()->ForceUpdating();
-  BtActivitiesLogger::GetInstacne()->DumpBtActivitiesStatistics(fd);
+
+  const std::string dumpsys_header = "Bluetooth HAL DUMP";
+
+  auto dump =
+      GenerateHalLogStringFrame(dumpsys_header, DumpBluetoothHalLog(), false);
+  write(fd, dump.c_str(), dump.length());
+
   FlushCoredumpToFd(fd);
 }
 
@@ -308,7 +369,7 @@ void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
 }
 
 void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
-  std::unique_lock<std::recursive_mutex> lock(mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::string anchor_timestamp = Logger::GetLogFormatTimestamp();
   std::pair log_entry =
       std::pair<std::string, std::string>(anchor, anchor_timestamp);
@@ -413,56 +474,36 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-void DebugCentral::DumpBluetoothHalLog(int fd, bool add_header) {
-  std::stringstream ss;
-
-  if (add_header) {
-    ss << "╔══════════════════════════════════════════════════════════\n";
-    ss << "║ START of Bluetooth HAL DUMP\n";
-    ss << "╠══════════════════════════════════════════════════════════\n";
-    ss << "║\n";
-  }
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\t  Controller Firmware Information" << std::endl;
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\t\t" << controller_firmware_info_ << std::endl;
-
-  ss << "║" << std::endl;
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\tAnchors' Last Appear" << std::endl;
-  ss << "║\t=============================================" << std::endl;
+std::string DebugCentral::DumpBluetoothHalLog() {
+  std::stringstream anchor_log;
   for (auto it = lasttime_record_.begin(); it != lasttime_record_.end(); ++it) {
     std::string anchor = it->second.first;
     std::string anchor_timestamp = it->second.second;
-    ss << "║\t\tTimestamp of " << anchor << ": " << anchor_timestamp
-       << std::endl;
+    anchor_log << anchor_timestamp << ": " << anchor << std::endl;
   }
-
-  ss << "║" << std::endl;
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\tAnchors' History" << std::endl;
-  ss << "║\t=============================================" << std::endl;
+  std::stringstream anchor_history;
   for (auto it = history_record_.begin(); it != history_record_.end(); ++it) {
     std::string anchor = it->first;
     std::string anchor_timestamp = it->second;
-    ss << "║\t\t" << anchor_timestamp << ": " << anchor << std::endl;
+    anchor_history << anchor_timestamp << ": " << anchor << std::endl;
   }
+
+  std::stringstream ss;
+  auto client_dumps = GetCoredumpFromDebugClients();
+  ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kBegin);
+  ss << GenerateHalLogString("Controller Firmware Information",
+                             controller_firmware_info_);
+  ss << GenerateHalLogString("Anchors' Last Appear", anchor_log.str());
+  ss << GenerateHalLogString("Anchors' History", anchor_history.str());
+  ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kEnd);
 
   if (!serial_debug_port_.empty()) {
     // Dump Kernel driver debugfs log
-    ss << "║\n";
     ss << DumpDebugfs(serial_debug_port_);
     ss << DumpDebugfs(kDebugNodeBtLpm);
   }
 
-  if (add_header) {
-    ss << "║\n";
-    ss << "╠══════════════════════════════════════════════════════════\n";
-    ss << "║ END of Bluetooth HAL DUMP\n";
-    ss << "╚══════════════════════════════════════════════════════════\n";
-  }
-  ss << std::endl;
-  write(fd, ss.str().c_str(), ss.str().length());
+  return ss.str();
 }
 
 void DebugCentral::HandleRootInflammationEvent(
@@ -525,7 +566,7 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
 
 void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
                                     uint8_t sub_error_code) {
-  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (is_coredump_generated_) {
     // coredump has already been generated, avoid duplicated dump in one crash
     // cycle
@@ -539,6 +580,17 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
 
   HAL_LOG(ERROR) << __func__ << ": Reason: "
                  << CoredumpErrorCodeToString(error_code, sub_error_code);
+
+  // Inform vendor implementations that the dump has started.
+  for (auto client : debug_clients_) {
+    if (client == nullptr) {
+      LOG(WARNING) << __func__
+                   << ": null router client in the registration list!";
+      continue;
+    }
+    client->OnGenerateCoredump(error_code, sub_error_code);
+  }
+
   int coredump_fd = OpenOrCreateCoredumpBin(kCoredumpFilePrefix);
 
   if (coredump_fd < 0) {
@@ -547,17 +599,15 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
   }
 
   std::stringstream ss;
-  ss << "DUMP REASON: " << CoredumpErrorCodeToString(error_code, sub_error_code)
+  ss << "║\tDUMP REASON: "
+     << CoredumpErrorCodeToString(error_code, sub_error_code)
      << " - occurred at " << GetCoredumpTimestampString() << std::endl;
+  ss << "║" << std::endl;
+
+  ss << DumpBluetoothHalLog();
+
   write(coredump_fd, ss.str().c_str(), ss.str().length());
-
-  DumpBluetoothHalLog(coredump_fd);
   close(coredump_fd);
-
-  // Inform vendor implementations that the dump has started.
-  for (auto& callback_ptr : coredump_callbacks_) {
-    (*callback_ptr)(error_code, sub_error_code);
-  }
 }
 
 int DebugCentral::OpenOrCreateCoredumpBin(const std::string& file_name_prefix) {
@@ -615,12 +665,12 @@ std::string DebugCentral::GetOrCreateCoredumpTimestampString() {
 }
 
 bool DebugCentral::IsCoredumpGenerated() {
-  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   return is_coredump_generated_;
 }
 
 void DebugCentral::ResetCoredumpGenerator() {
-  std::lock_guard<std::mutex> lock(coredump_mutex_);
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   crash_timestamp_.clear();
   if (is_coredump_generated_) {
     HAL_LOG(ERROR) << "Reset Bluetooth HAL after generating coredump!";
