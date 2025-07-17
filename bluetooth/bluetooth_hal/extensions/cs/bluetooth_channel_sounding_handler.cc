@@ -161,7 +161,6 @@ bool BluetoothChannelSoundingHandler::OpenSession(
 
 void BluetoothChannelSoundingHandler::OnBluetoothEnabled() {
   auto& cs_loader = CsConfigLoader::GetLoader();
-  cs_loader.LoadConfig();
   const std::vector<HalPacket>& calibration_commands =
       cs_loader.GetCsCalibrationCommands();
 
