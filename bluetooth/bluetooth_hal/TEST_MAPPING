@@ -62,6 +62,9 @@
     },
     {
       "name": "bluetooth_hal_bqr_test"
+    },
+    {
+      "name": "bluetooth_hal_bluetooth_activities_test"
     }
   ]
 }
