@@ -202,6 +202,12 @@ void BluetoothChannelSoundingHandler::OnCommandCallback(
   // Store the read local cap value for Stack to read via
   // GetVendorSpecificData.
   if (sub_opcode == kHciVscReadLocalCapabilitySubOpCode) {
+    if (packet.size() < kCommandCompleteReadLocalCapabilityOffset +
+                            kCommandCompleteReadLocalCapabilityValueLength) {
+      LOG(WARNING) << __func__ << ": Invalid event size.";
+      return;
+    }
+
     local_capabilities_.clear();
     for (int i = 0; i < kCommandCompleteReadLocalCapabilityValueLength; i++) {
       local_capabilities_.push_back(
