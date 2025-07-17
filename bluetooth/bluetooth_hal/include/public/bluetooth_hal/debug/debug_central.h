@@ -34,6 +34,7 @@
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/debug/bluetooth_activities.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
+#include "bluetooth_hal/debug/debug_types.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/util/timer_manager.h"
 
@@ -92,60 +93,6 @@
 
 namespace bluetooth_hal {
 namespace debug {
-
-enum class AnchorType : uint8_t {
-  kNone = 0,
-
-  // HciProxy
-  kStartHci,
-
-  // BluetoothHci
-  kInitialize,
-  kClose,
-  kServiceDied,
-  kSendHciCommand,
-  kSendAclData,
-  kSendScoData,
-  kSendIsoData,
-  kCallbackHciEvent,
-  kCallbackAclData,
-  kCallbackScoData,
-  kCallbackIsoData,
-
-  // HciRouter
-  kRouterInitialize,
-  kTxTask,
-  kRxTask,
-
-  // Thread
-  kThreadAcceptClient,
-  kThreadDaemonClosed,
-  kThreadSocketFileDeleted,
-  kThreadClientError,
-  kThreadClientConnect,
-  kThreadHardwareReset,
-
-  // H4 UART
-  kUserialOpen,
-  kUserialClose,
-  kUserialTtyOpen,
-
-  // PowerManager
-  kPowerControl,
-  kLowPowerMode,
-
-  // WakelockWatchdog
-  kWatchdog,
-};
-
-enum class CoredumpErrorCode : uint8_t {
-  kForceCollectCoredump,
-  kControllerHwError,
-  kControllerRootInflammed,
-  kControllerDebugDumpWithoutRootInflammed,
-  kControllerDebugInfo,
-  kVendor = 0xFF,
-};
 
 using CoredumpCallback =
     std::function<void(CoredumpErrorCode error_code, uint8_t sub_error_code)>;
