@@ -99,6 +99,24 @@ bool BluetoothChannelSoundingHandler::GetVendorSpecificData(
     std::optional<std::vector<std::optional<VendorSpecificData>>>*
         return_value) {
   *return_value = std::nullopt;
+
+  // When the ranging HAL is bound, it first acquires vendor-specific data. Set
+  // up all vendor-related components here.
+  auto& cs_loader = CsConfigLoader::GetLoader();
+  const std::vector<HalPacket>& calibration_commands =
+      cs_loader.GetCsCalibrationCommands();
+
+  if (calibration_commands.empty()) {
+    LOG(WARNING) << __func__ << ": No calibration commands are found.";
+    return true;
+  }
+
+  LOG(INFO) << __func__ << ": Send calibration commands.";
+
+  for (const auto& command : calibration_commands) {
+    SendCommand(command);
+  }
+
   return true;
 }
 
@@ -158,23 +176,6 @@ bool BluetoothChannelSoundingHandler::OpenSession(
 
   return true;
 }
-
-void BluetoothChannelSoundingHandler::OnBluetoothEnabled() {
-  auto& cs_loader = CsConfigLoader::GetLoader();
-  const std::vector<HalPacket>& calibration_commands =
-      cs_loader.GetCsCalibrationCommands();
-
-  if (calibration_commands.empty()) {
-    LOG(WARNING) << __func__ << ": No calibration commands are found.";
-    return;
-  }
-
-  for (const auto& command : calibration_commands) {
-    SendCommand(command);
-  }
-};
-
-void BluetoothChannelSoundingHandler::OnBluetoothDisabled() {};
 
 void BluetoothChannelSoundingHandler::OnCommandCallback(
     const HalPacket& packet) {
