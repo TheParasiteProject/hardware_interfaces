@@ -28,6 +28,7 @@
 #include "android/binder_status.h"
 #include "bluetooth_hal/chip/chip_provisioner_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder.h"
 #include "bluetooth_hal/hci_proxy_aidl.h"
 #include "bluetooth_hal/hci_proxy_ffi.h"
@@ -39,6 +40,8 @@ using ::aidl::android::hardware::bluetooth::hal::IBluetoothHci_addService;
 using ::bluetooth_hal::HciProxyAidl;
 using ::bluetooth_hal::chip::ChipProvisionerInterface;
 using ::bluetooth_hal::extensions::cs::BluetoothChannelSounding;
+using ::bluetooth_hal::extensions::cs::
+    ChannelSoundingDistanceEstimatorInterface;
 using ::bluetooth_hal::extensions::finder::BluetoothFinder;
 using ::bluetooth_hal::transport::TransportInterface;
 
@@ -57,6 +60,12 @@ bool BluetoothHal::RegisterVendorTransport(
 void BluetoothHal::RegisterVendorChipProvisioner(
     ChipProvisionerInterface::FactoryFn factory) {
   ChipProvisionerInterface::RegisterVendorChipProvisioner(std::move(factory));
+}
+
+void BluetoothHal::RegisterVendorChannelSoundingDistanceEstimator(
+    ChannelSoundingDistanceEstimatorInterface::FactoryFn factory) {
+  ChannelSoundingDistanceEstimatorInterface::
+      RegisterVendorChannelSoundingDistanceEstimator(std::move(factory));
 }
 
 void BluetoothHal::Start() {

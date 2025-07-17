@@ -32,7 +32,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android/binder_auto_utils.h"
-#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_algorithm.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_util.h"
 #include "bluetooth_hal/hal_types.h"
 
@@ -58,16 +58,11 @@ using ::ndk::ScopedAStatus;
 constexpr uint8_t kOneSidePct = 0x01;
 constexpr uint8_t kMode0ChannelMap = 0x02;
 
-static std::unique_ptr<ChannelSoundingAlgorithm> channel_sounding_algorithm =
-    nullptr;
-
 BluetoothChannelSoundingSession::BluetoothChannelSoundingSession(
     std::shared_ptr<IBluetoothChannelSoundingSessionCallback> callback,
-    Reason /* reason */) {
+    Reason /* reason */)
+    : distance_estimator_(ChannelSoundingDistanceEstimatorInterface::Create()) {
   callback_ = callback;
-  if (channel_sounding_algorithm == nullptr) {
-    channel_sounding_algorithm = std::make_unique<ChannelSoundingAlgorithm>();
-  }
 }
 
 ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
@@ -76,7 +71,7 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
   LOG(INFO) << __func__;
 
   if (!uuid_matched_) {
-    LOG(INFO) << "UUID doesn't matched, ignore";
+    LOG(INFO) << ": UUID doesn't matched, ignore.";
     return ScopedAStatus::ok();
   }
 
@@ -129,11 +124,11 @@ ScopedAStatus BluetoothChannelSoundingSession::writeRawData(
   }
 
   RangingResult ranging_result;
-  channel_sounding_algorithm->reset_variables();
+  distance_estimator_->ResetVariables();
   ranging_result.resultMeters =
-      channel_sounding_algorithm->estimate_distance(in_rawData);
+      distance_estimator_->EstimateDistance(in_rawData);
   ranging_result.confidenceLevel =
-      channel_sounding_algorithm->get_confidence_level() * 100;
+      distance_estimator_->GetConfidenceLevel() * 100;
   callback_->onResult(ranging_result);
   return ScopedAStatus::ok();
 }
@@ -156,20 +151,20 @@ void BluetoothChannelSoundingSession::HandleVendorSpecificData(
       GetUintProperty(Property::kChannelSoundingVendorSpecificFirstDataByte,
                       uuid0.value().opaqueValue[1]);
   LOG(INFO) << __func__
-            << " vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
+            << ": vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
 
   if ((vendor_specific_data_byte_1 & kOneSidePct) != 0) {
-    LOG(INFO) << __func__ << " support 1-side PCT";
+    LOG(INFO) << __func__ << ": Support 1-side PCT.";
     enable_fake_notification_ = true;
   } else {
-    LOG(INFO) << __func__ << " do not support 1-side PCT";
+    LOG(INFO) << __func__ << ": Do not support 1-side PCT.";
     enable_fake_notification_ = false;
   }
   if ((vendor_specific_data_byte_1 & kMode0ChannelMap) != 0) {
-    LOG(INFO) << __func__ << " support mode 0 Channel Map";
+    LOG(INFO) << __func__ << ": Support mode 0 Channel Map.";
     enable_mode_0_channel_map_ = true;
   } else {
-    LOG(INFO) << __func__ << " do not support mode 0 Channel Map";
+    LOG(INFO) << __func__ << ": Do not support mode 0 Channel Map.";
     enable_mode_0_channel_map_ = false;
   }
 }

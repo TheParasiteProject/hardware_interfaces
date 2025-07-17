@@ -57,28 +57,29 @@ bool IsUuidMatched(
     const std::optional<std::vector<std::optional<VendorSpecificData>>>
         vendor_specific_data) {
   if (!vendor_specific_data.has_value()) {
-    LOG(WARNING) << __func__ << " no value";
+    LOG(WARNING) << __func__ << ": No value.";
     return false;
   }
 
   const auto& data = *vendor_specific_data;
 
   if (data.size() < kMinNumUuid) {
-    LOG(WARNING) << __func__ << " invalid size";
+    LOG(WARNING) << __func__ << ": Invalid size.";
     return false;
   }
 
   const auto uuid0 = data[0];
   if (!uuid0.has_value() ||
       uuid0->characteristicUuid != kUuidSpecialRangingSettingCapability) {
-    LOG(WARNING) << __func__
-                 << " uuid0 doesn't match kUuidSpecialRangingSettingCapability";
+    LOG(WARNING)
+        << __func__
+        << ": uuid0 doesn't match kUuidSpecialRangingSettingCapability.";
     return false;
   }
 
   if (uuid0->opaqueValue.size() < 5) {
     LOG(WARNING) << __func__
-                 << " invalid data for kUuidSpecialRangingSettingCapability";
+                 << ": Invalid data for kUuidSpecialRangingSettingCapability.";
     return false;
   }
 
@@ -86,7 +87,7 @@ bool IsUuidMatched(
   if (!uuid1.has_value() ||
       uuid1->characteristicUuid != kUuidSpecialRangingSettingCommand) {
     LOG(WARNING) << __func__
-                 << " uuid0 doesn't match kUuidSpecialRangingSettingCommand";
+                 << ": uuid0 doesn't match kUuidSpecialRangingSettingCommand.";
     return false;
   }
 

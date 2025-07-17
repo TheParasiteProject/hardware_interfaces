@@ -17,16 +17,22 @@
 #pragma once
 
 #include "aidl/android/hardware/bluetooth/ranging/ChannelSoudingRawData.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 
-using ::aidl::android::hardware::bluetooth::ranging::ChannelSoudingRawData;
+namespace bluetooth_hal {
+namespace extensions {
+namespace cs {
 
-class ChannelSoundingAlgorithm {
+class ChannelSoundingDistanceEstimator
+    : public ChannelSoundingDistanceEstimatorInterface {
  public:
-  void reset_variables() {};
+  void ResetVariables() override;
 
-  double estimate_distance([[maybe_unused]] const ChannelSoudingRawData&) {
-    return 0;
-  }
+  double EstimateDistance(const ::aidl::android::hardware::bluetooth::ranging::
+                              ChannelSoudingRawData& raw_data) override;
 
-  double get_confidence_level() { return 0; }
+  double GetConfidenceLevel() override;
 };
+}  // namespace cs
+}  // namespace extensions
+}  // namespace bluetooth_hal

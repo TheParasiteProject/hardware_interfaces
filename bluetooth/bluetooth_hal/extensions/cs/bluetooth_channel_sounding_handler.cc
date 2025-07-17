@@ -140,14 +140,14 @@ bool BluetoothChannelSoundingHandler::OpenSession(
   SessionTracker tracker{.parameters = in_params};
 
   if (session->ShouldEnableFakeNotification()) {
-    LOG(INFO) << __func__ << " Enable fake notification";
+    LOG(INFO) << __func__ << ": Enable fake notification.";
     tracker.is_fake_notification_enabled = true;
   }
 
   session_trackers_.insert_or_assign(in_params.aclHandle, tracker);
 
   if (session->ShouldEnableMode0ChannelMap()) {
-    LOG(INFO) << __func__ << " Enable mode 0 channel map";
+    LOG(INFO) << __func__ << ": Enable mode 0 channel map.";
     HalPacket command = BuildEnableMode0ChannelMapCommand(
         static_cast<uint16_t>(in_params.aclHandle), kCommandValueEnable);
     SendCommand(command);
@@ -161,7 +161,6 @@ bool BluetoothChannelSoundingHandler::OpenSession(
 
 void BluetoothChannelSoundingHandler::OnBluetoothEnabled() {
   auto& cs_loader = CsConfigLoader::GetLoader();
-  cs_loader.LoadConfig();
   const std::vector<HalPacket>& calibration_commands =
       cs_loader.GetCsCalibrationCommands();
 
@@ -231,12 +230,12 @@ void BluetoothChannelSoundingHandler::HandleCsSubevent(
 
   if (tracker->get().cur_procedure_counter == procedure_counter) {
     LOG(DEBUG) << __func__
-               << "Skip duplicate fake notification, procedure_counter: "
+               << ": Skip duplicate fake notification, procedure_counter: "
                << procedure_counter;
     return;
   }
 
-  LOG(DEBUG) << __func__ << "Send fake notification, connection_handle:"
+  LOG(DEBUG) << __func__ << ": Send fake notification, connection_handle:"
              << connection_handle
              << ", procedure_counter:" << procedure_counter;
 

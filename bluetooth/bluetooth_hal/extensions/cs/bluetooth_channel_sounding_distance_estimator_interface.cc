@@ -14,30 +14,32 @@
  * limitations under the License.
  */
 
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
+
 #include <memory>
 
-#include "bluetooth_hal/chip/chip_provisioner_interface.h"
-#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
-#include "bluetooth_hal/transport/transport_interface.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
 
 namespace bluetooth_hal {
+namespace extensions {
+namespace cs {
 
-class BluetoothHal {
- public:
-  static BluetoothHal& GetHal();
-  bool RegisterVendorTransport(
-      std::unique_ptr<::bluetooth_hal::transport::TransportInterface>
-          transport);
-  void RegisterVendorChipProvisioner(
-      ::bluetooth_hal::chip::ChipProvisionerInterface::FactoryFn factory);
-  void RegisterVendorChannelSoundingDistanceEstimator(
-      ::bluetooth_hal::extensions::cs::
-          ChannelSoundingDistanceEstimatorInterface::FactoryFn factory);
-  void Start();
-  void StartOffloadHal();
+ChannelSoundingDistanceEstimatorInterface::FactoryFn
+    ChannelSoundingDistanceEstimatorInterface::vendor_factory_ = nullptr;
 
- private:
-  void StartExtensions();
-};
+std::unique_ptr<ChannelSoundingDistanceEstimatorInterface>
+ChannelSoundingDistanceEstimatorInterface::Create() {
+  if (vendor_factory_) {
+    return vendor_factory_();
+  }
+  return std::make_unique<ChannelSoundingDistanceEstimator>();
+}
 
+void ChannelSoundingDistanceEstimatorInterface::
+    RegisterVendorChannelSoundingDistanceEstimator(FactoryFn factory) {
+  vendor_factory_ = std::move(factory);
+}
+
+}  // namespace cs
+}  // namespace extensions
 }  // namespace bluetooth_hal
