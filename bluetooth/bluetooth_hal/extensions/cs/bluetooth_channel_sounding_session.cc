@@ -71,7 +71,7 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
   LOG(INFO) << __func__;
 
   if (!uuid_matched_) {
-    LOG(INFO) << "UUID doesn't matched, ignore";
+    LOG(INFO) << ": UUID doesn't matched, ignore.";
     return ScopedAStatus::ok();
   }
 
@@ -151,20 +151,20 @@ void BluetoothChannelSoundingSession::HandleVendorSpecificData(
       GetUintProperty(Property::kChannelSoundingVendorSpecificFirstDataByte,
                       uuid0.value().opaqueValue[1]);
   LOG(INFO) << __func__
-            << " vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
+            << ": vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
 
   if ((vendor_specific_data_byte_1 & kOneSidePct) != 0) {
-    LOG(INFO) << __func__ << " support 1-side PCT";
+    LOG(INFO) << __func__ << ": Support 1-side PCT.";
     enable_fake_notification_ = true;
   } else {
-    LOG(INFO) << __func__ << " do not support 1-side PCT";
+    LOG(INFO) << __func__ << ": Do not support 1-side PCT.";
     enable_fake_notification_ = false;
   }
   if ((vendor_specific_data_byte_1 & kMode0ChannelMap) != 0) {
-    LOG(INFO) << __func__ << " support mode 0 Channel Map";
+    LOG(INFO) << __func__ << ": Support mode 0 Channel Map.";
     enable_mode_0_channel_map_ = true;
   } else {
-    LOG(INFO) << __func__ << " do not support mode 0 Channel Map";
+    LOG(INFO) << __func__ << ": Do not support mode 0 Channel Map.";
     enable_mode_0_channel_map_ = false;
   }
 }
