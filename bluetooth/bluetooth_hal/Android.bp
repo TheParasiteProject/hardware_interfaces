@@ -102,6 +102,7 @@ filegroup {
     name: "hal_debug_srcs",
     srcs: [
         "debug/bluetooth_activity.cc",
+        "debug/bluetooth_activities.cc",
         "debug/debug_central.cc",
         "debug/debug_monitor.cc",
         "debug/stack_trace_helper.cc",
@@ -654,6 +655,24 @@ cc_test {
         "bqr/bqr_link_quality_event_test.cc",
         "bqr/bqr_root_inflammation_event.cc",
         "bqr/bqr_root_inflammation_event_test.cc",
+    ],
+    shared_libs: [
+        "libbase",
+    ],
+}
+
+cc_test {
+    name: "bluetooth_hal_bluetooth_activities_test",
+    defaults: ["bluetooth_hal_test_defaults"],
+    srcs: [
+        "hci_router_client.cc",
+        "debug/bluetooth_activities.cc",
+        "debug/bluetooth_activities_test.cc",
+        "util/logging.cc",
+        ":test_mock_router_srcs",
+    ],
+    static_libs: [
+        "libgmock",
     ],
     shared_libs: [
         "libbase",
