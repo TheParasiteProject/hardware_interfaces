@@ -417,10 +417,6 @@ void DebugCentral::HandleDebugInfoCommand() {
       std::chrono::milliseconds(kHandleDebugInfoCommandMs));
 }
 
-void DebugCentral::SetControllerFirmwareInformation(const std::string& info) {
-  controller_firmware_info_ = info;
-}
-
 void DebugCentral::GenerateVendorDumpFile(const std::string& file_path,
                                           const std::vector<uint8_t>& data,
                                           uint8_t vendor_error_code) {
@@ -491,8 +487,6 @@ std::string DebugCentral::DumpBluetoothHalLog() {
   std::stringstream ss;
   auto client_dumps = GetCoredumpFromDebugClients();
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kBegin);
-  ss << GenerateHalLogString("Controller Firmware Information",
-                             controller_firmware_info_);
   ss << GenerateHalLogString("Anchors' Last Appear", anchor_log.str());
   ss << GenerateHalLogString("Anchors' History", anchor_history.str());
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kEnd);

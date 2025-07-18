@@ -178,16 +178,6 @@ class DebugCentral {
   void HandleDebugInfoCommand();
 
   /**
-   * @brief Sets controller firmware information for debugging.
-   * This optional API allows OEM vendors to provide additional firmware
-   * details, which will be included in bugreports to aid debugging.
-   *
-   * @param info A string containing the firmware information to be printed in
-   * the bugreport.
-   */
-  void SetControllerFirmwareInformation(const std::string& info);
-
-  /**
    * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
    * triggers the Bluetoth HAL core dump and prepare for a crash. It can trigger
    * a CoredumpCallback to the caller if the coredump procedure was initiated by
@@ -248,7 +238,6 @@ class DebugCentral {
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  std::string controller_firmware_info_;
   std::list<std::pair<std::string, std::string>> history_record_;
   std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
