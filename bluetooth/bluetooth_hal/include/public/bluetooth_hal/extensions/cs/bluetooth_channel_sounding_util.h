@@ -77,6 +77,13 @@ constexpr uint8_t kGattNotification = 0x1b;
 
 constexpr uint16_t kInitialProcedureCounter = 0xffff;
 
+enum class CsFeature : uint8_t {
+  kInlinePct = 0x01,
+  kMode0ChannelMap = 0x02,
+  kPreferredConnectionInterval = 0x04,
+  kPreferredSniffInterval = 0x08,
+};
+
 std::string ToHex(const std::span<const uint8_t> data);
 
 bool IsUuidMatched(
