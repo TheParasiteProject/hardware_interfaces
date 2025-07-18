@@ -35,6 +35,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "android-base/logging.h"
 #include "android-base/properties.h"
@@ -281,7 +282,7 @@ DurationTracker::DurationTracker(AnchorType type, const std::string& log)
     : log_(log), type_(type) {
   std::stringstream ss;
   ss << "[ IN] " << log_;
-  DebugCentral::Get().UpdateRecord(type_, ss.str());
+  DebugCentral::Get().AddLog(type_, ss.str());
 }
 
 DurationTracker::~DurationTracker() {
@@ -290,7 +291,7 @@ DurationTracker::~DurationTracker() {
   }
   std::stringstream ss;
   ss << "[OUT] " << log_;
-  DebugCentral::Get().UpdateRecord(type_, ss.str());
+  DebugCentral::Get().AddLog(type_, ss.str());
 }
 
 DebugCentral& DebugCentral::Get() {
@@ -368,17 +369,17 @@ void DebugCentral::SetBtUartDebugPort(const std::string& uart_port) {
   LOG(ERROR) << __func__ << ": Cannot found uart port!";
 }
 
-void DebugCentral::UpdateRecord(AnchorType type, const std::string& anchor) {
+void DebugCentral::AddLog(AnchorType type, const std::string& log) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::string anchor_timestamp = Logger::GetLogFormatTimestamp();
-  std::pair log_entry =
-      std::pair<std::string, std::string>(anchor, anchor_timestamp);
-  if (history_record_.size() >= kMaxHistory) {
-    history_record_.pop_front();
+  std::string timestamp_str = Logger::GetLogFormatTimestamp();
+  std::pair log_with_timestamp =
+      std::pair<std::string, std::string>(log, timestamp_str);
+  if (hal_log_.size() >= kMaxHalLogLines) {
+    hal_log_.pop_front();
   }
-  history_record_.push_back(log_entry);
+  hal_log_.push_back(log_with_timestamp);
   if (type != AnchorType::kNone) {
-    lasttime_record_[type] = log_entry;
+    anchor_log_[type] = log_with_timestamp;
   }
 }
 
@@ -472,23 +473,23 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
 
 std::string DebugCentral::DumpBluetoothHalLog() {
   std::stringstream anchor_log;
-  for (auto it = lasttime_record_.begin(); it != lasttime_record_.end(); ++it) {
-    std::string anchor = it->second.first;
-    std::string anchor_timestamp = it->second.second;
-    anchor_log << anchor_timestamp << ": " << anchor << std::endl;
+  for (auto it = anchor_log_.begin(); it != anchor_log_.end(); ++it) {
+    std::string log = it->second.first;
+    std::string timestamp = it->second.second;
+    anchor_log << timestamp << ": " << log << std::endl;
   }
   std::stringstream anchor_history;
-  for (auto it = history_record_.begin(); it != history_record_.end(); ++it) {
-    std::string anchor = it->first;
-    std::string anchor_timestamp = it->second;
-    anchor_history << anchor_timestamp << ": " << anchor << std::endl;
+  for (auto it = hal_log_.begin(); it != hal_log_.end(); ++it) {
+    std::string log = it->first;
+    std::string timestamp = it->second;
+    anchor_history << timestamp << ": " << log << std::endl;
   }
 
   std::stringstream ss;
   auto client_dumps = GetCoredumpFromDebugClients();
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kBegin);
-  ss << GenerateHalLogString("Anchors' Last Appear", anchor_log.str());
-  ss << GenerateHalLogString("Anchors' History", anchor_history.str());
+  ss << GenerateHalLogString("Anchor Log", anchor_log.str());
+  ss << GenerateHalLogString("Bluetooth HAL Log", anchor_history.str());
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kEnd);
 
   if (!serial_debug_port_.empty()) {

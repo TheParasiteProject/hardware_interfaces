@@ -144,7 +144,7 @@ class DebugCentral {
   /*
    * Write debug message to logger.
    */
-  void UpdateRecord(AnchorType type, const std::string& anchor);
+  void AddLog(AnchorType type, const std::string& log);
 
   /*
    * Notify BtHal have detected error, we will collect debug log first then and
@@ -234,12 +234,12 @@ class DebugCentral {
                                                uint8_t sub_error_code);
 
  private:
-  static constexpr int kMaxHistory = 400;
+  static constexpr int kMaxHalLogLines = 400;
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  std::list<std::pair<std::string, std::string>> history_record_;
-  std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
+  std::list<std::pair<std::string, std::string>> hal_log_;
+  std::map<AnchorType, std::pair<std::string, std::string>> anchor_log_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
   DebugMonitor debug_monitor_;
   BluetoothActivities bluetooth_activities_;
@@ -278,7 +278,7 @@ class LogHelper {
 #ifdef UNIT_TEST
       (void)type_;
 #else
-      DebugCentral::Get().UpdateRecord(type_, log_message);
+      DebugCentral::Get().AddLog(type_, log_message);
 #endif
       LOG_WITH_TAG(severity_, tag_) << log_message;
     }
