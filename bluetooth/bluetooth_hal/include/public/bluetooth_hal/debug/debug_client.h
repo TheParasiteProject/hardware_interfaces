@@ -133,10 +133,8 @@ class DebugClient {
     }
 
     Coredump coredump(log_tag_, GetClientLogsInString(),
-                      CoredumpType::kInternalEnd);
-    std::vector<Coredump> coredumps;
-    coredumps.push_back(coredump);
-    return coredumps;
+                      CoredumpPosition::kEnd);
+    return {coredump};
   }
 
  protected:
