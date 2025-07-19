@@ -293,11 +293,13 @@ protected:
         NFA_SendRawVsCommand(sizeof(rf_discovery_cmd), rf_discovery_cmd, nfaVSCallback);
         usleep(10000);
 
-        uint8_t cmd[] = {NCI_ANDROID_SET_PASSIVE_OBSERVER_TECH, 0x0B};
-        status = NFA_SendVsCommand(NCI_MSG_PROP_ANDROID, sizeof(cmd), cmd, nfaVSCallback);
-        if (status == NFA_STATUS_OK) {
-            if (!sNfaVsCommand.wait(1000)) {
-                LOG(WARNING) << "Timeout waiting for observemode response";
+        if (get_vsr_api_level() >= 202504) {
+            uint8_t cmd[] = {NCI_ANDROID_SET_PASSIVE_OBSERVER_TECH, 0x0B};
+            status = NFA_SendVsCommand(NCI_MSG_PROP_ANDROID, sizeof(cmd), cmd, nfaVSCallback);
+            if (status == NFA_STATUS_OK) {
+                if (!sNfaVsCommand.wait(1000)) {
+                    LOG(WARNING) << "Timeout waiting for observemode response";
+                }
             }
         }
     }
