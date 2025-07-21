@@ -269,6 +269,13 @@ impl SkClient {
     }
 }
 
+/// Helper method to delete secrets.
+fn delete_sk_ids(instance: &str, ids: &[&Id]) {
+    let sk = get_connection(instance);
+    let ids: Vec<SecretId> = ids.iter().map(|id| SecretId { id: id.0 }).collect();
+    sk.deleteIds(&ids).unwrap();
+}
+
 #[derive(Debug)]
 enum Error {
     // Errors from Secretkeeper API errors. These are thrown by core SecretManagement and
@@ -620,20 +627,16 @@ fn secretkeeper_many_sessions_parallel(instance: String) {
             let _result = use_sk_may_fail(instance, idx);
         }));
     }
-
-    // Remove any IDs that might have been stored in the test - when _guard goes out of scope
-    let _guard = scopeguard::guard((), |_| {
-        let sk_client = SkClient::new(&instance).unwrap();
-        for idx in 0..SESSION_COUNT {
-            let mut id = ID_EXAMPLE.clone();
-            id.0[0] = idx as u8;
-            sk_client.delete(&[&id]);
-        }
-    });
-
     // Wait for all activity to quiesce.
     for handle in handles {
         let _result = handle.join();
+    }
+
+    // Remove any IDs that might have been stored in the test.
+    for idx in 0..SESSION_COUNT {
+        let mut id = ID_EXAMPLE.clone();
+        id.0[0] = idx as u8;
+        delete_sk_ids(&instance, &[&id]);
     }
 
     // Now that all the parallel activity is done, should still be able to interact with

@@ -24,8 +24,7 @@
 //! that is based on the Rust reference implementation are described in system/keymint/README.md.
 
 use kmr_hal::{register_binder_services, HalServiceError, SerializedChannel};
-use kmr_hal_nonsecure::{attestation_id_info, get_boot_info};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use std::ops::DerefMut;
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -59,24 +58,11 @@ fn inner_main() -> Result<(), HalServiceError> {
     // Create a TA in-process, which acts as a local channel for communication.
     let channel = Arc::new(Mutex::new(LocalTa::new()));
 
-    // Let the TA know information about the boot environment. In a real device this
-    // is communicated directly from the bootloader to the TA, but here we retrieve
-    // the information from system properties and send from the HAL service.
-    let boot_req = get_boot_info();
-    debug!("boot/HAL->TA: boot info is {:?}", boot_req);
-    kmr_hal::send_boot_info(channel.lock().unwrap().deref_mut(), boot_req)
-        .map_err(|e| HalServiceError(format!("Failed to send boot info: {:?}", e)))?;
+    kmr_hal_nonsecure::send_boot_info_and_attestation_id_info(&channel)?;
 
     // Let the TA know information about the userspace environment.
     if let Err(e) = kmr_hal::send_hal_info(channel.lock().unwrap().deref_mut()) {
         error!("Failed to send HAL info: {:?}", e);
-    }
-
-    // Let the TA know about attestation IDs. (In a real device these would be pre-provisioned into
-    // the TA.)
-    let attest_ids = attestation_id_info();
-    if let Err(e) = kmr_hal::send_attest_ids(channel.lock().unwrap().deref_mut(), attest_ids) {
-        error!("Failed to send attestation ID info: {:?}", e);
     }
 
     register_binder_services(&channel, SERVICE_INSTANCE)?;

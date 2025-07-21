@@ -239,6 +239,9 @@ TEST_P(RadioImsTest, updateImsCallStatus) {
               toString(radioRsp_ims->rspInfo.error).c_str());
 
     verifyError(radioRsp_ims->rspInfo.error);
+
+    // Disconnect all the potential established calls to prevent them affecting other tests.
+    clearPotentialEstablishedCalls();
 }
 
 /*
@@ -285,4 +288,19 @@ void RadioImsTest::verifyError(RadioError resp) {
             FAIL();
             break;
     }
+}
+
+void RadioImsTest::clearPotentialEstablishedCalls() {
+    serial = GetRandomSerialNumber();
+
+    ndk::ScopedAStatus res = radio_ims->updateImsCallStatus(serial, {});
+    ASSERT_OK(res);
+    EXPECT_EQ(std::cv_status::no_timeout, wait());
+    EXPECT_EQ(RadioResponseType::SOLICITED, radioRsp_ims->rspInfo.type);
+    EXPECT_EQ(serial, radioRsp_ims->rspInfo.serial);
+
+    ALOGI("clearPotentialEstablishedCalls, rspInfo.error = %s\n",
+          toString(radioRsp_ims->rspInfo.error).c_str());
+
+    verifyError(radioRsp_ims->rspInfo.error);
 }
