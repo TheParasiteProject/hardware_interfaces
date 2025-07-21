@@ -3285,6 +3285,8 @@ class StreamFixture {
         ASSERT_NO_FATAL_FAILURE(mStream->SetUpPortConfig(module));
         ASSERT_NO_FATAL_FAILURE(SetUpStream(module));
     }
+    void closeStream() { mStream->close(); }
+
     void SetUpPatchForMixPortConfig(IModule* module, ModuleConfig* moduleConfig,
                                     const AudioPortConfig& mixPortConfig) {
         constexpr bool connectedOnly = true;
@@ -3709,13 +3711,12 @@ class AudioStream : public AudioCoreModule {
     }
 
     void Close() {
-        const auto portConfig = moduleConfig->getSingleConfigForMixPort(IOTraits<Stream>::is_input);
-        if (!portConfig.has_value()) {
-            GTEST_SKIP() << "No mix port for attached devices";
+        StreamFixture<Stream> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpStreamForAnyMixPort(module.get(), moduleConfig.get()));
+        if (auto reason = stream.skipTestReason(); !reason.empty()) {
+            GTEST_SKIP() << reason;
         }
-        WithStream<Stream> stream(portConfig.value());
-        ASSERT_NO_FATAL_FAILURE(stream.SetUp(module.get(), kDefaultLargeBufferSizeFrames));
-        ASSERT_NO_FATAL_FAILURE(stream.close());
+        ASSERT_NO_FATAL_FAILURE(stream.closeStream());
     }
 
     void CloseTwice() {
