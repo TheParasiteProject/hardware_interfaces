@@ -25,10 +25,9 @@ using ::android::renderengine::LayerSettings;
 
 class TestLayer {
   public:
-    TestLayer(const std::shared_ptr<ComposerClientWrapper>& client, int64_t display,
-              ComposerClientWriter& writer)
+    TestLayer(ComposerClientWrapper& client, int64_t display, ComposerClientWriter& writer)
         : mDisplay(display) {
-        const auto& [status, layer] = client->createLayer(display, kBufferSlotCount, &writer);
+        const auto& [status, layer] = client.createLayer(display, kBufferSlotCount, &writer);
         EXPECT_TRUE(status.isOk());
         mLayer = layer;
     }
