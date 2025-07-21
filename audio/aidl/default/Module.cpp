@@ -1237,6 +1237,15 @@ ndk::ScopedAStatus Module::setAudioPortConfigImpl(
                    << ": requested port config points to non-existent portId " << portId;
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
+
+    if (portIt->ext.getTag() == AudioPortExt::Tag::device &&
+        !portIt->ext.get<AudioPortExt::Tag::device>().device.type.connection.empty() &&
+        mConnectedDevicePorts.find(portId) == mConnectedDevicePorts.end()) {
+        LOG(ERROR) << __func__ << ": " << mType << ": requested portId " << portId
+                   << " is not connected to an external device (is it a template port?).";
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
     if (existing != configs.end()) {
         *out_suggested = *existing;
     } else {

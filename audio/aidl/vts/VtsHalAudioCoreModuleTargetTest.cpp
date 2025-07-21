@@ -128,6 +128,7 @@ using ndk::ScopedAStatus;
 static constexpr int32_t kAidlVersion1 = 1;
 static constexpr int32_t kAidlVersion2 = 2;
 static constexpr int32_t kAidlVersion3 = 3;
+static constexpr int32_t kAidlVersion4 = 4;
 
 template <typename T>
 std::set<int32_t> extractIds(const std::vector<T>& v) {
@@ -2143,6 +2144,43 @@ TEST_P(AudioCoreModule, SetAudioPortConfigSuggestedConfig) {
     EXPECT_EQ(suggestedConfig.flags.value(), appliedConfig.flags.value());
     ASSERT_EQ(AudioPortExt::Tag::mix, appliedConfig.ext.getTag());
     EXPECT_EQ(kIoHandle, appliedConfig.ext.get<AudioPortExt::Tag::mix>().handle);
+}
+
+// Note: This test relies on simulation of external device connections by the HAL module.
+TEST_P(AudioCoreModule, SetAudioPortConfigRejectsTemplateDevicePort) {
+    if (aidlVersion < kAidlVersion4) {
+        GTEST_SKIP() << "Current HAL version less than " << kAidlVersion4 << " .Skipping the test ";
+    }
+    ASSERT_NO_FATAL_FAILURE(SetUpModuleConfig());
+    // Get template ports
+    std::vector<AudioPort> templateDevicePorts = moduleConfig->getExternalDevicePorts();
+
+    if (templateDevicePorts.empty()) {
+        GTEST_SKIP() << "No template ports found";
+    }
+    for (const auto& port : templateDevicePorts) {
+        SCOPED_TRACE("Test template port: " + port.toString());
+        // Connect to external device
+        WithDevicePortConnectedState portConnected(GenerateUniqueDeviceAddress(port));
+        ASSERT_NO_FATAL_FAILURE(portConnected.SetUp(module.get(), moduleConfig.get()));
+        auto connectedPortConfig = moduleConfig->getSingleConfigForDevicePort(portConnected.get());
+
+        // Call setAudioPortConfig with valid config and verify that the configs were
+        // successfully applied
+        ASSERT_NO_FATAL_FAILURE(ApplyEveryConfig({connectedPortConfig}));
+
+        // Call setAudioPortConfig with template port ID
+        connectedPortConfig.portId = port.id;
+        AudioPortConfig templateOutConfig;
+        bool isConfigApplied = false;
+        EXPECT_STATUS(EX_ILLEGAL_ARGUMENT,
+                      module->setAudioPortConfig(connectedPortConfig, &templateOutConfig,
+                                                 &isConfigApplied))
+                << "Connected port config: " << connectedPortConfig;
+        if (isConfigApplied) {
+            SCOPED_TRACE("Applied config: " + templateOutConfig.toString());
+        }
+    }
 }
 
 TEST_P(AudioCoreModule, SetAllAttachedDevicePortConfigs) {
