@@ -37,7 +37,6 @@ cc_defaults {
         "libcrypto",
         "libbase",
         "libgatekeeper",
-        "libvendorsupport",
         "packagemanager_aidl-cpp",
     ],
     static_libs: [
@@ -53,6 +52,7 @@ cc_defaults {
         "libjsoncpp",
         "libkeymint_remote_prov_support",
         "libkeymint_support",
+        "libvendorsupport",
     ],
 }
 
