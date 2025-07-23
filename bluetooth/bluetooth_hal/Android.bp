@@ -180,6 +180,7 @@ filegroup {
         "transport/device_control/uart_manager.cc",
         "transport/device_control/power_manager.cc",
         "transport/transport_interface.cc",
+        "transport/vendor_packet_validator.cc",
         "transport/hci_packet_rescuer.cc",
         "transport/uart_h4/data_processor.cc",
         "transport/uart_h4/hci_packetizer.cc",
@@ -565,6 +566,7 @@ cc_test {
     name: "bluetooth_hal_hci_packet_rescuer_test",
     defaults: ["bluetooth_hal_test_defaults"],
     srcs: [
+        "transport/vendor_packet_validator.cc",
         "transport/hci_packet_rescuer.cc",
         "transport/hci_packet_rescuer_test.cc",
         ":test_mock_debug_srcs",

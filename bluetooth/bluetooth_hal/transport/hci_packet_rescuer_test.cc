@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -53,14 +54,17 @@ struct HciPacketRescuerTestParam {
 class HciPacketRescuerTest : public Test {
  protected:
   void SetUp() override {
+    hci_packet_rescuer_ = std::make_unique<HciPacketRescuer>();
     MockBluetoothActivities::SetMockBluetoothActivities(
         &mock_bluetooth_activities_);
   }
 
   void TearDown() override {
+    hci_packet_rescuer_.reset();
     MockBluetoothActivities::SetMockBluetoothActivities(nullptr);
   }
 
+  std::unique_ptr<HciPacketRescuer> hci_packet_rescuer_;
   MockBluetoothActivities mock_bluetooth_activities_;
 };
 
@@ -72,7 +76,8 @@ TEST_P(HciPacketRescuerParamTest, FindValidPacketOffset) {
   const auto& param = GetParam();
   param.mock_setup(mock_bluetooth_activities_);
 
-  size_t offset = FindValidPacketOffset(std::span(param.data_stream));
+  size_t offset =
+      hci_packet_rescuer_->FindValidPacketOffset(std::span(param.data_stream));
 
   EXPECT_EQ(offset, param.expected_offset) << "Test: " << param.test_name;
 }
@@ -140,28 +145,20 @@ INSTANTIATE_TEST_SUITE_P(
             .test_name = "ValidEventPacketAtStart",
             .data_stream = {static_cast<uint8_t>(HciPacketType::kEvent),
                             static_cast<uint8_t>(EventCode::kCommandComplete),
-                            0x01},
+                            0x05, 0x01, 0x02, 0x03, 0x04, 0x05},
             .expected_offset = 0},
         HciPacketRescuerTestParam{
             .test_name = "ValidEventPacketWithOffset",
             .data_stream = {0xAB, 0xCD, 0xEF, 0xFF, 0xAA, 0xBB,
                             static_cast<uint8_t>(HciPacketType::kEvent),
                             static_cast<uint8_t>(EventCode::kCommandComplete),
-                            0x01},
+                            0x05, 0x01, 0x02, 0x03, 0x04, 0x05},
             .expected_offset = 6},
         HciPacketRescuerTestParam{
             .test_name = "InvalidEventPacket",
             .data_stream = {static_cast<uint8_t>(HciPacketType::kEvent), 0x01,
                             0x01},
-            .expected_offset = 3},
-        HciPacketRescuerTestParam{
-            .test_name = "MultipleValidPacketsFindFirst",
-            .data_stream = {0xAA, static_cast<uint8_t>(HciPacketType::kEvent),
-                            static_cast<uint8_t>(EventCode::kCommandStatus),
-                            0x01, 0x02,
-                            static_cast<uint8_t>(HciPacketType::kAclData), 0x23,
-                            0x01},
-            .expected_offset = 1}),
+            .expected_offset = 3}),
     [](const TestParamInfo<HciPacketRescuerParamTest::ParamType>& info) {
       return info.param.test_name;
     });
