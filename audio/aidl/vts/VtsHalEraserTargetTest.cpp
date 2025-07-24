@@ -15,6 +15,10 @@
  */
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdio>
+#include <future>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -23,18 +27,27 @@
 #include <aidl/Gtest.h>
 #include <aidl/android/hardware/audio/effect/IEffect.h>
 #include <aidl/android/hardware/audio/effect/IFactory.h>
+#include <aidl/android/media/audio/eraser/BnEraserCallback.h>
+#include <aidl/android/media/audio/eraser/ClassificationMetadata.h>
+#include <aidl/android/media/audio/eraser/ClassificationMetadataList.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
+#include <android-base/thread_annotations.h>
 #include <android/binder_interface_utils.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
 #include <gtest/gtest.h>
+#include <stdio.h>
+
+#include "audio_utils/mutex.h"
+#include "audio_utils/sndfile.h"
 
 #include "EffectHelper.h"
 #include "TestUtils.h"
 
 using namespace android;
 
+using aidl::android::hardware::audio::common::getChannelCount;
 using aidl::android::hardware::audio::effect::Descriptor;
 using aidl::android::hardware::audio::effect::Eraser;
 using aidl::android::hardware::audio::effect::getEffectTypeUuidEraser;
@@ -43,8 +56,35 @@ using aidl::android::hardware::audio::effect::IFactory;
 using aidl::android::hardware::audio::effect::Parameter;
 using aidl::android::media::audio::common::AudioFormatType;
 using aidl::android::media::audio::common::PcmType;
+using aidl::android::media::audio::eraser::BnEraserCallback;
+using aidl::android::media::audio::eraser::ClassificationMetadata;
+using aidl::android::media::audio::eraser::ClassificationMetadataList;
 using aidl::android::media::audio::eraser::Mode;
+using aidl::android::media::audio::eraser::SoundClassification;
+using ::android::audio::utils::toString;
 using android::hardware::audio::common::testing::detail::TestExecutionTracer;
+
+class EraserCallback : public BnEraserCallback {
+  public:
+    ndk::ScopedAStatus onClassifierUpdate(int,
+                                          const ClassificationMetadataList& metadataList) override {
+        audio_utils::unique_lock lock(mMutex);
+        mResults.push_back(metadataList);
+        LOG(DEBUG) << " received metadata list " << metadataList.toString();
+        mCv.notify_one();
+        return ndk::ScopedAStatus::ok();
+    }
+
+    std::vector<ClassificationMetadataList> getResults() {
+        audio_utils::unique_lock lock(mMutex);
+        return mResults;
+    }
+
+  private:
+    std::mutex mMutex;
+    audio_utils::condition_variable mCv;
+    std::vector<ClassificationMetadataList> mResults GUARDED_BY(mMutex);
+};
 
 class EraserTestHelper : public EffectHelper {
   public:
@@ -63,7 +103,7 @@ class EraserTestHelper : public EffectHelper {
         mOpenEffectReturn = IEffect::OpenEffectReturn{};
     }
 
-    bool isModeSupported(Mode mode) {
+    bool isModeSupported(Mode mode) const {
         if (!mEffect) return false;
 
         Parameter param;
@@ -89,13 +129,33 @@ class EraserTestHelper : public EffectHelper {
         return true;
     }
 
-    static const long kInputFrameCount = 0x100, kOutputFrameCount = 0x100;
+    static bool readWavFile(const std::string& aacFilePath, std::vector<float>* wavData) {
+        if (aacFilePath.empty() || !wavData) {
+            return false;
+        }
+        SF_INFO sfinfo;
+        SNDFILE* sndfile = sf_open(aacFilePath.c_str(), SFM_READ, &sfinfo);
+        if (!sndfile) {
+            LOG(ERROR) << "Could not open wav file " << aacFilePath;
+            return false;
+        }
+        if (sfinfo.channels > 2) {
+            LOG(ERROR) << "Only support mono or stereo wav file";
+            return false;
+        }
+        wavData->resize(sfinfo.frames * sfinfo.channels);
+        sf_readf_float(sndfile, wavData->data(), sfinfo.frames);
+        sf_close(sndfile);
+        return true;
+    }
+
+    static constexpr long kInputFrameCount = 0x4000, kOutputFrameCount = 0x4000;
     const std::shared_ptr<IFactory> mFactory;
     std::shared_ptr<IEffect> mEffect;
     IEffect::OpenEffectReturn mOpenEffectReturn;
-    const AudioChannelLayout kMonoChannel =
-            AudioChannelLayout::make<AudioChannelLayout::layoutMask>(
-                    AudioChannelLayout::LAYOUT_MONO);
+    static constexpr AudioChannelLayout kMonoChannel = AudioChannelLayout(
+            std::in_place_index<static_cast<size_t>(AudioChannelLayout::layoutMask)>,
+            AudioChannelLayout::LAYOUT_MONO);
 
   private:
     std::vector<std::pair<Eraser::Tag, Eraser>> mTags;
@@ -187,16 +247,22 @@ INSTANTIATE_TEST_SUITE_P(EraserParamTest, EraserParamTest,
                          });
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EraserParamTest);
 
-using EraserDataTestParam = std::tuple<std::pair<std::shared_ptr<IFactory>, Descriptor>>;
+using EraserDataTestParam = std::tuple<std::pair<std::shared_ptr<IFactory>, Descriptor>,
+                                       std::pair<std::string, SoundClassification>>;
 class EraserDataTest : public ::testing::TestWithParam<EraserDataTestParam>,
                        public EraserTestHelper {
   public:
-    EraserDataTest() : EraserTestHelper(std::get<PARAM_INSTANCE_NAME>(GetParam())) {}
+    EraserDataTest()
+        : EraserTestHelper(std::get<PARAM_INSTANCE_NAME>(GetParam())),
+          mAudioFile(std::get<PARAM_AUDIO_FILE>(GetParam()).first),
+          mExpectedClassification(std::get<PARAM_AUDIO_FILE>(GetParam()).second) {
+        LOG(INFO) << " testing " << toString(mExpectedClassification) << " with " << mAudioFile;
+    }
 
     void SetUp() override {
         ASSERT_NO_FATAL_FAILURE(SetUpEraser());
 
-        Parameter::Common common = createParamCommon();
+        Parameter::Common common = createParamCommon(AUDIO_SESSION_NONE, 15600, 15600);
         ASSERT_NO_FATAL_FAILURE(open(mEffect, common, std::nullopt, &mOpenEffectReturn, EX_NONE));
         ASSERT_NE(nullptr, mEffect);
     }
@@ -205,26 +271,73 @@ class EraserDataTest : public ::testing::TestWithParam<EraserDataTestParam>,
         ASSERT_NO_FATAL_FAILURE(close(mEffect));
         ASSERT_NO_FATAL_FAILURE(TearDownEraser());
     }
+    const std::string mAudioFile;
+    const SoundClassification mExpectedClassification;
 };
 
-TEST_P(EraserDataTest, ClassifyAudio) {
+TEST_P(EraserDataTest, ClassifySounds) {
     // eraser effect must support CLASSIFIER mode
     ASSERT_TRUE(isModeSupported(Mode::CLASSIFIER));
-    ASSERT_TRUE(setEraserMode(Mode::CLASSIFIER));
+
+    auto callback = ndk::SharedRefBase::make<EraserCallback>();
+    using EraserConfiguration = aidl::android::media::audio::eraser::Configuration;
+    Eraser eraser = Eraser::make<Eraser::configuration>(
+            EraserConfiguration({.mode = Mode::CLASSIFIER, .callback = callback}));
+    Parameter::Specific specific = Parameter::Specific::make<Parameter::Specific::eraser>(eraser);
+    Parameter param = Parameter::make<Parameter::specific>(specific);
+    EXPECT_IS_OK(mEffect->setParameter(param));
+
+    std::vector<float> wavData;
+    ASSERT_TRUE(readWavFile(mAudioFile, &wavData));
+
+    const auto channelCount = getChannelCount(kMonoChannel);
+    ASSERT_NE(0ul, channelCount);
+    std::vector<float> out(kOutputFrameCount * channelCount, 0);
+
+    ASSERT_NO_FATAL_FAILURE(
+            processInputAndWriteToOutput(wavData, out, mEffect, &mOpenEffectReturn));
+
+    // very loose check, make sure the classifier report at least one expected sound category
+    auto results = callback->getResults();
+    ASSERT_TRUE(results.size() >= 0);
+    bool foundExpectedSound = false;
+    // check the expected sound exist in the last result
+    for (const auto& result : results) {
+        for (const auto& metadata : result.metadatas) {
+            // verify the sound category and confidence score with loose expectation
+            if (metadata.classification.classification == mExpectedClassification) {
+                foundExpectedSound = true;
+                break;
+            }
+        }
+        if (foundExpectedSound) {
+            break;
+        }
+    }
+    ASSERT_TRUE(foundExpectedSound);
 }
 
-INSTANTIATE_TEST_SUITE_P(EraserDataTest, EraserDataTest,
-                         ::testing::Combine(testing::ValuesIn(
-                                 kDescPair = EffectFactoryHelper::getAllEffectDescriptors(
-                                         IFactory::descriptor, getEffectTypeUuidEraser()))),
-                         [](const testing::TestParamInfo<EraserDataTest::ParamType>& info) {
-                             auto descriptor = std::get<PARAM_INSTANCE_NAME>(info.param).second;
-                             std::string name = getPrefix(descriptor);
-                             std::replace_if(
-                                     name.begin(), name.end(),
-                                     [](const char c) { return !std::isalnum(c); }, '_');
-                             return name;
-                         });
+[[clang::no_destroy]] static const std::vector<std::pair<std::string, SoundClassification>>
+        kClassifierFileMap = {
+                {"/data/local/tmp/speech.16khz.1ch.f32.6s.wav", SoundClassification::HUMAN},
+                {"/data/local/tmp/dog.16khz.1ch.f32.6s.wav", SoundClassification::ANIMAL},
+                {"/data/local/tmp/wind.16khz.1ch.f32.6s.wav", SoundClassification::ENVIRONMENT},
+};
+
+INSTANTIATE_TEST_SUITE_P(
+        EraserDataTest, EraserDataTest,
+        ::testing::Combine(
+                testing::ValuesIn(kDescPair = EffectFactoryHelper::getAllEffectDescriptors(
+                                          IFactory::descriptor, getEffectTypeUuidEraser())),
+                testing::ValuesIn(kClassifierFileMap)),
+        [](const testing::TestParamInfo<EraserDataTest::ParamType>& info) {
+            auto descriptor = std::get<PARAM_INSTANCE_NAME>(info.param).second;
+            std::string name =
+                    getPrefix(descriptor) + "_" + std::get<PARAM_AUDIO_FILE>(info.param).first;
+            std::replace_if(
+                    name.begin(), name.end(), [](const char c) { return !std::isalnum(c); }, '_');
+            return name;
+        });
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EraserDataTest);
 
 int main(int argc, char** argv) {
