@@ -222,6 +222,21 @@ cc_test {
 
 cc_test {
     name: "VtsHalEraserTargetTest",
-    defaults: ["VtsHalAudioEffectTargetTestDefaults"],
-    srcs: ["VtsHalEraserTargetTest.cpp"],
+    defaults: [
+        "latest_android_hardware_audio_effect_ndk_static",
+        "VtsHalAudioTargetTestDefaults",
+    ],
+    test_config_template: "VtsHalAudioEraserTest.xml",
+    srcs: [
+        ":effectCommonFile",
+        "VtsHalEraserTargetTest.cpp",
+    ],
+    static_libs: [
+        "libsndfile",
+    ],
+    data: [
+        "data/dog.16khz.1ch.f32.6s.wav",
+        "data/speech.16khz.1ch.f32.6s.wav",
+        "data/wind.16khz.1ch.f32.6s.wav",
+    ],
 }

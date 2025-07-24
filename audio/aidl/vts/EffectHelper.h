@@ -223,8 +223,9 @@ class EffectHelper {
         }
     }
 
-    static void writeToFmq(std::unique_ptr<StatusMQ>& statusMq, std::unique_ptr<DataMQ>& dataMq,
-                           const std::vector<float>& buffer, int version) {
+    static void writeToFmq(const std::unique_ptr<StatusMQ>& statusMq,
+                           const std::unique_ptr<DataMQ>& dataMq, const std::vector<float>& buffer,
+                           int version) {
         const size_t available = dataMq->availableToWrite();
         ASSERT_NE(0Ul, available);
         auto bufferFloats = buffer.size();
@@ -240,8 +241,8 @@ class EffectHelper {
         ASSERT_EQ(::android::OK, EventFlag::deleteEventFlag(&efGroup));
     }
 
-    static void readFromFmq(std::unique_ptr<StatusMQ>& statusMq, size_t statusNum,
-                            std::unique_ptr<DataMQ>& dataMq, size_t expectFloats,
+    static void readFromFmq(const std::unique_ptr<StatusMQ>& statusMq, size_t statusNum,
+                            const std::unique_ptr<DataMQ>& dataMq, size_t expectFloats,
                             std::vector<float>& buffer,
                             std::optional<int> expectStatus = STATUS_OK) {
         if (0 == statusNum) {
@@ -261,7 +262,32 @@ class EffectHelper {
         }
     }
 
-    static void expectDataMqUpdateEventFlag(std::unique_ptr<StatusMQ>& statusMq) {
+    static void writeToAndReadFromFmq(std::unique_ptr<StatusMQ>& statusMq, size_t statusNum,
+                                      std::unique_ptr<DataMQ>& inputMq,
+                                      std::unique_ptr<DataMQ>& outputMq,
+                                      const std::vector<float>& inputBuffer,
+                                      std::vector<float>& outputBuffer,
+                                      std::optional<int> expectStatus = std::nullopt,
+                                      const int version = -1) {
+        const size_t inputBufferFloats = inputBuffer.size();
+        size_t processed_size = 0ul;
+        while (processed_size < inputBufferFloats) {
+            const size_t floatsToWrite =
+                    std::min(inputMq->availableToWrite(), inputBufferFloats - processed_size);
+            ASSERT_NE(0Ul, floatsToWrite);
+
+            std::vector<float> input(inputBuffer.begin() + processed_size,
+                                     inputBuffer.begin() + processed_size + floatsToWrite);
+            // write to input FMQ
+            ASSERT_NO_FATAL_FAILURE(writeToFmq(statusMq, inputMq, input, version));
+            // read same size from output FMQ
+            ASSERT_NO_FATAL_FAILURE(readFromFmq(statusMq, statusNum, outputMq, floatsToWrite,
+                                                outputBuffer, expectStatus));
+            processed_size += floatsToWrite;
+        }
+    }
+
+    static void expectDataMqUpdateEventFlag(const std::unique_ptr<StatusMQ>& statusMq) {
         EventFlag* efGroup;
         ASSERT_EQ(::android::OK,
                   EventFlag::createEventFlag(statusMq->getEventFlagWord(), &efGroup));
@@ -427,11 +453,12 @@ class EffectHelper {
     }
 
     // keep writing data to the FMQ until effect transit from DRAINING to IDLE
-    static void waitForDrain(std::vector<float>& inputBuffer, std::vector<float>& outputBuffer,
+    static void waitForDrain(const std::vector<float>& inputBuffer,
+                             std::vector<float>& outputBuffer,
                              const std::shared_ptr<IEffect>& effect,
-                             std::unique_ptr<EffectHelper::StatusMQ>& statusMQ,
-                             std::unique_ptr<EffectHelper::DataMQ>& inputMQ,
-                             std::unique_ptr<EffectHelper::DataMQ>& outputMQ, int version) {
+                             const std::unique_ptr<EffectHelper::StatusMQ>& statusMQ,
+                             const std::unique_ptr<EffectHelper::DataMQ>& inputMQ,
+                             const std::unique_ptr<EffectHelper::DataMQ>& outputMQ, int version) {
         State state;
         while (effect->getState(&state).getStatus() == EX_NONE && state == State::DRAINING) {
             EXPECT_NO_FATAL_FAILURE(
@@ -485,6 +512,38 @@ class EffectHelper {
 
         if (callStopReset) {
             ASSERT_NO_FATAL_FAILURE(command(effect, CommandId::RESET));
+        }
+    }
+
+    static void processInputAndWriteToOutput(const std::vector<float>& inputBuffer,
+                                             std::vector<float>& outputBuffer,
+                                             const std::shared_ptr<IEffect>& effect,
+                                             const IEffect::OpenEffectReturn* openEffectReturn,
+                                             int version = -1) {
+        // Initialize AidlMessagequeues
+        auto statusMQ = std::make_unique<EffectHelper::StatusMQ>(openEffectReturn->statusMQ);
+        ASSERT_TRUE(statusMQ->isValid());
+        auto inputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->inputDataMQ);
+        ASSERT_TRUE(inputMQ->isValid());
+        auto outputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->outputDataMQ);
+        ASSERT_TRUE(outputMQ->isValid());
+
+        // Enabling the process
+        ASSERT_NO_FATAL_FAILURE(command(effect, CommandId::START));
+
+        // Write from buffer to message queues and calling process
+        if (version == -1) {
+            ASSERT_IS_OK(effect->getInterfaceVersion(&version));
+        }
+
+        EXPECT_NO_FATAL_FAILURE(EffectHelper::writeToAndReadFromFmq(
+                statusMQ, 1, inputMQ, outputMQ, inputBuffer, outputBuffer, std::nullopt, version));
+
+        // Disable the process
+        ASSERT_NO_FATAL_FAILURE(command(effect, CommandId::STOP));
+        if (version >= kDrainSupportedVersion) {
+            EXPECT_NO_FATAL_FAILURE(waitForDrain(inputBuffer, outputBuffer, effect, statusMQ,
+                                                 inputMQ, outputMQ, version));
         }
     }
 
