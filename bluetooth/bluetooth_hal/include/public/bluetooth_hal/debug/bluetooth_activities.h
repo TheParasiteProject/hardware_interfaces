@@ -58,6 +58,15 @@ class BluetoothActivities {
    */
   virtual bool HasConnectedDevice() const = 0;
 
+  /**
+   * @brief Checks if a specific Bluetooth device is connected.
+   *
+   * @param connection_handle The handle of the Bluetooth connection to check.
+   * @return true if the device with the given connection handle is connected,
+   * false otherwise.
+   */
+  virtual bool IsConnected(uint16_t connection_handle) const = 0;
+
   virtual void OnMonitorPacketCallback(
       ::bluetooth_hal::hci::MonitorMode mode,
       const ::bluetooth_hal::hci::HalPacket& packet) = 0;

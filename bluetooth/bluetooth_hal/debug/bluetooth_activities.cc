@@ -78,6 +78,7 @@ class BluetoothActivitiesImpl : public BluetoothActivities,
   BluetoothActivitiesImpl();
 
   bool HasConnectedDevice() const;
+  bool IsConnected(uint16_t connection_handle) const;
   void HandleBleMetaEvent(const ::bluetooth_hal::hci::HalPacket& event);
   void HandleConnectCompleteEvent(const ::bluetooth_hal::hci::HalPacket& event);
   void HandleDisconnectCompleteEvent(
@@ -156,6 +157,11 @@ void BluetoothActivities::Stop() {
 
 bool BluetoothActivitiesImpl::HasConnectedDevice() const {
   return connected_device_address_.size() > 0;
+}
+
+bool BluetoothActivitiesImpl::IsConnected(uint16_t connection_handle) const {
+  return connected_device_address_.find(connection_handle) !=
+         connected_device_address_.end();
 }
 
 void BluetoothActivitiesImpl::OnMonitorPacketCallback(

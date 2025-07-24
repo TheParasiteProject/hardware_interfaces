@@ -18,6 +18,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <sys/types.h>
 
 #include <cstdint>
 #include <utility>
@@ -43,6 +44,8 @@ using ::bluetooth_hal::hci::MonitorMode;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::Test;
+using ::testing::Values;
+using ::testing::WithParamInterface;
 
 constexpr size_t kClassicConnectionCompleteEventLength = 14;
 constexpr size_t kDisconnectionCompleteEventLength = 7;
@@ -170,35 +173,45 @@ class BluetoothActivitiesTest : public Test {
 
 TEST_F(BluetoothActivitiesTest, InitialState) {
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().IsConnected(0x000a));
 }
 
 class ConnectionAndDisconnectionTest
     : public BluetoothActivitiesTest,
-      public ::testing::WithParamInterface<HalPacket> {};
+      public WithParamInterface<std::pair<HalPacket, uint16_t>> {};
 
 TEST_P(ConnectionAndDisconnectionTest, ConnectionAndDisconnection) {
+  const auto& [packet, connect_handle] = GetParam();
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                     GetParam());
+                                                     packet);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_TRUE(BluetoothActivities::Get().IsConnected(connect_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
 }
 
 INSTANTIATE_TEST_SUITE_P(
     ConnectionAndDisconnectionTest, ConnectionAndDisconnectionTest,
-    ::testing::Values(
-        CreateClassicConnectionCompleteEvent(device_1, true),
-        CreateBleConnectionCompleteEvent(device_1, true),
-        CreateBleEnhancedConnectionCompleteV1Event(device_1, true),
-        CreateBleEnhancedConnectionCompleteV2Event(device_1, true)));
+    Values(std::make_pair(CreateClassicConnectionCompleteEvent(device_1, true),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleConnectionCompleteEvent(device_1, true),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleEnhancedConnectionCompleteV1Event(device_1,
+                                                                     true),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleEnhancedConnectionCompleteV2Event(device_1,
+                                                                     true),
+                          device_1.connection_handle)));
 
 class MultiDeviceConnectionsAndDisconnectionsTest
     : public BluetoothActivitiesTest,
-      public ::testing::WithParamInterface<std::pair<HalPacket, HalPacket>> {};
+      public WithParamInterface<std::pair<HalPacket, HalPacket>> {};
 
 TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
        MultiDeviceConnectionsAndDisconnections) {
@@ -209,58 +222,82 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      device_1_connection_event);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_TRUE(
+      BluetoothActivities::Get().IsConnected(device_1.connection_handle));
+  EXPECT_FALSE(
+      BluetoothActivities::Get().IsConnected(device_2.connection_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      device_2_connection_event);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_TRUE(
+      BluetoothActivities::Get().IsConnected(device_1.connection_handle));
+  EXPECT_TRUE(
+      BluetoothActivities::Get().IsConnected(device_2.connection_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(
+      BluetoothActivities::Get().IsConnected(device_1.connection_handle));
+  EXPECT_TRUE(
+      BluetoothActivities::Get().IsConnected(device_2.connection_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_2, true));
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(
+      BluetoothActivities::Get().IsConnected(device_1.connection_handle));
+  EXPECT_FALSE(
+      BluetoothActivities::Get().IsConnected(device_2.connection_handle));
 }
 
 INSTANTIATE_TEST_SUITE_P(
     MultiDeviceConnectionsAndDisconnectionsTest,
     MultiDeviceConnectionsAndDisconnectionsTest,
-    ::testing::Values(
-        std::make_pair(CreateClassicConnectionCompleteEvent(device_1, true),
-                       CreateClassicConnectionCompleteEvent(device_2, true)),
-        std::make_pair(CreateBleConnectionCompleteEvent(device_1, true),
-                       CreateBleConnectionCompleteEvent(device_2, true)),
-        std::make_pair(
-            CreateBleEnhancedConnectionCompleteV1Event(device_1, true),
-            CreateBleEnhancedConnectionCompleteV1Event(device_2, true)),
-        std::make_pair(
-            CreateBleEnhancedConnectionCompleteV2Event(device_1, true),
-            CreateBleEnhancedConnectionCompleteV2Event(device_2, true)),
-        std::make_pair(CreateClassicConnectionCompleteEvent(device_1, true),
-                       CreateBleConnectionCompleteEvent(device_2, true)),
-        std::make_pair(CreateBleEnhancedConnectionCompleteV1Event(device_1,
-                                                                  true),
-                       CreateClassicConnectionCompleteEvent(device_2, true))));
+    Values(std::make_pair(CreateClassicConnectionCompleteEvent(device_1, true),
+                          CreateClassicConnectionCompleteEvent(device_2, true)),
+           std::make_pair(CreateBleConnectionCompleteEvent(device_1, true),
+                          CreateBleConnectionCompleteEvent(device_2, true)),
+           std::make_pair(
+               CreateBleEnhancedConnectionCompleteV1Event(device_1, true),
+               CreateBleEnhancedConnectionCompleteV1Event(device_2, true)),
+           std::make_pair(
+               CreateBleEnhancedConnectionCompleteV2Event(device_1, true),
+               CreateBleEnhancedConnectionCompleteV2Event(device_2, true)),
+           std::make_pair(CreateClassicConnectionCompleteEvent(device_1, true),
+                          CreateBleConnectionCompleteEvent(device_2, true)),
+           std::make_pair(
+               CreateBleEnhancedConnectionCompleteV1Event(device_1, true),
+               CreateClassicConnectionCompleteEvent(device_2, true))));
 
-class ConnectionFailTest : public BluetoothActivitiesTest,
-                           public ::testing::WithParamInterface<HalPacket> {};
+class ConnectionFailTest
+    : public BluetoothActivitiesTest,
+      public WithParamInterface<std::pair<HalPacket, uint16_t>> {};
 
 TEST_P(ConnectionFailTest, ConnectionFail) {
+  const auto& [packet, connect_handle] = GetParam();
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
 
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                     GetParam());
+                                                     packet);
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
 }
 
 INSTANTIATE_TEST_SUITE_P(
     ConnectionFailTest, ConnectionFailTest,
-    ::testing::Values(
-        CreateClassicConnectionCompleteEvent(device_1, false),
-        CreateBleConnectionCompleteEvent(device_1, false),
-        CreateBleEnhancedConnectionCompleteV1Event(device_1, false),
-        CreateBleEnhancedConnectionCompleteV2Event(device_1, false)));
+    Values(std::make_pair(CreateClassicConnectionCompleteEvent(device_1, false),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleConnectionCompleteEvent(device_1, false),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleEnhancedConnectionCompleteV1Event(device_1,
+                                                                     false),
+                          device_1.connection_handle),
+           std::make_pair(CreateBleEnhancedConnectionCompleteV2Event(device_1,
+                                                                     false),
+                          device_1.connection_handle)));
 
 }  // namespace
 }  // namespace debug
