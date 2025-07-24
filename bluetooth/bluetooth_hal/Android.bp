@@ -104,6 +104,7 @@ filegroup {
         "debug/bluetooth_activity.cc",
         "debug/bluetooth_activities.cc",
         "debug/debug_central.cc",
+        "debug/debug_client.cc",
         "debug/debug_monitor.cc",
         "debug/stack_trace_helper.cc",
         "debug/vnd_snoop_logger.cc",

@@ -33,8 +33,11 @@
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/debug/bluetooth_activities.h"
+#include "bluetooth_hal/debug/debug_client.h"
 #include "bluetooth_hal/debug/debug_monitor.h"
+#include "bluetooth_hal/debug/debug_types.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/util/logging.h"
 #include "bluetooth_hal/util/timer_manager.h"
 
 /*
@@ -82,73 +85,8 @@
   ([](auto&& logger) -> auto&& { return logger; })( \
       ::bluetooth_hal::debug::LogHelper(::android::base::severity, LOG_TAG))
 
-/*
- * Helper mecro for LogHelper to print system log with a specific tag.
- */
-#define LOG_WITH_TAG(severity, tag)                                          \
-  ::android::base::LogMessage(__FILE__, __LINE__, SEVERITY_LAMBDA(severity), \
-                              tag, -1)                                       \
-      .stream()
-
 namespace bluetooth_hal {
 namespace debug {
-
-enum class AnchorType : uint8_t {
-  kNone = 0,
-
-  // HciProxy
-  kStartHci,
-
-  // BluetoothHci
-  kInitialize,
-  kClose,
-  kServiceDied,
-  kSendHciCommand,
-  kSendAclData,
-  kSendScoData,
-  kSendIsoData,
-  kCallbackHciEvent,
-  kCallbackAclData,
-  kCallbackScoData,
-  kCallbackIsoData,
-
-  // HciRouter
-  kRouterInitialize,
-  kTxTask,
-  kRxTask,
-
-  // Thread
-  kThreadAcceptClient,
-  kThreadDaemonClosed,
-  kThreadSocketFileDeleted,
-  kThreadClientError,
-  kThreadClientConnect,
-  kThreadHardwareReset,
-
-  // H4 UART
-  kUserialOpen,
-  kUserialClose,
-  kUserialTtyOpen,
-
-  // PowerManager
-  kPowerControl,
-  kLowPowerMode,
-
-  // WakelockWatchdog
-  kWatchdog,
-};
-
-enum class CoredumpErrorCode : uint8_t {
-  kForceCollectCoredump,
-  kControllerHwError,
-  kControllerRootInflammed,
-  kControllerDebugDumpWithoutRootInflammed,
-  kControllerDebugInfo,
-  kVendor = 0xFF,
-};
-
-using CoredumpCallback =
-    std::function<void(CoredumpErrorCode error_code, uint8_t sub_error_code)>;
 
 class DurationTracker {
  public:
@@ -170,27 +108,21 @@ class DebugCentral {
   static DebugCentral& Get();
 
   /**
-   * @brief Register a callback function which is invoked when the DebugCentral
-   * is generating a coredump. This is used for vendor customized debug code to
-   * react to the coerdump procedure.
+   * @brief Register a debug client to receive debug callbacks from the
+   * DebugCentral.
    *
-   * This method supports multiple callback registry.
-   *
-   * @param callback The callback function to be registered.
+   * @param debug_client The client resigers for debug information.
    * @return return true if success, otherwise false.
    */
-  bool RegisterCoredumpCallback(
-      const std::shared_ptr<CoredumpCallback> callback);
+  bool RegisterDebugClient(DebugClient* debug_client);
 
   /**
-   * @brief Unregister the callback that was registered via
-   * RegisterCoredumpCallback.
+   * @brief Unregister the debug client that was registered.
    *
-   * @param callback The callback function to be unregistered.
+   * @param callback The debug client to be unregistered.
    * @return return true if success, otherwise false.
    */
-  bool UnregisterCoredumpCallback(
-      const std::shared_ptr<CoredumpCallback> callback);
+  bool UnregisterDebugClient(DebugClient* debug_client);
 
   /*
    * Invokes when bugreport is triggered, dump all information to the debug fd.
@@ -205,7 +137,7 @@ class DebugCentral {
   /*
    * Write debug message to logger.
    */
-  void UpdateRecord(AnchorType type, const std::string& anchor);
+  void AddLog(AnchorType type, const std::string& log);
 
   /*
    * Notify BtHal have detected error, we will collect debug log first then and
@@ -237,16 +169,6 @@ class DebugCentral {
    * not report Debug Info events in time.
    */
   void HandleDebugInfoCommand();
-
-  /**
-   * @brief Sets controller firmware information for debugging.
-   * This optional API allows OEM vendors to provide additional firmware
-   * details, which will be included in bugreports to aid debugging.
-   *
-   * @param info A string containing the firmware information to be printed in
-   * the bugreport.
-   */
-  void SetControllerFirmwareInformation(const std::string& info);
 
   /**
    * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
@@ -305,30 +227,27 @@ class DebugCentral {
                                                uint8_t sub_error_code);
 
  private:
-  static constexpr int kMaxHistory = 400;
-  // Determine if we should hijack the vendor debug event or not
+  static constexpr int kMaxHalLogLines = 400;
   std::string serial_debug_port_;
   std::string crash_timestamp_;
   std::recursive_mutex mutex_;
-  // BtHal Logger
-  std::string controller_firmware_info_;
-  std::list<std::pair<std::string, std::string>> history_record_;
-  std::map<AnchorType, std::pair<std::string, std::string>> lasttime_record_;
+  std::list<std::pair<std::string, std::string>> hal_log_;
+  std::map<AnchorType, std::pair<std::string, std::string>> anchor_log_;
   ::bluetooth_hal::util::Timer debug_info_command_timer_;
   DebugMonitor debug_monitor_;
   BluetoothActivities bluetooth_activities_;
   ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
-  std::unordered_set<std::shared_ptr<CoredumpCallback>> coredump_callbacks_;
-  std::mutex coredump_mutex_;
+  std::unordered_set<DebugClient*> debug_clients_;
   bool is_coredump_generated_;
 
-  void DumpBluetoothHalLog(int fd, bool add_header = false);
+  std::string DumpBluetoothHalLog();
   void GenerateCoredump(CoredumpErrorCode error_code,
                         uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
   std::string GetOrCreateCoredumpTimestampString();
   int OpenOrCreateCoredumpBin(const std::string& file_prefix);
+  std::vector<Coredump> GetCoredumpFromDebugClients();
 };
 
 class LogHelper {
@@ -352,7 +271,7 @@ class LogHelper {
 #ifdef UNIT_TEST
       (void)type_;
 #else
-      DebugCentral::Get().UpdateRecord(type_, log_message);
+      DebugCentral::Get().AddLog(type_, log_message);
 #endif
       LOG_WITH_TAG(severity_, tag_) << log_message;
     }
