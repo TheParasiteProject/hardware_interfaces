@@ -22,8 +22,12 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <list>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/bluetooth_address.h"
@@ -31,6 +35,7 @@
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/hci_monitor.h"
+#include "bluetooth_hal/hci_router_client.h"
 #include "bluetooth_hal/util/logging.h"
 
 namespace bluetooth_hal {
@@ -38,6 +43,7 @@ namespace debug {
 namespace {
 
 using ::bluetooth_hal::hci::BleMetaEventSubCode;
+using ::bluetooth_hal::hci::BluetoothAddress;
 using ::bluetooth_hal::hci::EventCode;
 using ::bluetooth_hal::hci::EventResultCode;
 using ::bluetooth_hal::hci::HalPacket;
@@ -66,7 +72,50 @@ std::string ToHexString(uint16_t value, int num_of_digits) {
 
 }  // namespace
 
-BluetoothActivities::BluetoothActivities()
+class BluetoothActivitiesImpl : public BluetoothActivities,
+                                public ::bluetooth_hal::hci::HciRouterClient {
+ public:
+  BluetoothActivitiesImpl();
+
+  bool HasConnectedDevice() const;
+  void HandleBleMetaEvent(const ::bluetooth_hal::hci::HalPacket& event);
+  void HandleConnectCompleteEvent(const ::bluetooth_hal::hci::HalPacket& event);
+  void HandleDisconnectCompleteEvent(
+      const ::bluetooth_hal::hci::HalPacket& event);
+
+  void OnCommandCallback(
+      [[maybe_unused]] const ::bluetooth_hal::hci::HalPacket& packet) override {
+  };
+  void OnMonitorPacketCallback(
+      ::bluetooth_hal::hci::MonitorMode mode,
+      const ::bluetooth_hal::hci::HalPacket& packet) override;
+  void OnBluetoothChipReady() override {};
+  void OnBluetoothChipClosed() override;
+  void OnBluetoothEnabled() override {};
+  void OnBluetoothDisabled() override {};
+
+ private:
+  struct ConnectionActivity {
+    uint16_t connection_handle;
+    BluetoothAddress bd_address;
+    std::string event;
+    std::string status;
+    std::string timestamp;
+  };
+
+  void UpdateConnectionHistory(const ConnectionActivity& device);
+
+  HciBleMetaEventMonitor ble_connection_complete_event_monitor_;
+  HciBleMetaEventMonitor ble_enhanced_connection_complete_v1_event_monitor_;
+  HciBleMetaEventMonitor ble_enhanced_connection_complete_v2_event_monitor_;
+  HciEventMonitor connection_complete_event_monitor_;
+  HciEventMonitor disconnection_complete_event_monitor_;
+
+  std::list<ConnectionActivity> connection_history_;
+  std::unordered_map<uint16_t, BluetoothAddress> connected_device_address_;
+};
+
+BluetoothActivitiesImpl::BluetoothActivitiesImpl()
     : ble_connection_complete_event_monitor_(HciBleMetaEventMonitor(
           static_cast<uint8_t>(BleMetaEventSubCode::kConnectionComplete))),
       ble_enhanced_connection_complete_v1_event_monitor_(
@@ -85,11 +134,31 @@ BluetoothActivities::BluetoothActivities()
   RegisterMonitor(disconnection_complete_event_monitor_, MonitorMode::kMonitor);
 }
 
-bool BluetoothActivities::HasConnectedDevice() {
+std::unique_ptr<BluetoothActivities> BluetoothActivities::instance_;
+std::mutex BluetoothActivities::mutex_;
+
+void BluetoothActivities::Start() { BluetoothActivities::Get(); }
+
+BluetoothActivities& BluetoothActivities::Get() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!instance_) {
+    instance_ = std::make_unique<BluetoothActivitiesImpl>();
+  }
+  return *instance_;
+}
+
+void BluetoothActivities::Stop() {
+  if (!instance_) {
+    return;
+  }
+  instance_.reset();
+}
+
+bool BluetoothActivitiesImpl::HasConnectedDevice() const {
   return connected_device_address_.size() > 0;
 }
 
-void BluetoothActivities::OnMonitorPacketCallback(
+void BluetoothActivitiesImpl::OnMonitorPacketCallback(
     [[maybe_unused]] MonitorMode mode, const HalPacket& packet) {
   switch (packet.GetEventCode()) {
     case static_cast<uint8_t>(EventCode::kBleMeta):
@@ -104,7 +173,11 @@ void BluetoothActivities::OnMonitorPacketCallback(
   }
 }
 
-void BluetoothActivities::HandleBleMetaEvent(const HalPacket& event) {
+void BluetoothActivitiesImpl::OnBluetoothChipClosed() {
+  connected_device_address_.clear();
+}
+
+void BluetoothActivitiesImpl::HandleBleMetaEvent(const HalPacket& event) {
   uint8_t event_status = event.At(kBleConnectionEventStatusOffset);
   ConnectionActivity activity{
       .connection_handle =
@@ -125,7 +198,8 @@ void BluetoothActivities::HandleBleMetaEvent(const HalPacket& event) {
   }
 }
 
-void BluetoothActivities::HandleConnectCompleteEvent(const HalPacket& event) {
+void BluetoothActivitiesImpl::HandleConnectCompleteEvent(
+    const HalPacket& event) {
   uint8_t event_status = event.At(kConnectionEventStatusOffset);
   ConnectionActivity activity{
       .connection_handle = event.AtUint16LittleEndian(kConnectionHandleOffset),
@@ -145,7 +219,7 @@ void BluetoothActivities::HandleConnectCompleteEvent(const HalPacket& event) {
   }
 }
 
-void BluetoothActivities::HandleDisconnectCompleteEvent(
+void BluetoothActivitiesImpl::HandleDisconnectCompleteEvent(
     const HalPacket& event) {
   uint8_t event_status = event.At(kDisconnectionEventStatusOffset);
   ConnectionActivity activity{
@@ -167,7 +241,7 @@ void BluetoothActivities::HandleDisconnectCompleteEvent(
   }
 }
 
-void BluetoothActivities::UpdateConnectionHistory(
+void BluetoothActivitiesImpl::UpdateConnectionHistory(
     const ConnectionActivity& device) {
   if (connection_history_.size() >= kBtMaxConnectHistoryRecord) {
     connection_history_.pop_front();

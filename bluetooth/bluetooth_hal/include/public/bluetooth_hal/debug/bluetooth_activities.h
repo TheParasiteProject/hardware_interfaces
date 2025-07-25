@@ -16,68 +16,60 @@
 
 #pragma once
 
-#include <cstdint>
-#include <list>
-#include <string>
-#include <unordered_map>
+#include <memory>
+#include <mutex>
 
-#include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/hal_packet.h"
-#include "bluetooth_hal/hci_monitor.h"
-#include "bluetooth_hal/hci_router_client.h"
 
 namespace bluetooth_hal {
 namespace debug {
 
-class BluetoothActivities : public ::bluetooth_hal::hci::HciRouterClient {
+class BluetoothActivities {
  public:
-  BluetoothActivities();
+  virtual ~BluetoothActivities() = default;
+
+  /**
+   * @brief Start the activities monitoring process.
+   *
+   * This function should be called before any other functions in this class are
+   * used.
+   */
+  static void Start();
+
+  /**
+   * @brief Get the singleton instance of BluetoothActivities.
+   *
+   * @return The singleton instance of BluetoothActivities.
+   */
+  static BluetoothActivities& Get();
+
+  /**
+   * @brief Stop the activities monitoring process, and clear the connections.
+   *
+   * After calling this function, all of the current connections and the
+   * connection history will be cleared. The instance will be reset.
+   */
+  static void Stop();
 
   /**
    * @brief Checks if there are any connected Bluetooth devices.
    *
    * @return true if there is at least one connected device, false otherwise.
    */
-  bool HasConnectedDevice();
+  virtual bool HasConnectedDevice() const = 0;
+
+  virtual void OnMonitorPacketCallback(
+      ::bluetooth_hal::hci::MonitorMode mode,
+      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+
+  virtual void OnBluetoothChipClosed() = 0;
 
  protected:
-  void OnCommandCallback(
-      [[maybe_unused]] const ::bluetooth_hal::hci::HalPacket& packet) override {
-  };
-  void OnMonitorPacketCallback(
-      ::bluetooth_hal::hci::MonitorMode mode,
-      const ::bluetooth_hal::hci::HalPacket& packet) override;
-  void OnBluetoothChipReady() override {};
-  void OnBluetoothChipClosed() override {};
-  void OnBluetoothEnabled() override {};
-  void OnBluetoothDisabled() override {};
+  BluetoothActivities() = default;
 
  private:
-  struct ConnectionActivity {
-    uint16_t connection_handle;
-    ::bluetooth_hal::hci::BluetoothAddress bd_address;
-    std::string event;
-    std::string status;
-    std::string timestamp;
-  };
-
-  void UpdateConnectionHistory(const ConnectionActivity& device);
-  void HandleBleMetaEvent(const ::bluetooth_hal::hci::HalPacket& event);
-  void HandleConnectCompleteEvent(const ::bluetooth_hal::hci::HalPacket& event);
-  void HandleDisconnectCompleteEvent(
-      const ::bluetooth_hal::hci::HalPacket& event);
-
-  ::bluetooth_hal::hci::HciBleMetaEventMonitor
-      ble_connection_complete_event_monitor_;
-  ::bluetooth_hal::hci::HciBleMetaEventMonitor
-      ble_enhanced_connection_complete_v1_event_monitor_;
-  ::bluetooth_hal::hci::HciBleMetaEventMonitor
-      ble_enhanced_connection_complete_v2_event_monitor_;
-  ::bluetooth_hal::hci::HciEventMonitor connection_complete_event_monitor_;
-  ::bluetooth_hal::hci::HciEventMonitor disconnection_complete_event_monitor_;
-  std::list<ConnectionActivity> connection_history_;
-  std::unordered_map<uint16_t, ::bluetooth_hal::hci::BluetoothAddress>
-      connected_device_address_;
+  static std::unique_ptr<BluetoothActivities> instance_;
+  static std::mutex mutex_;
 };
 
 }  // namespace debug

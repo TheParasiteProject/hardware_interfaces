@@ -20,7 +20,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
-#include <memory>
+#include <utility>
 
 #include "bluetooth_hal/bluetooth_address.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -41,7 +41,6 @@ using ::bluetooth_hal::hci::MockHciRouter;
 using ::bluetooth_hal::hci::MockHciRouterClientAgent;
 using ::bluetooth_hal::hci::MonitorMode;
 using ::testing::_;
-using ::testing::NotNull;
 using ::testing::Return;
 using ::testing::Test;
 
@@ -50,26 +49,6 @@ constexpr size_t kDisconnectionCompleteEventLength = 7;
 constexpr size_t kBleConnectionCompleteEventLength = 22;
 constexpr size_t kBleEnhancedConnectionCompleteV1EventLength = 34;
 constexpr size_t kBleEnhancedConnectionCompleteV2EventLength = 37;
-
-class BluetoothActivitiesForTest : public BluetoothActivities {
- public:
-  void OnMonitorPacketCallback(MonitorMode mode,
-                               const HalPacket& packet) override {
-    BluetoothActivities::OnMonitorPacketCallback(mode, packet);
-  }
-
-  void EnableBluetooth() {
-    OnBluetoothChipReady();
-    OnBluetoothEnabled();
-    OnHalStateChanged(HalState::kRunning, HalState::kBtChipReady);
-    OnPacketCallback(HalPacket({0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C, 0x00}));
-  }
-
-  void DisableBluetooth() {
-    OnBluetoothDisabled();
-    OnBluetoothChipClosed();
-  }
-};
 
 struct BtDeviceForTest {
   uint16_t connection_handle;
@@ -155,21 +134,17 @@ class BluetoothActivitiesTest : public Test {
  protected:
   void SetUp() override {
     MockHciRouterClientAgent::SetMockAgent(&mock_hci_router_client_agent_);
-    EXPECT_CALL(mock_hci_router_client_agent_, RegisterRouterClient(NotNull()))
-        .WillOnce(Return(true));
-
     MockHciRouter::SetMockRouter(&mock_hci_router_);
     ON_CALL(mock_hci_router_, Send(_)).WillByDefault(Return(true));
     ON_CALL(mock_hci_router_, SendCommand(_, _)).WillByDefault(Return(true));
 
-    bluetooth_activities = std::make_unique<BluetoothActivitiesForTest>();
+    BluetoothActivities::Start();
+    EnableBluetooth();
   }
 
   void TearDown() override {
-    EXPECT_CALL(mock_hci_router_client_agent_,
-                UnregisterRouterClient(bluetooth_activities.get()))
-        .WillOnce(Return(true));
-    bluetooth_activities.reset();
+    BluetoothActivities::Stop();
+    DisableBluetooth();
   }
 
   void EnableBluetooth() {
@@ -179,7 +154,6 @@ class BluetoothActivitiesTest : public Test {
         .WillByDefault(Return(true));
     ON_CALL(mock_hci_router_client_agent_, IsBluetoothEnabled())
         .WillByDefault(Return(true));
-    bluetooth_activities->EnableBluetooth();
   }
 
   void DisableBluetooth() {
@@ -189,16 +163,13 @@ class BluetoothActivitiesTest : public Test {
         .WillByDefault(Return(false));
     ON_CALL(mock_hci_router_client_agent_, IsBluetoothEnabled())
         .WillByDefault(Return(false));
-    bluetooth_activities->DisableBluetooth();
   }
   MockHciRouter mock_hci_router_;
   MockHciRouterClientAgent mock_hci_router_client_agent_;
-  std::unique_ptr<BluetoothActivitiesForTest> bluetooth_activities;
 };
 
 TEST_F(BluetoothActivitiesTest, InitialState) {
-  EnableBluetooth();
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 }
 
 class ConnectionAndDisconnectionTest
@@ -206,16 +177,15 @@ class ConnectionAndDisconnectionTest
       public ::testing::WithParamInterface<HalPacket> {};
 
 TEST_P(ConnectionAndDisconnectionTest, ConnectionAndDisconnection) {
-  EnableBluetooth();
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                GetParam());
-  EXPECT_TRUE(bluetooth_activities->HasConnectedDevice());
+  BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
+                                                     GetParam());
+  EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(
+  BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -234,24 +204,23 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
        MultiDeviceConnectionsAndDisconnections) {
   const auto& [device_1_connection_event, device_2_connection_event] =
       GetParam();
-  EnableBluetooth();
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                device_1_connection_event);
-  EXPECT_TRUE(bluetooth_activities->HasConnectedDevice());
+  BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
+                                                     device_1_connection_event);
+  EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                device_2_connection_event);
-  EXPECT_TRUE(bluetooth_activities->HasConnectedDevice());
+  BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
+                                                     device_2_connection_event);
+  EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(
+  BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
-  EXPECT_TRUE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(
+  BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_2, true));
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -278,12 +247,11 @@ class ConnectionFailTest : public BluetoothActivitiesTest,
                            public ::testing::WithParamInterface<HalPacket> {};
 
 TEST_P(ConnectionFailTest, ConnectionFail) {
-  EnableBluetooth();
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 
-  bluetooth_activities->OnMonitorPacketCallback(MonitorMode::kMonitor,
-                                                GetParam());
-  EXPECT_FALSE(bluetooth_activities->HasConnectedDevice());
+  BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
+                                                     GetParam());
+  EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
 }
 
 INSTANTIATE_TEST_SUITE_P(
