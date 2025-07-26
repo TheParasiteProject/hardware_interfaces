@@ -26,6 +26,7 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/bluetooth_hci_callback.h"
+#include "bluetooth_hal/debug/bluetooth_activities.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/extensions/finder/bluetooth_finder_handler.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -38,6 +39,7 @@ namespace bluetooth_hal {
 
 using ::bluetooth_hal::BluetoothHciCallback;
 using ::bluetooth_hal::HalState;
+using ::bluetooth_hal::debug::BluetoothActivities;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::extensions::finder::BluetoothFinderHandler;
 using ::bluetooth_hal::hci::HalPacket;
@@ -81,6 +83,7 @@ class HciCallback : public HciRouterCallback {
 BluetoothHci::BluetoothHci() : bluetooth_hci_callback_(nullptr) {
   // Lazily construct the static HciRouter instance.
   HciRouter::GetRouter();
+  BluetoothActivities::Start();
 }
 
 void BluetoothHci::HandleSignal(int signum) {
