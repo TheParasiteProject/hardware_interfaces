@@ -70,6 +70,7 @@ typedef u32 NanDataPathId;
 #define NAN_IDENTITY_TAG_LEN                    8
 #define NAN_IDENTITY_NONCE_LEN                  8
 #define NAN_MAX_MATCH_IDENTITY_LEN             1024
+#define NAN_MAX_COMEBACK_COOKIE_LEN            255
 /*
   Definition of various NanResponseType
 */
@@ -2972,7 +2973,7 @@ typedef struct {
     u32 cookie_length;
 
     /* Cookie for the follow up request */
-    u8 cookie[];
+    u8 cookie[NAN_MAX_COMEBACK_COOKIE_LEN];
 
 } NanBootstrappingRequest;
 /*
@@ -3024,7 +3025,7 @@ typedef struct {
     u32 cookie_length;
 
     /* Cookie for the follow up response */
-    u8 cookie[];
+    u8 cookie[NAN_MAX_COMEBACK_COOKIE_LEN];
 
 } NanBootstrappingIndicationResponse;
 
