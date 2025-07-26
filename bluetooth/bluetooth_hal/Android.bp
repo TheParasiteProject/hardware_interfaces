@@ -554,11 +554,17 @@ cc_test {
     name: "bluetooth_hal_hci_packetizer_test",
     defaults: ["bluetooth_hal_test_defaults"],
     srcs: [
+        "transport/vendor_packet_validator.cc",
+        "transport/hci_packet_rescuer.cc",
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/hci_packetizer_test.cc",
+        ":test_mock_debug_srcs",
     ],
     static_libs: [
         "libgmock",
+    ],
+    shared_libs: [
+        "libbase",
     ],
 }
 
@@ -587,6 +593,8 @@ cc_test {
         "transport/device_control/power_manager.cc",
         "transport/transport_interface.cc",
         "transport/transport_interface_test.cc",
+        "transport/vendor_packet_validator.cc",
+        "transport/hci_packet_rescuer.cc",
         "transport/uart_h4/data_processor.cc",
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/transport_uart_h4.cc",
@@ -594,6 +602,7 @@ cc_test {
         "util/system_call_wrapper.cc",
         "util/timer_manager.cc",
         ":test_mock_util_srcs",
+        ":test_mock_debug_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -614,6 +623,8 @@ cc_test {
         "transport/device_control/uart_manager.cc",
         "transport/device_control/power_manager.cc",
         "transport/transport_interface.cc",
+        "transport/vendor_packet_validator.cc",
+        "transport/hci_packet_rescuer.cc",
         "transport/uart_h4/data_processor.cc",
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/transport_uart_h4.cc",
@@ -622,6 +633,7 @@ cc_test {
         "util/system_call_wrapper.cc",
         "util/timer_manager.cc",
         ":test_mock_util_srcs",
+        ":test_mock_debug_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -637,10 +649,13 @@ cc_test {
     name: "bluetooth_hal_data_processor_test",
     defaults: ["bluetooth_hal_test_defaults"],
     srcs: [
+        "transport/vendor_packet_validator.cc",
+        "transport/hci_packet_rescuer.cc",
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/data_processor.cc",
         "transport/uart_h4/data_processor_test.cc",
         "util/fd_watcher.cc",
+        ":test_mock_debug_srcs",
     ],
     static_libs: [
         "libgmock",

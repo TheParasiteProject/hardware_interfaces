@@ -24,6 +24,7 @@
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/test/common/test_helper.h"
+#include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
 #include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -40,6 +41,7 @@ using ::testing::Test;
 using ::testing::Values;
 using ::testing::WithParamInterface;
 
+using ::bluetooth_hal::config::MockHalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::HalPacketCallback;
 using ::bluetooth_hal::hci::HciPacketType;
@@ -51,6 +53,7 @@ class DataProcessorTest : public Test {
  protected:
   void SetUp() override {
     MockSystemCallWrapper::SetMockWrapper(&mock_system_call_wrapper_);
+    MockHalConfigLoader::SetMockLoader(&mock_hal_config_loader_);
     data_processor_ = std::make_unique<DataProcessor>(
         test_fd_, std::bind_front(&MockPacketHandler::HalPacketCallback,
                                   &mock_packet_handler_));
@@ -61,6 +64,7 @@ class DataProcessorTest : public Test {
   std::unique_ptr<DataProcessor> data_processor_;
   MockSystemCallWrapper mock_system_call_wrapper_;
   MockPacketHandler mock_packet_handler_;
+  MockHalConfigLoader mock_hal_config_loader_;
   int test_fd_ = 1;
 };
 
