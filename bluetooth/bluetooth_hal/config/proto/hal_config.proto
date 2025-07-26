@@ -44,4 +44,5 @@ message HalConfig {
   optional string lpm_wakelock_ctrl_proc_node = 24;
   optional string rfkill_folder_prefix = 25;
   optional string rfkill_type_bluetooth = 26;
+  optional bool enhanced_packet_validation_supported = 27;
 }

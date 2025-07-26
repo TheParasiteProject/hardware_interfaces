@@ -99,7 +99,8 @@ constexpr std::string_view kValidContent = R"({
   "lpm_waking_proc_node": "/test/proc/bluetooth/sleep/btwrite",
   "lpm_wakelock_ctrl_proc_node": "/test/proc/bluetooth/sleep/wakelock_ctrl",
   "rfkill_folder_prefix": "/test/sys/class/rfkill/rfkill",
-  "rfkill_type_bluetooth": "testbluetooth"
+  "rfkill_type_bluetooth": "testbluetooth",
+  "enhanced_packet_validation_supported": true
 })";
 
 class ConfigLoaderTestBase : public Test {
@@ -220,6 +221,11 @@ TEST_F(ConfigLoaderTestBase, GetRfkillTypeBluetoothOnInit) {
             cfg_consts::kRfkillTypeBluetooth);
 }
 
+TEST_F(ConfigLoaderTestBase, IsEnhancedPacketValidationSupported) {
+  EXPECT_FALSE(
+      HalConfigLoader::GetLoader().IsEnhancedPacketValidationSupported());
+}
+
 class ConfigLoaderProtoTest : public ConfigLoaderTestBase {
  protected:
   void SetUp() override {
@@ -329,6 +335,11 @@ TEST_F(ConfigLoaderProtoTest, GetRfkillFolderPrefix) {
 TEST_F(ConfigLoaderProtoTest, GetRfkillTypeBluetooth) {
   EXPECT_EQ(HalConfigLoader::GetLoader().GetRfkillTypeBluetooth(),
             kTestRfkillTypeBluetooth);
+}
+
+TEST_F(ConfigLoaderProtoTest, IsEnhancedPacketValidationSupported) {
+  EXPECT_TRUE(
+      HalConfigLoader::GetLoader().IsEnhancedPacketValidationSupported());
 }
 
 class ConfigLoaderUtilTest : public ConfigLoaderTestBase {};
