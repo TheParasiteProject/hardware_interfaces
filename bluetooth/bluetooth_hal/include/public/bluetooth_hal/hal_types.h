@@ -209,6 +209,7 @@ enum class EventCode : uint8_t {
   kDisconnectionComplete = 0x05,
   kCommandComplete = 0x0e,
   kCommandStatus = 0x0f,
+  kNumberOfCompletedPackets = 0x13,
   kBleMeta = 0x3e,
   kVendorSpecific = 0xff,
 };
