@@ -55,5 +55,6 @@ filegroup {
     name: "test_mock_debug_srcs",
     srcs: [
         "mock/mock_vnd_snoop_logger.cc",
+        "mock/mock_bluetooth_activities.cc",
     ],
 }
