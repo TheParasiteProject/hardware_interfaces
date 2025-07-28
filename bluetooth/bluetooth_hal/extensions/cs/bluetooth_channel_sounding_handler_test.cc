@@ -477,9 +477,9 @@ class VendorSpecificRepliesTest
  public:
   static std::vector<std::optional<VendorSpecificData>> BuildData(
       bool is_fake_notification_enabled, bool is_mode_0_channel_map_enabled) {
-    uint8_t enable_one_side_pct = is_fake_notification_enabled
-                                      ? kCommandValueEnable
-                                      : kCommandValueIgnore;
+    uint8_t enable_inline_pct = is_fake_notification_enabled
+                                    ? kCommandValueEnable
+                                    : kCommandValueIgnore;
     uint8_t enable_cs_subevent_report = is_fake_notification_enabled
                                             ? kCommandValueDisable
                                             : kCommandValueIgnore;
@@ -493,7 +493,7 @@ class VendorSpecificRepliesTest
 
     VendorSpecificData command;
     command.characteristicUuid = kUuidSpecialRangingSettingCommand;
-    command.opaqueValue = {kDataTypeReply, enable_one_side_pct,
+    command.opaqueValue = {kDataTypeReply, enable_inline_pct,
                            enable_cs_subevent_report,
                            enable_mode_0_channel_map};
 

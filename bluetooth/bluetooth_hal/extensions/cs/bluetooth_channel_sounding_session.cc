@@ -55,7 +55,7 @@ using ::bluetooth_hal::Property;
 using ::ndk::ScopedAStatus;
 
 // Feature.
-constexpr uint8_t kOneSidePct = 0x01;
+constexpr uint8_t kInlinePct = 0x01;
 constexpr uint8_t kMode0ChannelMap = 0x02;
 
 BluetoothChannelSoundingSession::BluetoothChannelSoundingSession(
@@ -82,7 +82,7 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
   capability.opaqueValue = {kDataTypeReply, 0x00, 0x00, 0x00, 0x00};
   (*_aidl_return)->push_back(capability);
 
-  uint8_t enable_one_side_pct =
+  uint8_t enable_inline_pct =
       enable_fake_notification_ ? kCommandValueEnable : kCommandValueIgnore;
   uint8_t enable_cs_subevent_report =
       enable_fake_notification_ ? kCommandValueDisable : kCommandValueIgnore;
@@ -91,7 +91,7 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
 
   VendorSpecificData command;
   command.characteristicUuid = kUuidSpecialRangingSettingCommand;
-  command.opaqueValue = {kDataTypeReply, enable_one_side_pct,
+  command.opaqueValue = {kDataTypeReply, enable_inline_pct,
                          enable_cs_subevent_report, enable_mode_0_channel_map};
   (*_aidl_return)->push_back(command);
 
@@ -153,11 +153,11 @@ void BluetoothChannelSoundingSession::HandleVendorSpecificData(
   LOG(INFO) << __func__
             << ": vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
 
-  if ((vendor_specific_data_byte_1 & kOneSidePct) != 0) {
-    LOG(INFO) << __func__ << ": Support 1-side PCT.";
+  if ((vendor_specific_data_byte_1 & kInlinePct) != 0) {
+    LOG(INFO) << __func__ << ": Support Inline PCT.";
     enable_fake_notification_ = true;
   } else {
-    LOG(INFO) << __func__ << ": Do not support 1-side PCT.";
+    LOG(INFO) << __func__ << ": Do not support Inline PCT.";
     enable_fake_notification_ = false;
   }
   if ((vendor_specific_data_byte_1 & kMode0ChannelMap) != 0) {
