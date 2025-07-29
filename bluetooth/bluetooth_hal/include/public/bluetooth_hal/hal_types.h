@@ -38,6 +38,8 @@ class Property {
   static constexpr char kProductName[] = "ro.product.name";
   static constexpr char kBuildType[] = "ro.build.type";
   static constexpr char kShutDownAction[] = "sys.shutdown.requested";
+  static constexpr char kCsConfigFile[] =
+      "persist.vendor.bluetooth.cs_config_path";
 
   // Transport properties.
   static constexpr char kUartPathOverride[] =
