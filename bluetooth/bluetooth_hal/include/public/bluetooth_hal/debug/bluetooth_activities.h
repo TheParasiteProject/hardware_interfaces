@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 
@@ -66,6 +67,13 @@ class BluetoothActivities {
    * false otherwise.
    */
   virtual bool IsConnected(uint16_t connection_handle) const = 0;
+
+  /**
+   * @brief Gets the number of connected devices.
+   *
+   * @return The number of connected devices.
+   */
+  virtual size_t GetConnectionHandleCount() const = 0;
 
   virtual void OnMonitorPacketCallback(
       ::bluetooth_hal::hci::MonitorMode mode,

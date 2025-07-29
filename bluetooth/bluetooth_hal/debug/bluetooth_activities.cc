@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <list>
 #include <memory>
@@ -79,6 +80,7 @@ class BluetoothActivitiesImpl : public BluetoothActivities,
 
   bool HasConnectedDevice() const;
   bool IsConnected(uint16_t connection_handle) const;
+  size_t GetConnectionHandleCount() const;
   void HandleBleMetaEvent(const ::bluetooth_hal::hci::HalPacket& event);
   void HandleConnectCompleteEvent(const ::bluetooth_hal::hci::HalPacket& event);
   void HandleDisconnectCompleteEvent(
@@ -162,6 +164,10 @@ bool BluetoothActivitiesImpl::HasConnectedDevice() const {
 bool BluetoothActivitiesImpl::IsConnected(uint16_t connection_handle) const {
   return connected_device_address_.find(connection_handle) !=
          connected_device_address_.end();
+}
+
+size_t BluetoothActivitiesImpl::GetConnectionHandleCount() const {
+  return connected_device_address_.size();
 }
 
 void BluetoothActivitiesImpl::OnMonitorPacketCallback(

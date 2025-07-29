@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -174,6 +175,7 @@ class BluetoothActivitiesTest : public Test {
 TEST_F(BluetoothActivitiesTest, InitialState) {
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_FALSE(BluetoothActivities::Get().IsConnected(0x000a));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 }
 
 class ConnectionAndDisconnectionTest
@@ -184,16 +186,19 @@ TEST_P(ConnectionAndDisconnectionTest, ConnectionAndDisconnection) {
   const auto& [packet, connect_handle] = GetParam();
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      packet);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_TRUE(BluetoothActivities::Get().IsConnected(connect_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 1);
 
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -218,7 +223,9 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
   const auto& [device_1_connection_event, device_2_connection_event] =
       GetParam();
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 
+  // Connect with device_1
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      device_1_connection_event);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
@@ -226,7 +233,9 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
       BluetoothActivities::Get().IsConnected(device_1.connection_handle));
   EXPECT_FALSE(
       BluetoothActivities::Get().IsConnected(device_2.connection_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 1);
 
+  // Connect with device_2
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      device_2_connection_event);
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
@@ -234,7 +243,9 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
       BluetoothActivities::Get().IsConnected(device_1.connection_handle));
   EXPECT_TRUE(
       BluetoothActivities::Get().IsConnected(device_2.connection_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 2);
 
+  // Disconnect with device_1
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_1, true));
   EXPECT_TRUE(BluetoothActivities::Get().HasConnectedDevice());
@@ -242,7 +253,9 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
       BluetoothActivities::Get().IsConnected(device_1.connection_handle));
   EXPECT_TRUE(
       BluetoothActivities::Get().IsConnected(device_2.connection_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 1);
 
+  // Disconnect with device_2
   BluetoothActivities::Get().OnMonitorPacketCallback(
       MonitorMode::kMonitor, CreateDisconnectionCompleteEvent(device_2, true));
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
@@ -250,6 +263,7 @@ TEST_P(MultiDeviceConnectionsAndDisconnectionsTest,
       BluetoothActivities::Get().IsConnected(device_1.connection_handle));
   EXPECT_FALSE(
       BluetoothActivities::Get().IsConnected(device_2.connection_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -279,11 +293,13 @@ TEST_P(ConnectionFailTest, ConnectionFail) {
   const auto& [packet, connect_handle] = GetParam();
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 
   BluetoothActivities::Get().OnMonitorPacketCallback(MonitorMode::kMonitor,
                                                      packet);
   EXPECT_FALSE(BluetoothActivities::Get().HasConnectedDevice());
   EXPECT_FALSE(BluetoothActivities::Get().IsConnected(connect_handle));
+  EXPECT_EQ(BluetoothActivities::Get().GetConnectionHandleCount(), 0);
 }
 
 INSTANTIATE_TEST_SUITE_P(

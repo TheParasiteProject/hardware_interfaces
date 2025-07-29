@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "bluetooth_hal/debug/bluetooth_activities.h"
 #include "gmock/gmock.h"
 
@@ -26,6 +29,7 @@ class MockBluetoothActivities : public BluetoothActivities {
  public:
   MOCK_METHOD(bool, HasConnectedDevice, (), (const));
   MOCK_METHOD(bool, IsConnected, (uint16_t connection_handle), (const));
+  MOCK_METHOD(size_t, GetConnectionHandleCount, (), (const));
   MOCK_METHOD(void, OnMonitorPacketCallback,
               (::bluetooth_hal::hci::MonitorMode mode,
                const ::bluetooth_hal::hci::HalPacket& packet),
