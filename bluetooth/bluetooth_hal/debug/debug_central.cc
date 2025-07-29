@@ -152,9 +152,12 @@ void DebugCentral::Dump(int fd) {
 
   const std::string dumpsys_header = "Bluetooth HAL DUMP";
 
-  auto dump =
-      GenerateHalLogStringFrame(dumpsys_header, DumpBluetoothHalLog(), false);
-  write(fd, dump.c_str(), dump.length());
+  std::stringstream dump;
+  auto client_dumps = GetCoredumpFromDebugClients();
+  dump << GenerateHalLogStringFrame(dumpsys_header,
+                                    DumpBluetoothHalLog(client_dumps), false);
+  dump << CoredumpToStringLog(client_dumps, CoredumpPosition::kCustomDumpsys);
+  write(fd, dump.str().c_str(), dump.str().length());
 
   FlushCoredumpToFd(fd);
 }
@@ -277,7 +280,8 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-std::string DebugCentral::DumpBluetoothHalLog() {
+std::string DebugCentral::DumpBluetoothHalLog(
+    const std::vector<Coredump>& client_dumps) {
   std::stringstream anchor_log;
   for (auto it = anchor_log_.begin(); it != anchor_log_.end(); ++it) {
     std::string log = it->second.first;
@@ -292,7 +296,6 @@ std::string DebugCentral::DumpBluetoothHalLog() {
   }
 
   std::stringstream ss;
-  auto client_dumps = GetCoredumpFromDebugClients();
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kBegin);
   ss << GenerateHalLogString("Anchor Log", anchor_log.str());
   ss << GenerateHalLogString("Bluetooth HAL Log", anchor_history.str());
@@ -405,7 +408,8 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
      << " - occurred at " << GetCoredumpTimestampString() << std::endl;
   ss << "║" << std::endl;
 
-  ss << DumpBluetoothHalLog();
+  auto client_dumps = GetCoredumpFromDebugClients();
+  ss << DumpBluetoothHalLog(client_dumps);
 
   write(coredump_fd, ss.str().c_str(), ss.str().length());
   close(coredump_fd);

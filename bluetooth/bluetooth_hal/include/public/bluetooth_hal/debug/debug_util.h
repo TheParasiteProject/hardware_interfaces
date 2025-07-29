@@ -81,8 +81,8 @@ inline std::string GenerateHalLogStringFrame(const std::string& title,
   return ss.str();
 }
 
-inline std::string CoredumpToStringLog(std::vector<Coredump> coredumps,
-                                       CoredumpPosition position) {
+inline std::string CoredumpToStringLog(const std::vector<Coredump> coredumps,
+                                       const CoredumpPosition position) {
   std::stringstream ss;
   for (auto dump : coredumps) {
     if (dump.position == position) {
@@ -90,6 +90,10 @@ inline std::string CoredumpToStringLog(std::vector<Coredump> coredumps,
         case CoredumpPosition::kBegin:
         case CoredumpPosition::kEnd:
           ss << GenerateHalLogString(dump.title, dump.coredump);
+          break;
+        case CoredumpPosition::kCustomDumpsys:
+          ss << dump.title << dump.coredump;
+          break;
       }
     }
   }

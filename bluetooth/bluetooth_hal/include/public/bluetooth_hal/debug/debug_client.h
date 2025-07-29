@@ -44,6 +44,7 @@ namespace debug {
 enum class CoredumpPosition : uint8_t {
   kBegin,
   kEnd,
+  kCustomDumpsys,
 };
 
 struct Coredump {
@@ -88,6 +89,9 @@ struct Coredump {
  * ╠══════════════════════════════════════════════════════════
  * ║ END of Bluetooth HAL DUMP
  * ╚══════════════════════════════════════════════════════════
+ *
+ * ** Everything with CoredumpPosition::kCustomDumpsys are printed outside **
+ * ** the HAL DUMP frame.                                                  **
  *
  */
 class DebugClient {
