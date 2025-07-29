@@ -23,7 +23,7 @@
 //! The additional device-specific components that are required for a real implementation of KeyMint
 //! that is based on the Rust reference implementation are described in system/keymint/README.md.
 
-use kmr_hal::{register_binder_services, HalServiceError, SerializedChannel};
+use kmr_hal::{register_binder_services, HalServiceError, SerializedChannel, ALL_HALS};
 use log::{error, info, warn};
 use std::ops::DerefMut;
 use std::sync::{mpsc, Arc, Mutex};
@@ -65,7 +65,7 @@ fn inner_main() -> Result<(), HalServiceError> {
         error!("Failed to send HAL info: {:?}", e);
     }
 
-    register_binder_services(&channel, SERVICE_INSTANCE)?;
+    register_binder_services(&channel, ALL_HALS, SERVICE_INSTANCE)?;
 
     binder::ProcessState::join_thread_pool();
     info!("KeyMint HAL service is terminating."); // should not reach here
