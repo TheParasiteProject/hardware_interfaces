@@ -262,7 +262,8 @@ class EraserDataTest : public ::testing::TestWithParam<EraserDataTestParam>,
     void SetUp() override {
         ASSERT_NO_FATAL_FAILURE(SetUpEraser());
 
-        Parameter::Common common = createParamCommon(AUDIO_SESSION_NONE, 15600, 15600);
+        Parameter::Common common =
+                createParamCommon(AUDIO_SESSION_NONE, 15600 /*iFrameCount*/, 15600 /*oFrameCount*/);
         ASSERT_NO_FATAL_FAILURE(open(mEffect, common, std::nullopt, &mOpenEffectReturn, EX_NONE));
         ASSERT_NE(nullptr, mEffect);
     }
@@ -294,8 +295,7 @@ TEST_P(EraserDataTest, ClassifySounds) {
     ASSERT_NE(0ul, channelCount);
     std::vector<float> out(kOutputFrameCount * channelCount, 0);
 
-    ASSERT_NO_FATAL_FAILURE(
-            processInputAndWriteToOutput(wavData, out, mEffect, &mOpenEffectReturn));
+    ASSERT_NO_FATAL_FAILURE(processInputAndWriteToOutput(wavData, out, mEffect, mOpenEffectReturn));
 
     // very loose check, make sure the classifier report at least one expected sound category
     auto results = callback->getResults();
@@ -319,9 +319,13 @@ TEST_P(EraserDataTest, ClassifySounds) {
 
 [[clang::no_destroy]] static const std::vector<std::pair<std::string, SoundClassification>>
         kClassifierFileMap = {
-                {"/data/local/tmp/speech.16khz.1ch.f32.6s.wav", SoundClassification::HUMAN},
-                {"/data/local/tmp/dog.16khz.1ch.f32.6s.wav", SoundClassification::ANIMAL},
-                {"/data/local/tmp/wind.16khz.1ch.f32.6s.wav", SoundClassification::ENVIRONMENT},
+                {"/data/local/tmp/speech.16khz.1ch.f32.wav", SoundClassification::HUMAN},
+                {"/data/local/tmp/bird.16khz.1ch.f32.wav", SoundClassification::ANIMAL},
+                {"/data/local/tmp/wind.16khz.1ch.f32.wav", SoundClassification::ENVIRONMENT},
+                {"/data/local/tmp/motorcycle.16khz.1ch.f32.wav", SoundClassification::THINGS},
+                {"/data/local/tmp/rain.16khz.1ch.f32.wav", SoundClassification::NATURE},
+                {"/data/local/tmp/music.16khz.1ch.f32.wav", SoundClassification::MUSIC},
+                {"/data/local/tmp/pinknoise.16khz.1ch.f32.wav", SoundClassification::AMBIGUOUS},
 };
 
 INSTANTIATE_TEST_SUITE_P(

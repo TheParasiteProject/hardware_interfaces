@@ -262,9 +262,9 @@ class EffectHelper {
         }
     }
 
-    static void writeToAndReadFromFmq(std::unique_ptr<StatusMQ>& statusMq, size_t statusNum,
-                                      std::unique_ptr<DataMQ>& inputMq,
-                                      std::unique_ptr<DataMQ>& outputMq,
+    static void writeToAndReadFromFmq(const std::unique_ptr<StatusMQ>& statusMq, size_t statusNum,
+                                      const std::unique_ptr<DataMQ>& inputMq,
+                                      const std::unique_ptr<DataMQ>& outputMq,
                                       const std::vector<float>& inputBuffer,
                                       std::vector<float>& outputBuffer,
                                       std::optional<int> expectStatus = std::nullopt,
@@ -518,14 +518,14 @@ class EffectHelper {
     static void processInputAndWriteToOutput(const std::vector<float>& inputBuffer,
                                              std::vector<float>& outputBuffer,
                                              const std::shared_ptr<IEffect>& effect,
-                                             const IEffect::OpenEffectReturn* openEffectReturn,
+                                             const IEffect::OpenEffectReturn& openEffectReturn,
                                              int version = -1) {
         // Initialize AidlMessagequeues
-        auto statusMQ = std::make_unique<EffectHelper::StatusMQ>(openEffectReturn->statusMQ);
+        auto statusMQ = std::make_unique<EffectHelper::StatusMQ>(openEffectReturn.statusMQ);
         ASSERT_TRUE(statusMQ->isValid());
-        auto inputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->inputDataMQ);
+        auto inputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn.inputDataMQ);
         ASSERT_TRUE(inputMQ->isValid());
-        auto outputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->outputDataMQ);
+        auto outputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn.outputDataMQ);
         ASSERT_TRUE(outputMQ->isValid());
 
         // Enabling the process
