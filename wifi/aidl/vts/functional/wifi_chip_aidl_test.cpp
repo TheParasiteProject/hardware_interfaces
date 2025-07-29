@@ -525,7 +525,11 @@ TEST_P(WifiChipAidlTest, StartLoggingToDebugRingBuffer) {
 
     status = wifi_chip_->startLoggingToDebugRingBuffer(
             ring_name, WifiDebugRingBufferVerboseLevel::VERBOSE, 5, 1024);
-    EXPECT_TRUE(status.isOk() || checkStatusCode(&status, WifiStatusCode::ERROR_NOT_SUPPORTED));
+    if (checkStatusCode(&status, WifiStatusCode::ERROR_NOT_SUPPORTED)) {
+        GTEST_SKIP() << "Skipping this test since startLoggingToDebugRingBuffer() "
+                        "is not supported by vendor.";
+    }
+    EXPECT_TRUE(status.isOk());
 
     status = wifi_chip_->stopLoggingToDebugRingBuffer();
     EXPECT_TRUE(status.isOk() || checkStatusCode(&status, WifiStatusCode::ERROR_NOT_SUPPORTED));

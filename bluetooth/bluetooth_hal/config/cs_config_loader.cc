@@ -27,19 +27,23 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hal_types.h"
+#include "bluetooth_hal/util/android_base_wrapper.h"
 #include "cs_config.pb.h"
 #include "google/protobuf/util/json_util.h"
 
 namespace bluetooth_hal {
 namespace config {
 
+using ::bluetooth_hal::Property;
 using ::bluetooth_hal::config::proto::CalibrationCommands;
 using ::bluetooth_hal::hci::HalPacket;
+using ::bluetooth_hal::util::AndroidBaseWrapper;
 
 using ::google::protobuf::util::JsonParseOptions;
 using ::google::protobuf::util::JsonStringToMessage;
 
-constexpr std::string_view kCsConfigFile =
+constexpr std::string_view kDefaultCsConfigFile =
     "/vendor/etc/bluetooth/bluetooth_channel_sounding_calibration.json";
 
 class CsConfigLoaderImpl : public CsConfigLoader {
@@ -65,7 +69,10 @@ CsConfigLoaderImpl::CsConfigLoaderImpl() {
 }
 
 bool CsConfigLoaderImpl::LoadConfig() {
-  return LoadConfigFromFile(kCsConfigFile);
+  std::string file_path = AndroidBaseWrapper::GetWrapper().GetProperty(
+      Property::kCsConfigFile, std::string(kDefaultCsConfigFile));
+
+  return LoadConfigFromFile(file_path);
 }
 
 bool CsConfigLoaderImpl::LoadConfigFromFile(std::string_view path) {
