@@ -558,7 +558,7 @@ void DynamicsProcessingTestHelper::setParamsAndProcess(ConfigType& configs,
     ASSERT_NO_FATAL_FAILURE(SetAndGetDynamicsProcessingParameters());
     if (isAllParamsValid()) {
         ASSERT_NO_FATAL_FAILURE(
-                processAndWriteToOutput(mInput, output, mEffect, &mOpenEffectReturn));
+                processAndWriteToOutput(mInput, output, mEffect, mOpenEffectReturn));
         ASSERT_GT(output.size(), kStartIndex);
     }
 }
