@@ -240,7 +240,7 @@ class DebugCentral {
   std::unordered_set<DebugClient*> debug_clients_;
   bool is_coredump_generated_;
 
-  std::string DumpBluetoothHalLog();
+  std::string DumpBluetoothHalLog(const std::vector<Coredump>& client_dumps);
   void GenerateCoredump(CoredumpErrorCode error_code,
                         uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
