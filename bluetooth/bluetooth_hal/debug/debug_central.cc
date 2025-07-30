@@ -28,11 +28,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
-#include <filesystem>
-#include <fstream>
+#include <cstdint>
 #include <iomanip>
 #include <mutex>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -44,6 +42,7 @@
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
 #include "bluetooth_hal/debug/bluetooth_activity.h"
+#include "bluetooth_hal/debug/debug_util.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hci_router.h"
@@ -73,206 +72,13 @@ constexpr int kDebugInfoLastBlockOffset = 5;
 
 constexpr int kHandleDebugInfoCommandMs = 1000;
 constexpr int kMaxCoredumpFiles = 3;
-const std::string kCoredumpFilePath = "/data/vendor/ssrdump/coredump/";
-const std::string kCoredumpPrefix = "coredump_bt_";
 const std::string kCoredumpFilePrefix = kCoredumpFilePath + kCoredumpPrefix;
 const std::string kSocdumpFilePrefix =
     kCoredumpFilePath + "coredump_bt_socdump_";
-const std::regex kTimestampPattern(R"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})");
 
 const std::string kDebugNodeBtLpm = "dev/logbuffer_btlpm";
 constexpr char kDebugNodeBtUartPrefix[] = "/dev/logbuffer_tty";
 constexpr char kHwStage[] = "ro.boot.hardware.revision";
-
-std::string GenerateHalLogString(const std::string& title,
-                                 const std::string& log,
-                                 bool format_log = true) {
-  std::stringstream ss;
-  ss << "║\t=============================================" << std::endl;
-  ss << "║\t" << title << std::endl;
-  ss << "║\t=============================================" << std::endl;
-  if (format_log) {
-    std::istringstream iss(log);
-    std::string line;
-    while (std::getline(iss, line)) {
-      ss << "║\t\t" << line << std::endl;
-    }
-  } else {
-    ss << log;
-  }
-  ss << "║" << std::endl;
-  return ss.str();
-}
-
-std::string GenerateHalLogStringFrame(const std::string& title,
-                                      const std::string& log,
-                                      bool format_log = true) {
-  std::stringstream ss;
-  ss << "╔══════════════════════════════════════════════════════════\n";
-  ss << "║ BEGIN of " << title << std::endl;
-  ss << "╠══════════════════════════════════════════════════════════\n";
-  ss << "║\n";
-  if (format_log) {
-    std::istringstream iss(log);
-    std::string line;
-    while (std::getline(iss, line)) {
-      ss << "║\t" << line << std::endl;
-    }
-  } else {
-    ss << log;
-  }
-  ss << "║\n";
-  ss << "╠══════════════════════════════════════════════════════════\n";
-  ss << "║ END of " << title << std::endl;
-  ss << "╚══════════════════════════════════════════════════════════\n";
-  ss << std::endl;
-  return ss.str();
-}
-
-std::string CoredumpToStringLog(std::vector<Coredump> coredumps,
-                                CoredumpPosition position) {
-  std::stringstream ss;
-  for (auto dump : coredumps) {
-    if (dump.position == position) {
-      switch (position) {
-        case CoredumpPosition::kBegin:
-        case CoredumpPosition::kEnd:
-          ss << GenerateHalLogString(dump.title, dump.coredump);
-      }
-    }
-  }
-  return ss.str();
-}
-
-std::string DumpDebugfs(const std::string& debugfs) {
-  std::stringstream file_content_ss;
-  std::ifstream file;
-
-  file.open(debugfs);
-  if (file.is_open()) {
-    std::string line;
-    while (std::getline(file, line)) {
-      file_content_ss << line << std::endl;
-    }
-    file.close();
-  } else {
-    file_content_ss << "Fail to read debugfs: " << debugfs << std::endl;
-  }
-
-  return GenerateHalLogString("Debugfs: " + debugfs, file_content_ss.str());
-}
-
-bool IsBinFilePatternMatch(const std::string& filename,
-                           const std::string& base_prefix) {
-  if (!filename.starts_with(base_prefix)) {
-    return false;
-  }
-  std::string remaining_part = filename.substr(base_prefix.length());
-
-  if (!remaining_part.ends_with(".bin")) {
-    return false;
-  }
-
-  std::string timestamp_str = remaining_part.substr(
-      0, remaining_part.length() - std::string(".bin").length());
-  return std::regex_match(timestamp_str, kTimestampPattern);
-}
-
-void DeleteOldestBinFiles(const std::string& directory,
-                          const std::string& base_file_prefix,
-                          size_t files_to_keep) {
-  std::vector<std::filesystem::directory_entry> filtered_files;
-
-  for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-    if (!entry.is_regular_file()) {
-      continue;
-    }
-    const std::string filename = entry.path().filename().string();
-
-    if (IsBinFilePatternMatch(filename, base_file_prefix)) {
-      filtered_files.emplace_back(entry);
-    }
-  }
-
-  // Sort files by their last write time
-  std::sort(filtered_files.begin(), filtered_files.end(),
-            [](const auto& a, const auto& b) {
-              return std::filesystem::last_write_time(a) >
-                     std::filesystem::last_write_time(b);
-            });
-
-  // Delete files, starting at files_to_keep
-  for (size_t i = files_to_keep; i < filtered_files.size(); ++i) {
-    std::filesystem::remove(filtered_files[i]);
-    LOG(INFO) << "Deleted: " << filtered_files[i].path().c_str();
-  }
-}
-
-void FlushCoredumpToFd(int fd) {
-  std::unique_ptr<DIR, decltype(&closedir)> dir(
-      opendir(kCoredumpFilePath.c_str()), closedir);
-  if (!dir) {
-    LOG(WARNING) << __func__
-                 << ": Failed to open directory: " << kCoredumpFilePath;
-    return;
-  }
-
-  std::stringstream combined_output_ss;
-  struct dirent* entry;
-
-  while ((entry = readdir(dir.get())) != nullptr) {
-    std::string file_name = entry->d_name;
-
-    if (file_name == "." || file_name == "..") {
-      continue;
-    }
-
-    std::string full_path = kCoredumpFilePath + file_name;
-
-    if (!IsBinFilePatternMatch(file_name, kCoredumpPrefix)) {
-      continue;
-    }
-
-    struct stat file_stat;
-    if (stat(full_path.c_str(), &file_stat) == -1 ||
-        !S_ISREG(file_stat.st_mode)) {
-      continue;
-    }
-
-    LOG(INFO) << __func__ << ": Dumping " << full_path;
-
-    std::stringstream current_file_content_ss;
-    std::ifstream input_file(full_path, std::ios::binary);
-    if (!input_file.is_open()) {
-      current_file_content_ss << "ERROR: Failed to open file: " << full_path
-                              << std::endl;
-      LOG(ERROR) << __func__ << ": Failed to open file: " << full_path;
-    } else {
-      current_file_content_ss << input_file.rdbuf();
-      input_file.close();
-    }
-
-    std::string formatted_log = GenerateHalLogStringFrame(
-        "LogFile: " + file_name, current_file_content_ss.str(), false);
-    combined_output_ss << formatted_log;
-  }
-
-  std::string final_output = combined_output_ss.str();
-  if (!final_output.empty()) {
-    ssize_t bytes_written =
-        write(fd, final_output.c_str(), final_output.length());
-    if (bytes_written == -1) {
-      LOG(ERROR) << __func__ << ": Failed to write to file descriptor " << fd
-                 << ". Error: " << strerror(errno);
-    } else if (static_cast<size_t>(bytes_written) != final_output.length()) {
-      LOG(WARNING) << __func__ << ": Incomplete write to file descriptor " << fd
-                   << ". Wrote " << bytes_written << " of "
-                   << final_output.length() << " bytes.";
-    }
-  } else {
-    LOG(INFO) << __func__ << ": No coredump files found to dump.";
-  }
-}
 
 }  // namespace
 
@@ -346,9 +152,12 @@ void DebugCentral::Dump(int fd) {
 
   const std::string dumpsys_header = "Bluetooth HAL DUMP";
 
-  auto dump =
-      GenerateHalLogStringFrame(dumpsys_header, DumpBluetoothHalLog(), false);
-  write(fd, dump.c_str(), dump.length());
+  std::stringstream dump;
+  auto client_dumps = GetCoredumpFromDebugClients();
+  dump << GenerateHalLogStringFrame(dumpsys_header,
+                                    DumpBluetoothHalLog(client_dumps), false);
+  dump << CoredumpToStringLog(client_dumps, CoredumpPosition::kCustomDumpsys);
+  write(fd, dump.str().c_str(), dump.str().length());
 
   FlushCoredumpToFd(fd);
 }
@@ -471,7 +280,8 @@ bool DebugCentral::OkToGenerateCrashDump(uint8_t error_code) {
   return is_thread_dispatcher_working || debug_monitor_.IsBluetoothEnabled();
 }
 
-std::string DebugCentral::DumpBluetoothHalLog() {
+std::string DebugCentral::DumpBluetoothHalLog(
+    const std::vector<Coredump>& client_dumps) {
   std::stringstream anchor_log;
   for (auto it = anchor_log_.begin(); it != anchor_log_.end(); ++it) {
     std::string log = it->second.first;
@@ -486,7 +296,6 @@ std::string DebugCentral::DumpBluetoothHalLog() {
   }
 
   std::stringstream ss;
-  auto client_dumps = GetCoredumpFromDebugClients();
   ss << CoredumpToStringLog(client_dumps, CoredumpPosition::kBegin);
   ss << GenerateHalLogString("Anchor Log", anchor_log.str());
   ss << GenerateHalLogString("Bluetooth HAL Log", anchor_history.str());
@@ -599,7 +408,8 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
      << " - occurred at " << GetCoredumpTimestampString() << std::endl;
   ss << "║" << std::endl;
 
-  ss << DumpBluetoothHalLog();
+  auto client_dumps = GetCoredumpFromDebugClients();
+  ss << DumpBluetoothHalLog(client_dumps);
 
   write(coredump_fd, ss.str().c_str(), ss.str().length());
   close(coredump_fd);

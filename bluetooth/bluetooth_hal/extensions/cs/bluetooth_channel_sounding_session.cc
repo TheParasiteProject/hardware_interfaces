@@ -54,10 +54,6 @@ using ::bluetooth_hal::Property;
 
 using ::ndk::ScopedAStatus;
 
-// Feature.
-constexpr uint8_t kOneSidePct = 0x01;
-constexpr uint8_t kMode0ChannelMap = 0x02;
-
 BluetoothChannelSoundingSession::BluetoothChannelSoundingSession(
     std::shared_ptr<IBluetoothChannelSoundingSessionCallback> callback,
     Reason /* reason */)
@@ -82,17 +78,26 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
   capability.opaqueValue = {kDataTypeReply, 0x00, 0x00, 0x00, 0x00};
   (*_aidl_return)->push_back(capability);
 
-  uint8_t enable_one_side_pct =
+  uint8_t enable_inline_pct =
       enable_fake_notification_ ? kCommandValueEnable : kCommandValueIgnore;
-  uint8_t enable_cs_subevent_report =
-      enable_fake_notification_ ? kCommandValueDisable : kCommandValueIgnore;
+
+  // Event mask used by `Set event mask for connection` command. Set all event
+  // bits to 0 — responder should ignore this if unsupported or inline PCT is
+  // not enabled.
+  constexpr uint32_t kEventMask = 0x00000000;
+
   uint8_t enable_mode_0_channel_map =
       enable_mode_0_channel_map_ ? kCommandValueEnable : kCommandValueIgnore;
 
   VendorSpecificData command;
   command.characteristicUuid = kUuidSpecialRangingSettingCommand;
-  command.opaqueValue = {kDataTypeReply, enable_one_side_pct,
-                         enable_cs_subevent_report, enable_mode_0_channel_map};
+  command.opaqueValue = {kDataTypeReply,
+                         enable_inline_pct,
+                         static_cast<uint8_t>((kEventMask >> 24) & 0xFF),
+                         static_cast<uint8_t>((kEventMask >> 16) & 0xFF),
+                         static_cast<uint8_t>((kEventMask >> 8) & 0xFF),
+                         static_cast<uint8_t>((kEventMask) & 0xFF),
+                         enable_mode_0_channel_map};
   (*_aidl_return)->push_back(command);
 
   for (auto& data : _aidl_return->value()) {
@@ -153,14 +158,16 @@ void BluetoothChannelSoundingSession::HandleVendorSpecificData(
   LOG(INFO) << __func__
             << ": vendor_specific_data_byte_1: " << vendor_specific_data_byte_1;
 
-  if ((vendor_specific_data_byte_1 & kOneSidePct) != 0) {
+  if ((vendor_specific_data_byte_1 &
+       static_cast<uint8_t>(CsFeature::kInlinePct)) != 0) {
     LOG(INFO) << __func__ << ": Support 1-side PCT.";
     enable_fake_notification_ = true;
   } else {
-    LOG(INFO) << __func__ << ": Do not support 1-side PCT.";
+    LOG(INFO) << __func__ << ": Do not support Inline PCT.";
     enable_fake_notification_ = false;
   }
-  if ((vendor_specific_data_byte_1 & kMode0ChannelMap) != 0) {
+  if ((vendor_specific_data_byte_1 &
+       static_cast<uint8_t>(CsFeature::kMode0ChannelMap)) != 0) {
     LOG(INFO) << __func__ << ": Support mode 0 Channel Map.";
     enable_mode_0_channel_map_ = true;
   } else {

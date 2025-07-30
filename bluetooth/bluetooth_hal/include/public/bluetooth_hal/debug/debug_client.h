@@ -44,6 +44,7 @@ namespace debug {
 enum class CoredumpPosition : uint8_t {
   kBegin,
   kEnd,
+  kCustomDumpsys,
 };
 
 struct Coredump {
@@ -89,15 +90,15 @@ struct Coredump {
  * ║ END of Bluetooth HAL DUMP
  * ╚══════════════════════════════════════════════════════════
  *
+ * ** Everything with CoredumpPosition::kCustomDumpsys are printed outside **
+ * ** the HAL DUMP frame.                                                  **
+ *
  */
 class DebugClient {
  public:
-#ifdef UNIT_TEST
-  virtual ~DebugClient() = default;
-#else
+#ifndef UNIT_TEST
   DebugClient();
   virtual ~DebugClient();
-#endif
 
   /**
    * @brief OnGenerateCoredump is automatically called by the DebugCentral if
@@ -112,8 +113,8 @@ class DebugClient {
    * @param error_code The main coredump error code of the coredump.
    * @param sub_error_code The sub error code of the coredump.
    */
-  virtual void OnGenerateCoredump([[maybe_unused]] CoredumpErrorCode error_code,
-                                  [[maybe_unused]] uint8_t sub_error_code) {}
+  virtual void OnGenerateCoredump(CoredumpErrorCode error_code,
+                                  uint8_t sub_error_code);
 
   /**
    * @brief Dump() can be called for two scenarios:
@@ -127,15 +128,7 @@ class DebugClient {
    * By default it returns the logs logged with the macro CLIENT_LOG(severity)
    * with LOG_TAG as the title.
    */
-  virtual std::vector<Coredump> Dump() {
-    if (log_tag_.empty()) {
-      return std::vector<Coredump>();
-    }
-
-    Coredump coredump(log_tag_, GetClientLogsInString(),
-                      CoredumpPosition::kEnd);
-    return {coredump};
-  }
+  virtual std::vector<Coredump> Dump();
 
  protected:
   /**
@@ -147,22 +140,8 @@ class DebugClient {
    public:
     explicit ClientLogStream(std::deque<std::string>& log_buffer,
                              ::android::base::LogSeverity severity,
-                             const char* tag)
-        : log_buffer_(log_buffer), severity_(severity), tag_(tag) {
-      timestamp_stream_
-          << ::bluetooth_hal::util::Logger::GetLogFormatTimestamp() << ": ";
-    }
-
-    ~ClientLogStream() {
-      auto log_message = stream_.str();
-      if (!log_message.empty()) {
-        if (log_buffer_.size() >= kMaxClientLogSize) {
-          log_buffer_.pop_front();
-        }
-        LOG_WITH_TAG(severity_, tag_) << log_message;
-        log_buffer_.push_back(timestamp_stream_.str() + log_message);
-      }
-    }
+                             const char* tag);
+    ~ClientLogStream();
 
     template <typename T>
     ClientLogStream& operator<<(const T& value) {
@@ -188,38 +167,44 @@ class DebugClient {
    * @brief ClientLog() returns a ClientLogStream object, allowing child classes
    * to log messages using stream-like syntax (e.g., ClientLog() << "message").
    * The log message is stored internally by DebugClient.
+   *
+   * This function should not be used directly without the CLIENT_LOG macro.
    */
   ClientLogStream ClientLog(::android::base::LogSeverity severity,
-                            const char* tag) {
-    if (log_tag_.empty()) {
-      SetClientLogTag(tag);
-    }
-    return ClientLogStream(client_logs_, severity, tag);
-  }
+                            const char* tag);
 
   /**
    * @brief GetClientLogs retrieves all collected log messages.
    * @return A constant reference to the vector of collected log strings.
    */
-  const std::deque<std::string>& GetClientLogs() const { return client_logs_; }
+  const std::deque<std::string>& GetClientLogs() const;
 
   /**
    * @brief GetClientLogsInString returns a single string containing all
    * collected logs, with each log entry separated by a newline.
    * @return A string with all log entries concatenated.
    */
-  std::string GetClientLogsInString() const {
-    std::ostringstream oss;
-    for (const auto& log : client_logs_) {
-      oss << log << "\n";
-    }
-    return oss.str();
-  }
+  std::string GetClientLogsInString() const;
 
-  void SetClientLogTag(const std::string& tag) { log_tag_ = tag; }
+  void SetClientLogTag(const std::string& tag);
 
   std::deque<std::string> client_logs_;
   std::string log_tag_;
+
+#else
+  // Empty methods for the child classes' unit tests.
+  // There is no point to create a mock solution for the logger besides adding
+  // more complexity in the code.
+  virtual ~DebugClient() = default;
+  virtual void OnGenerateCoredump([[maybe_unused]] CoredumpErrorCode error_code,
+                                  [[maybe_unused]] uint8_t sub_error_code) {}
+  const std::deque<std::string>& GetClientLogs() const {
+    static const std::deque<std::string> empty_logs;
+    return empty_logs;
+  }
+  std::string GetClientLogsInString() const { return ""; }
+  void SetClientLogTag([[maybe_unused]] const std::string& tag) {}
+#endif
 };
 
 }  // namespace debug
