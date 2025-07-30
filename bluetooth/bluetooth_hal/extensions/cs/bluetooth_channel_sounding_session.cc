@@ -80,15 +80,24 @@ ScopedAStatus BluetoothChannelSoundingSession::getVendorSpecificReplies(
 
   uint8_t enable_inline_pct =
       enable_fake_notification_ ? kCommandValueEnable : kCommandValueIgnore;
-  uint8_t enable_cs_subevent_report =
-      enable_fake_notification_ ? kCommandValueDisable : kCommandValueIgnore;
+
+  // Event mask used by `Set event mask for connection` command. Set all event
+  // bits to 0 — responder should ignore this if unsupported or inline PCT is
+  // not enabled.
+  constexpr uint32_t kEventMask = 0x00000000;
+
   uint8_t enable_mode_0_channel_map =
       enable_mode_0_channel_map_ ? kCommandValueEnable : kCommandValueIgnore;
 
   VendorSpecificData command;
   command.characteristicUuid = kUuidSpecialRangingSettingCommand;
-  command.opaqueValue = {kDataTypeReply, enable_inline_pct,
-                         enable_cs_subevent_report, enable_mode_0_channel_map};
+  command.opaqueValue = {kDataTypeReply,
+                         enable_inline_pct,
+                         static_cast<uint8_t>((kEventMask >> 24) & 0xFF),
+                         static_cast<uint8_t>((kEventMask >> 16) & 0xFF),
+                         static_cast<uint8_t>((kEventMask >> 8) & 0xFF),
+                         static_cast<uint8_t>((kEventMask) & 0xFF),
+                         enable_mode_0_channel_map};
   (*_aidl_return)->push_back(command);
 
   for (auto& data : _aidl_return->value()) {

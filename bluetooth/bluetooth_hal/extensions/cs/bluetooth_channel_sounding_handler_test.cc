@@ -488,9 +488,6 @@ class VendorSpecificRepliesTest
     uint8_t enable_inline_pct = is_fake_notification_enabled
                                     ? kCommandValueEnable
                                     : kCommandValueIgnore;
-    uint8_t enable_cs_subevent_report = is_fake_notification_enabled
-                                            ? kCommandValueDisable
-                                            : kCommandValueIgnore;
     uint8_t enable_mode_0_channel_map = is_mode_0_channel_map_enabled
                                             ? kCommandValueEnable
                                             : kCommandValueIgnore;
@@ -501,9 +498,9 @@ class VendorSpecificRepliesTest
 
     VendorSpecificData command;
     command.characteristicUuid = kUuidSpecialRangingSettingCommand;
-    command.opaqueValue = {kDataTypeReply, enable_inline_pct,
-                           enable_cs_subevent_report,
-                           enable_mode_0_channel_map};
+    command.opaqueValue = {
+        kDataTypeReply,           enable_inline_pct, 0, 0, 0, 0,
+        enable_mode_0_channel_map};
 
     return {capability, command};
   }
