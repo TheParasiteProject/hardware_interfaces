@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,6 @@
 
 package android.hardware.drm;
 @VintfStability
-interface ICryptoPlugin {
-  int decrypt(in android.hardware.drm.DecryptArgs args);
-  List<android.hardware.drm.LogMessage> getLogMessages();
-  void notifyResolution(in int width, in int height);
-  boolean requiresSecureDecoderComponent(in String mime);
-  void setMediaDrmSession(in byte[] sessionId);
-  void setSharedBufferBase(in android.hardware.drm.SharedBuffer base);
-  android.hardware.drm.KeyHandleResult getKeyHandle(in byte[] keyId, in android.hardware.drm.Mode mode);
+parcelable KeyHandleResult {
+  byte[] keyHandle;
 }
