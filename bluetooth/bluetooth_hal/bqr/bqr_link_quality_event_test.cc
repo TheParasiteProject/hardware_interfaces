@@ -24,6 +24,7 @@
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v4.h"
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v5.h"
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v6.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v7.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "gtest/gtest.h"
@@ -259,6 +260,10 @@ void VerifyDefaultV6(const BqrLinkQualityEventV6& packet) {
   ASSERT_EQ(packet.GetCoexInfoMask(), 0);
 }
 
+void VerifyDefaultV7(const BqrLinkQualityEventV7& packet) {
+  VerifyDefaultV6(packet);
+}
+
 TEST(BqrLinkQualityEventTest, ValidV3PacketParsing) {
   auto packet = BqrLinkQualityEventV1ToV3(CreateBqrLinkQualityEventV6V5V3());
   ASSERT_TRUE(packet.IsValid());
@@ -311,10 +316,12 @@ TEST(BqrLinkQualityEventTest, InvalidPacketParsingIncorrectFormat) {
   auto packet_v4 = BqrLinkQualityEventV4(CreateIncorrectBqrHalPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateIncorrectBqrHalPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateIncorrectBqrHalPacket());
+  auto packet_v7 = BqrLinkQualityEventV7(CreateIncorrectBqrHalPacket());
   VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);
+  VerifyDefaultV7(packet_v7);
 }
 
 TEST(BqrLinkQualityEventTest, InvalidPacketParsingPacketTooShort) {
@@ -322,10 +329,12 @@ TEST(BqrLinkQualityEventTest, InvalidPacketParsingPacketTooShort) {
   auto packet_v4 = BqrLinkQualityEventV4(CreateShortBqrPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateShortBqrPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateShortBqrPacket());
+  auto packet_v7 = BqrLinkQualityEventV7(CreateShortBqrPacket());
   VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);
+  VerifyDefaultV7(packet_v7);
 }
 
 TEST(BqrLinkQualityEventTest, InvalidPacketParsingWrongReportId) {
@@ -333,10 +342,12 @@ TEST(BqrLinkQualityEventTest, InvalidPacketParsingWrongReportId) {
   auto packet_v4 = BqrLinkQualityEventV4(CreateWrongReportIdPacket());
   auto packet_v5 = BqrLinkQualityEventV5(CreateWrongReportIdPacket());
   auto packet_v6 = BqrLinkQualityEventV6(CreateWrongReportIdPacket());
+  auto packet_v7 = BqrLinkQualityEventV7(CreateWrongReportIdPacket());
   VerifyDefaultV1ToV3(packet_v3);
   VerifyDefaultV4(packet_v4);
   VerifyDefaultV5(packet_v5);
   VerifyDefaultV6(packet_v6);
+  VerifyDefaultV7(packet_v7);
 }
 
 }  // namespace
