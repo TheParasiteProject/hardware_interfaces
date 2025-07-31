@@ -114,6 +114,15 @@ std::vector<AudioPort> ModuleConfig::getAttachedDevicePorts() const {
     return result;
 }
 
+std::optional<AudioPort> ModuleConfig::getAttachedInputDevicePort() const {
+    for (const auto& port : mPorts) {
+        if (mAttachedSourceDevicePorts.count(port.id) != 0) {
+            return port;
+        }
+    }
+    return {};
+}
+
 std::vector<aidl::android::media::audio::common::AudioPort>
 ModuleConfig::getAudioPortsForDeviceTypes(const std::vector<AudioDeviceType>& deviceTypes,
                                           const std::string& connection) const {
@@ -177,6 +186,14 @@ std::vector<AudioPort> ModuleConfig::getNonBlockingMixPorts(bool connectedOnly,
     return findMixPorts(false /*isInput*/, connectedOnly, singlePort, [&](const AudioPort& port) {
         return isBitPositionFlagSet(port.flags.get<AudioIoFlags::Tag::output>(),
                                     AudioOutputFlags::NON_BLOCKING);
+    });
+}
+
+std::vector<AudioPort> ModuleConfig::getSynchronousMixPorts(bool connectedOnly,
+                                                            bool singlePort) const {
+    return findMixPorts(false /*isInput*/, connectedOnly, singlePort, [&](const AudioPort& port) {
+        return !isBitPositionFlagSet(port.flags.get<AudioIoFlags::Tag::output>(),
+                                     AudioOutputFlags::NON_BLOCKING);
     });
 }
 

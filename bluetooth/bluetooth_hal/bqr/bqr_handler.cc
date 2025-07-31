@@ -30,6 +30,7 @@
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v4.h"
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v5.h"
 #include "bluetooth_hal/bqr/bqr_link_quality_event_v6.h"
+#include "bluetooth_hal/bqr/bqr_link_quality_event_v7.h"
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/debug/debug_central.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -138,6 +139,10 @@ void BqrHandler::HandleLinkQualityEvent(const BqrEvent& bqr_event) {
     } break;
     case BqrVersion::kV6: {
       BqrLinkQualityEventV6 link_quality_event(bqr_event);
+      LOG(INFO) << link_quality_event.ToString();
+    } break;
+    case BqrVersion::kV7: {
+      BqrLinkQualityEventV7 link_quality_event(bqr_event);
       LOG(INFO) << link_quality_event.ToString();
     } break;
     default:

@@ -118,9 +118,9 @@ bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
   SCOPED_ANCHOR(AnchorType::kInitialize, __func__);
   ScopedWakelock wakelock(WakeSource::kInitialize);
 
-  LOG(INFO) << "Initializing Bluetooth HAL.";
+  HAL_LOG(INFO) << "Initializing Bluetooth HAL, cb=" << cb;
   if (bluetooth_hci_callback_ != nullptr) {
-    LOG(WARNING) << "The HAL has already been initialized!";
+    HAL_LOG(WARNING) << "The HAL has already been initialized!";
     cb->InitializationComplete(BluetoothHciStatus::kHardwareInitializeError);
     return false;
   }
@@ -131,7 +131,12 @@ bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
   auto callback = std::make_shared<HciCallback>(
       std::bind_front(&BluetoothHci::DispatchPacketToStack, this),
       std::bind_front(&BluetoothHci::HandleHalStateChanged, this));
-  return HciRouter::GetRouter().Initialize(callback);
+  if (!HciRouter::GetRouter().Initialize(callback)) {
+    HAL_LOG(ERROR) << "Failed to initialize HciRouter!";
+    is_initializing_ = false;
+    bluetooth_hci_callback_ = nullptr;
+  }
+  return true;
 }
 
 bool BluetoothHci::SendHciCommand(const HalPacket& packet) {
@@ -175,6 +180,7 @@ bool BluetoothHci::SendIsoData(const HalPacket& packet) {
 bool BluetoothHci::Close() {
   bluetooth_hci_callback_ = nullptr;
   ANCHOR_LOG_INFO(AnchorType::kClose) << __func__;
+  HAL_LOG(INFO) << __func__;
   ScopedWakelock wakelock(WakeSource::kClose);
   HciRouter::GetRouter().Cleanup();
   return true;
@@ -195,7 +201,8 @@ void BluetoothHci::SendDataToController(const HalPacket& packet) {
 
 void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
   if (bluetooth_hci_callback_ == nullptr) {
-    LOG(ERROR) << "bluetooth_hci_callback is null!";
+    LOG(ERROR) << "bluetooth_hci_callback is null! packet="
+               << packet.ToString();
     return;
   }
   HciPacketType type = packet.GetType();

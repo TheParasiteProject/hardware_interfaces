@@ -28,9 +28,13 @@
     <target_preparer class="com.android.tradefed.targetprep.PushFilePreparer">
         <option name="cleanup" value="true" />
         <option name="push" value="{MODULE}->/data/local/tmp/{MODULE}" />
-        <option name="push" value="dog.16khz.1ch.f32.6s.wav->/data/local/tmp/dog.16khz.1ch.f32.6s.wav"/>
-        <option name="push" value="speech.16khz.1ch.f32.6s.wav->/data/local/tmp/speech.16khz.1ch.f32.6s.wav"/>
-        <option name="push" value="wind.16khz.1ch.f32.6s.wav->/data/local/tmp/wind.16khz.1ch.f32.6s.wav"/>
+        <option name="push" value="bird.16khz.1ch.f32.wav->/data/local/tmp/bird.16khz.1ch.f32.wav"/>
+        <option name="push" value="motorcycle.16khz.1ch.f32.wav->/data/local/tmp/motorcycle.16khz.1ch.f32.wav"/>
+        <option name="push" value="speech.16khz.1ch.f32.wav->/data/local/tmp/speech.16khz.1ch.f32.wav"/>
+        <option name="push" value="wind.16khz.1ch.f32.wav->/data/local/tmp/wind.16khz.1ch.f32.wav"/>
+        <option name="push" value="rain.16khz.1ch.f32.wav->/data/local/tmp/rain.16khz.1ch.f32.wav"/>
+        <option name="push" value="music.16khz.1ch.f32.wav->/data/local/tmp/music.16khz.1ch.f32.wav"/>
+        <option name="push" value="pinknoise.16khz.1ch.f32.wav->/data/local/tmp/pinknoise.16khz.1ch.f32.wav"/>
     </target_preparer>
 
     <test class="com.android.tradefed.testtype.GTest" >

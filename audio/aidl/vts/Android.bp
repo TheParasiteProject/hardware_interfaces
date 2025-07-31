@@ -235,8 +235,12 @@ cc_test {
         "libsndfile",
     ],
     data: [
-        "data/dog.16khz.1ch.f32.6s.wav",
-        "data/speech.16khz.1ch.f32.6s.wav",
-        "data/wind.16khz.1ch.f32.6s.wav",
+        "data/bird.16khz.1ch.f32.wav",
+        "data/motorcycle.16khz.1ch.f32.wav",
+        "data/speech.16khz.1ch.f32.wav",
+        "data/wind.16khz.1ch.f32.wav",
+        "data/music.16khz.1ch.f32.wav",
+        "data/rain.16khz.1ch.f32.wav",
+        "data/pinknoise.16khz.1ch.f32.wav",
     ],
 }
