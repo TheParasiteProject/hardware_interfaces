@@ -86,18 +86,30 @@ bool ChipProvisioner::DownloadFirmware() {
 
 bool ChipProvisioner::ResetFirmware() {
   LOG(INFO) << __func__;
-  if (!ExecuteCurrentSetupStep(SetupCommandType::kReset)) {
-    LOG(ERROR) << __func__ << ": Failed to reset firmware.";
-    // TODO: b/372148907 - Need to report error (kill self if needed).
-    return false;
-  }
 
   switch (HciRouter::GetRouter().GetHalState()) {
     case HalState::kBtChipReady:
+      // Turning ON Bluetooth.
+      // Step 1: Reset the Bluetooth controller.
+      if (!ExecuteCurrentSetupStep(SetupCommandType::kReset)) {
+        LOG(FATAL) << __func__
+                   << ": Failed to reset firmware when turning ON BT.";
+      }
+      // Step 2: Update HAL state to Running.
       UpdateHalState(HalState::kRunning);
       break;
     case HalState::kRunning:
+      // Turning OFF Bluetooth, steps are in reverse order. HAL state updated
+      // before controller reset to prevent delay on HAL state change.
+
+      // Step 2: Update HAL state to BtChipReady.
       UpdateHalState(HalState::kBtChipReady);
+
+      // Step 1: Reset the Bluetooth controller.
+      if (!ExecuteCurrentSetupStep(SetupCommandType::kReset)) {
+        LOG(FATAL) << __func__
+                   << ": Failed to reset firmware when turning OFF BT.";
+      }
       break;
     default:
       // TODO: b/372148907 - Need to report error (kill self if needed).
@@ -127,7 +139,8 @@ bool ChipProvisioner::SendCommandAndWait(const HalPacket& packet) {
   std::future_status status = command_promise_.get_future().wait_for(
       std::chrono::milliseconds(kCommandTimeoutMs));
   if (status != std::future_status::ready) {
-    LOG(ERROR) << __func__ << ": Command timeout during download firmware.";
+    LOG(ERROR) << __func__ << ": Command timeout waiting for "
+               << packet.ToString();
     return false;
   }
   command_promise_ = std::promise<void>();
