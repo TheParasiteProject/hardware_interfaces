@@ -267,9 +267,11 @@ class TxHandler {
 
   void UnvoteRouterTaskWakelock() {
     std::unique_lock<std::mutex> lock(task_wakelock_mutex_);
+    // Reset wakelock to prevent false watchdog bite.
+    Wakelock::GetWakelock().Release(WakeSource::kRouterTask);
     wake_lock_votes_--;
-    if (wake_lock_votes_ == 0) {
-      Wakelock::GetWakelock().Release(WakeSource::kRouterTask);
+    if (wake_lock_votes_ > 0) {
+      Wakelock::GetWakelock().Acquire(WakeSource::kRouterTask);
     }
   }
 
