@@ -101,9 +101,12 @@ void BluetoothHci::HandleSignal(int signum) {
 
 void BluetoothHci::HandleServiceDied() {
   ANCHOR_LOG(AnchorType::kServiceDied) << __func__;
-  if (bluetooth_hci_callback_ == nullptr) {
-    HAL_LOG(ERROR) << __func__ << ": called but callback is null";
-    return;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (bluetooth_hci_callback_ == nullptr) {
+      HAL_LOG(ERROR) << __func__ << ": called but callback is null";
+      return;
+    }
   }
   HAL_LOG(ERROR) << __func__ << ": Bluetooth service died!";
   if (DebugCentral::Get().IsCoredumpGenerated()) {
@@ -119,20 +122,24 @@ bool BluetoothHci::Initialize(const std::shared_ptr<BluetoothHciCallback>& cb) {
   ScopedWakelock wakelock(WakeSource::kInitialize);
 
   HAL_LOG(INFO) << "Initializing Bluetooth HAL, cb=" << cb;
-  if (bluetooth_hci_callback_ != nullptr) {
-    HAL_LOG(WARNING) << "The HAL has already been initialized!";
-    cb->InitializationComplete(BluetoothHciStatus::kHardwareInitializeError);
-    return false;
-  }
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (bluetooth_hci_callback_ != nullptr) {
+      HAL_LOG(WARNING) << "The HAL has already been initialized!";
+      cb->InitializationComplete(BluetoothHciStatus::kHardwareInitializeError);
+      return false;
+    }
 
-  is_initializing_ = true;
-  bluetooth_hci_callback_ = cb;
+    is_initializing_ = true;
+    bluetooth_hci_callback_ = cb;
+  }
 
   auto callback = std::make_shared<HciCallback>(
       std::bind_front(&BluetoothHci::DispatchPacketToStack, this),
       std::bind_front(&BluetoothHci::HandleHalStateChanged, this));
   if (!HciRouter::GetRouter().Initialize(callback)) {
     HAL_LOG(ERROR) << "Failed to initialize HciRouter!";
+    std::lock_guard<std::mutex> lock(callback_mutex_);
     is_initializing_ = false;
     bluetooth_hci_callback_ = nullptr;
   }
@@ -178,7 +185,10 @@ bool BluetoothHci::SendIsoData(const HalPacket& packet) {
 }
 
 bool BluetoothHci::Close() {
-  bluetooth_hci_callback_ = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    bluetooth_hci_callback_ = nullptr;
+  }
   ANCHOR_LOG_INFO(AnchorType::kClose) << __func__;
   HAL_LOG(INFO) << __func__;
   ScopedWakelock wakelock(WakeSource::kClose);
@@ -200,6 +210,7 @@ void BluetoothHci::SendDataToController(const HalPacket& packet) {
 }
 
 void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
+  std::lock_guard<std::mutex> lock(callback_mutex_);
   if (bluetooth_hci_callback_ == nullptr) {
     LOG(ERROR) << "bluetooth_hci_callback is null! packet="
                << packet.ToString();
@@ -251,6 +262,7 @@ void BluetoothHci::DispatchPacketToStack(const HalPacket& packet) {
 
 void BluetoothHci::HandleHalStateChanged(HalState new_state,
                                          [[maybe_unused]] HalState old_state) {
+  std::lock_guard<std::mutex> lock(callback_mutex_);
   if (is_initializing_ && bluetooth_hci_callback_ != nullptr) {
     switch (new_state) {
       case HalState::kRunning:

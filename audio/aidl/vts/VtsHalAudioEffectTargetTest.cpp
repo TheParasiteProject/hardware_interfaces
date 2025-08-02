@@ -623,7 +623,7 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataInProcessingState) {
     ASSERT_NO_FATAL_FAILURE(open(mEffect, common, std::nullopt /* specific */, &ret, EX_NONE));
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
     ASSERT_NO_FATAL_FAILURE(close(mEffect));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, mEffect));
 }
@@ -639,9 +639,9 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataAfterRestart) {
 
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
 
     ASSERT_NO_FATAL_FAILURE(close(mEffect));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, mEffect));
@@ -664,7 +664,7 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataAfterReopen) {
 
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
 
     // set a new common parameter with different IO frameCount, reopen
     Parameter::Id id = Parameter::Id::make<Parameter::Id::commonTag>(Parameter::common);
@@ -678,7 +678,7 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataAfterReopen) {
     inputBuffer.resize(mInputSamples);
     outputBuffer.resize(mOutputSamples);
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
 
     ASSERT_NO_FATAL_FAILURE(close(mEffect));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, mEffect));
@@ -701,7 +701,7 @@ TEST_P(AudioEffectDataPathTest, SendDataAtIdleAndConsumeDataInProcessing) {
 
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion));
 
     EXPECT_NO_FATAL_FAILURE(EffectHelper::writeToFmq(statusMQ, inputMQ, inputBuffer, mVersion));
     ASSERT_NO_FATAL_FAILURE(command(mEffect, CommandId::START));
@@ -723,7 +723,7 @@ TEST_P(AudioEffectDataPathTest, ProcessDataMultipleTimes) {
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
 
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion, 2));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion, 2));
 
     ASSERT_NO_FATAL_FAILURE(close(mEffect));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, mEffect));
@@ -740,9 +740,9 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataAndRestart) {
     std::vector<float> inputBuffer(mInputSamples), outputBuffer(mOutputSamples);
 
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion, 2));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion, 2));
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, &ret, mVersion, 2));
+            processAndWriteToOutput(inputBuffer, outputBuffer, mEffect, ret, mVersion, 2));
 
     ASSERT_NO_FATAL_FAILURE(close(mEffect));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, mEffect));
@@ -792,9 +792,9 @@ TEST_P(AudioEffectDataPathTest, ConsumeDataMultipleEffects) {
             outputBuffer2(oFrameCount2 * mOutputFrameSize / sizeof(float));
 
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer1, outputBuffer1, effect1, &ret1, mVersion, 2));
+            processAndWriteToOutput(inputBuffer1, outputBuffer1, effect1, ret1, mVersion, 2));
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(inputBuffer2, outputBuffer2, effect2, &ret2, mVersion, 2));
+            processAndWriteToOutput(inputBuffer2, outputBuffer2, effect2, ret2, mVersion, 2));
 
     ASSERT_NO_FATAL_FAILURE(close(effect1));
     ASSERT_NO_FATAL_FAILURE(destroy(mFactory, effect1));

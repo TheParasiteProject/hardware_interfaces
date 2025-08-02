@@ -219,7 +219,7 @@ TEST_P(VolumeDataTest, ApplyLevelMuteUnmute) {
     // Apply Volume Level
 
     ASSERT_NO_FATAL_FAILURE(setAndVerifyParameters(Volume::levelDb, kBaseLevel, EX_NONE));
-    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, &mOpenEffectReturn));
+    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, mOpenEffectReturn));
 
     ASSERT_NO_FATAL_FAILURE(
             calculateAndVerifyMagnitude(outputMag, mChannelLayout, output, mBinOffsets));
@@ -233,7 +233,7 @@ TEST_P(VolumeDataTest, ApplyLevelMuteUnmute) {
     // Apply Mute
 
     ASSERT_NO_FATAL_FAILURE(setAndVerifyParameters(Volume::mute, true /*mute*/, EX_NONE));
-    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, &mOpenEffectReturn));
+    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, mOpenEffectReturn));
 
     std::vector<float> subOutputMute(output.begin() + offset, output.end());
 
@@ -259,7 +259,7 @@ TEST_P(VolumeDataTest, ApplyLevelMuteUnmute) {
     // Apply Unmute
 
     ASSERT_NO_FATAL_FAILURE(setAndVerifyParameters(Volume::mute, false /*unmute*/, EX_NONE));
-    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, &mOpenEffectReturn));
+    ASSERT_NO_FATAL_FAILURE(processAndWriteToOutput(mInput, output, mEffect, mOpenEffectReturn));
 
     std::vector<float> subOutputUnmute(output.begin() + offset, output.end());
 
@@ -295,7 +295,7 @@ TEST_P(VolumeDataTest, DecreasingLevels) {
 
     ASSERT_NO_FATAL_FAILURE(setAndVerifyParameters(Volume::levelDb, kBaseLevel, EX_NONE));
     ASSERT_NO_FATAL_FAILURE(
-            processAndWriteToOutput(mInput, baseOutput, mEffect, &mOpenEffectReturn));
+            processAndWriteToOutput(mInput, baseOutput, mEffect, mOpenEffectReturn));
 
     ASSERT_NO_FATAL_FAILURE(
             calculateAndVerifyMagnitude(outputMag, mChannelLayout, baseOutput, mBinOffsets));
@@ -312,7 +312,7 @@ TEST_P(VolumeDataTest, DecreasingLevels) {
         }
         ASSERT_NO_FATAL_FAILURE(setAndVerifyParameters(Volume::levelDb, level, EX_NONE));
         ASSERT_NO_FATAL_FAILURE(
-                processAndWriteToOutput(mInput, output, mEffect, &mOpenEffectReturn));
+                processAndWriteToOutput(mInput, output, mEffect, mOpenEffectReturn));
 
         ASSERT_NO_FATAL_FAILURE(
                 calculateAndVerifyMagnitude(outputMag, mChannelLayout, output, mBinOffsets));

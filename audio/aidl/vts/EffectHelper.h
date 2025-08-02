@@ -474,15 +474,15 @@ class EffectHelper {
     static void processAndWriteToOutput(std::vector<float>& inputBuffer,
                                         std::vector<float>& outputBuffer,
                                         const std::shared_ptr<IEffect>& effect,
-                                        IEffect::OpenEffectReturn* openEffectReturn,
+                                        const IEffect::OpenEffectReturn& openEffectReturn,
                                         int version = -1, int times = 1,
                                         bool callStopReset = true) {
         // Initialize AidlMessagequeues
-        auto statusMQ = std::make_unique<EffectHelper::StatusMQ>(openEffectReturn->statusMQ);
+        auto statusMQ = std::make_unique<EffectHelper::StatusMQ>(openEffectReturn.statusMQ);
         ASSERT_TRUE(statusMQ->isValid());
-        auto inputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->inputDataMQ);
+        auto inputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn.inputDataMQ);
         ASSERT_TRUE(inputMQ->isValid());
-        auto outputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn->outputDataMQ);
+        auto outputMQ = std::make_unique<EffectHelper::DataMQ>(openEffectReturn.outputDataMQ);
         ASSERT_TRUE(outputMQ->isValid());
 
         // Enabling the process
