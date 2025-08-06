@@ -1092,12 +1092,18 @@ TEST_P(GraphicsComposerAidlTest, SetPowerModeUnsupported) {
 TEST_P(GraphicsComposerAidlTest, SetVsyncEnabled) {
     mComposerClient->setVsyncAllowed(true);
 
+    int32_t maxVsyncPeriod = 0;
     for (const auto& display : mDisplays) {
         EXPECT_TRUE(mComposerClient->setVsync(display.getDisplayId(), true).isOk());
         usleep(60 * 1000);
         EXPECT_TRUE(mComposerClient->setVsync(display.getDisplayId(), false).isOk());
+
+        const int32_t vsyncPeriod = display.getVsyncPeriod();
+        maxVsyncPeriod = std::max(maxVsyncPeriod, vsyncPeriod);
     }
 
+    // wait some time to allow in-flight callbacks to complete.
+    usleep(2 * static_cast<uint32_t>(maxVsyncPeriod) / 1000);
     mComposerClient->setVsyncAllowed(false);
 }
 
