@@ -96,6 +96,9 @@ constexpr std::string_view kBtLogPathPrefix =
     "/data/vendor/bluetooth/btsnoop_hci_vnd";
 constexpr int kMaxLogFileCount = 10;
 
+constexpr std::string kBtLogModeFull = "full";
+constexpr std::string kBtLogModeFiltered = "filtered";
+constexpr std::string kBtLogModeDisabled = "disabled";
 // Truncate to certain length for packet types that need to be filtered.
 constexpr int kFilteredPacketLength = 32;
 
@@ -119,14 +122,27 @@ std::string GetLogPathWithTimeStamp(std::string_view prefix) {
   return ss.str();
 }
 
-bool IsVndSnoopLogEnabled() {
-  const std::string btsnoop_log_mode = android::base::GetProperty(
-      Property::kBtSnoopLogMode,
-      HalConfigLoader::GetLoader().IsUserDebugOrEngBuild() ? "filtered"
-                                                           : "disabled");
-  const bool is_enabled = android::base::GetBoolProperty(
-      Property::kBtVendorSnoopEnabledProperty, false);
-  return btsnoop_log_mode != "disabled" && is_enabled;
+std::string GetBtSnoopLogMode() {
+  return android::base::GetProperty(Property::kBtSnoopLogMode,
+                                    kBtLogModeDisabled);
+}
+
+bool IsBtVndSnoopLogEnabled() {
+  return android::base::GetBoolProperty(Property::kBtVendorSnoopEnabledProperty,
+                                        false);
+}
+
+std::string GetBtVndSnoopLogMode() {
+  if (!IsBtVndSnoopLogEnabled()) {
+    return kBtLogModeDisabled;
+  }
+  std::string bt_snoop_log_mode = GetBtSnoopLogMode();
+  if (bt_snoop_log_mode == kBtLogModeDisabled) {
+    return HalConfigLoader::GetLoader().IsUserDebugOrEngBuild()
+               ? kBtLogModeFiltered
+               : kBtLogModeDisabled;
+  }
+  return bt_snoop_log_mode;
 }
 
 size_t GetMaxPacketsPerFile() {
@@ -227,11 +243,14 @@ class LoggerHandler {
 
   void StartNewRecording() {
     LOG(INFO) << __func__ << ": Start recording vendor btsnoop log.";
-    max_packets_per_file_ = GetMaxPacketsPerFile();
 
-    const bool enabled = IsVndSnoopLogEnabled();
-    LOG(INFO) << __func__ << ": Vendor btsnoop log enabled: " << enabled << ".";
-    if (enabled) {
+    std::string vnd_snoop_log_mode = GetBtVndSnoopLogMode();
+    LOG(INFO) << __func__ << ": Vendor btsnoop log mode: " << vnd_snoop_log_mode
+              << ".";
+
+    max_packets_per_file_ = GetMaxPacketsPerFile();
+    filtered = vnd_snoop_log_mode != kBtLogModeFull;
+    if (vnd_snoop_log_mode != kBtLogModeDisabled) {
       PrepareNewLogFile();
       state_ = State::kRecording;
     } else {
@@ -259,8 +278,6 @@ class LoggerHandler {
     // Bit 0: Direction (0 for Sent/Outgoing, 1 for Received/Incoming)
     // Bit 1: Type (0 for Data, 1 for Command/Event)
     uint32_t flags = 0;
-    // Set filtered for data packet types.
-    bool filtered = false;
     switch (type) {
       case HciPacketType::kCommand:
         flags |= (1 << 1);
@@ -276,7 +293,6 @@ class LoggerHandler {
         if (direction == VndSnoopLogger::Direction::kIncoming) {
           flags |= (1 << 0);
         }
-        filtered = true;
         break;
       default:
         break;
@@ -377,6 +393,7 @@ class LoggerHandler {
   State state_{State::kStoppedOrDisabled};
   size_t max_packets_per_file_{0};
   size_t packet_counter_{0};
+  bool filtered = true;
   std::unique_ptr<Worker<LoggerTask>> logger_thread_;
 };
 
