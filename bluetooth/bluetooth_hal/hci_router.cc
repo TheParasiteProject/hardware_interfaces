@@ -594,8 +594,6 @@ void HciRouterImpl::HandleReceivedPacket(const HalPacket& packet) {
 void HciRouterImpl::HandleCommandCompleteOrCommandStatusEvent(
     const HalPacket& event) {
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
-  uint16_t opcode = event.GetCommandOpcodeFromGeneratedEvent();
-
   std::promise<std::shared_ptr<HalPacketCallback>> promise;
   std::future<std::shared_ptr<HalPacketCallback>> future = promise.get_future();
   tx_handler_->Post(TxTask::GetCommandCallback(event, std::move(promise)));
