@@ -127,9 +127,6 @@ ConversionResult<AudioAttributes> EngineConfigXmlConverter::convertAudioAttribut
 ConversionResult<AudioHalAttributesGroup> EngineConfigXmlConverter::convertAttributesGroupToAidl(
         const eng_xsd::AttributesGroup& xsdcAttributesGroup) {
     AudioHalAttributesGroup aidlAttributesGroup;
-    static const int kStreamTypeEnumOffset =
-            static_cast<int>(eng_xsd::Stream::AUDIO_STREAM_VOICE_CALL) -
-            static_cast<int>(AudioStreamType::VOICE_CALL);
     aidlAttributesGroup.streamType = xsdcAttributesGroup.hasStreamType()
                                              ? VALUE_OR_FATAL(convertAudioStreamTypeToAidl(
                                                        xsdcAttributesGroup.getStreamType()))
