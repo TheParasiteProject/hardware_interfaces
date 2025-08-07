@@ -239,6 +239,13 @@ class HalConfigLoader : public ConfigLoader {
    */
   virtual const std::string& GetRfkillTypeBluetooth() const = 0;
 
+  /**
+   * @brief Checks whether enhanced packet validation is supported.
+   *
+   * @return true if supported; false otherwise.
+   */
+  virtual bool IsEnhancedPacketValidationSupported() const = 0;
+
   static HalConfigLoader& GetLoader();
 
   static void ResetLoader();

@@ -163,6 +163,9 @@ class HciConstants {
   static constexpr size_t kHciBqrEventSubCodeOffset = 3;
   static constexpr size_t kHciBqrReportIdOffset = 4;
 
+  // Vendor Specific Event Constants.
+  static constexpr size_t kHciVendorSpecificEventSubCodeOffset = 3;
+
   static constexpr size_t GetPreambleSize(HciPacketType type) {
     switch (type) {
       case HciPacketType::kCommand:
@@ -206,9 +209,22 @@ class HciConstants {
 // Part E, section 7.7.
 enum class EventCode : uint8_t {
   kConnectionComplete = 0x03,
+  kConnectionRequest = 0x04,
   kDisconnectionComplete = 0x05,
+  kReadRemoteVersionInformationComplete = 0x0c,
+  kQosSetupComplete = 0x0d,
   kCommandComplete = 0x0e,
   kCommandStatus = 0x0f,
+  kRoleChange = 0x12,
+  kNumberOfCompletedPackets = 0x13,
+  kModeChange = 0x14,
+  kLinkKeyRequest = 0x17,
+  kMaxSlotsChange = 0x1b,
+  kReadRemoteExtendedFeaturesComplete = 0x23,
+  kSniffSubrating = 0x2e,
+  kEncryptionKeyRefreshComplete = 0x30,
+  kLinkSupervisionTimeoutChanged = 0x38,
+  kEnhancedFlushComplete = 0x39,
   kBleMeta = 0x3e,
   kVendorSpecific = 0xff,
 };

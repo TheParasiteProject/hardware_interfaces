@@ -111,6 +111,7 @@ class HalConfigLoaderImpl : public HalConfigLoader {
   const std::string& GetLpmWakelockCtrlProcNode() const override;
   const std::string& GetRfkillFolderPrefix() const override;
   const std::string& GetRfkillTypeBluetooth() const override;
+  bool IsEnhancedPacketValidationSupported() const override;
 
   std::string DumpConfigToString() const override;
 
@@ -140,6 +141,7 @@ class HalConfigLoaderImpl : public HalConfigLoader {
   bool is_ble_non_connection_sar_enabled_{false};
   int kernel_rx_wake_lock_time_ms_{0};
   bool is_low_power_mode_enabled_{false};
+  bool is_enhanced_packet_validation_supported_{false};
   std::string lpm_enable_proc_node_{cfg_consts::kLpmEnableProcNode};
   std::string lpm_waking_proc_node_{cfg_consts::kLpmWakingProcNode};
   std::string lpm_wakelock_ctrl_proc_node_{
@@ -268,6 +270,10 @@ const std::string& HalConfigLoaderImpl::GetRfkillFolderPrefix() const {
 
 const std::string& HalConfigLoaderImpl::GetRfkillTypeBluetooth() const {
   return rfkill_type_bluetooth_;
+}
+
+bool HalConfigLoaderImpl::IsEnhancedPacketValidationSupported() const {
+  return is_enhanced_packet_validation_supported_;
 }
 
 void HalConfigLoaderImpl::UpdateBqrEventMask(const std::string& mask) {
@@ -443,6 +449,11 @@ bool HalConfigLoaderImpl::LoadConfigFromString(std::string_view content) {
     rfkill_type_bluetooth_ = config.rfkill_type_bluetooth();
   }
 
+  if (config.has_enhanced_packet_validation_supported()) {
+    is_enhanced_packet_validation_supported_ =
+        config.enhanced_packet_validation_supported();
+  }
+
   LOG(INFO) << DumpConfigToString();
 
   return true;
@@ -496,6 +507,8 @@ std::string HalConfigLoaderImpl::DumpConfigToString() const {
      << "\"\n";
   ss << "GetRfkillFolderPrefix: \"" << GetRfkillFolderPrefix() << "\"\n";
   ss << "GetRfkillTypeBluetooth: \"" << GetRfkillTypeBluetooth() << "\"\n";
+  ss << "IsEnhancedPacketValidationSupported: \""
+     << IsEnhancedPacketValidationSupported() << "\"\n";
 
   // Runtime checks.
   ss << "IsUserDebugOrEngBuild (Property): " << IsUserDebugOrEngBuild() << "\n";

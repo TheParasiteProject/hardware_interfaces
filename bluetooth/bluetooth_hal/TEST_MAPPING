@@ -49,6 +49,9 @@
       "name": "bluetooth_hal_hci_packetizer_test"
     },
     {
+      "name": "bluetooth_hal_hci_packet_rescuer_test"
+    },
+    {
       "name": "bluetooth_hal_transport_interface_test"
     },
     {

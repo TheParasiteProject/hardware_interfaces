@@ -95,6 +95,8 @@ class MockHalConfigLoader : public HalConfigLoader {
   MOCK_METHOD(const std::string&, GetRfkillTypeBluetooth, (),
               (const, override));
 
+  MOCK_METHOD(bool, IsEnhancedPacketValidationSupported, (), (const, override));
+
   static void SetMockLoader(MockHalConfigLoader* loader);
 };
 
