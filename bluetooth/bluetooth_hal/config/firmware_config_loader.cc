@@ -549,8 +549,6 @@ std::optional<DataPacket> FirmwareConfigLoaderImpl::GetNextPacketByCommand() {
     }
 
     bool is_launch_ram = (GetOpcode(std::span(header)) == launch_ram_opcode_);
-    bool is_last_file = (static_cast<size_t>(current_firmware_file_index_) ==
-                         current_firmware_filenames_.size() - 1);
 
     DataType packet_data_type = DataType::kDataFragment;
     if (is_launch_ram) {
