@@ -51,7 +51,7 @@ class BluetoothHci {
 
   std::shared_ptr<BluetoothHciCallback> bluetooth_hci_callback_;
   bool is_initializing_;
-  static std::atomic<bool> is_signal_handled_;
+  static std::atomic<bool> is_sigterm_handled_;
   std::mutex callback_mutex_;
 };
 

@@ -282,7 +282,7 @@ TEST_F(HciRouterTest, InitializeWithAcceleratedBtOn) {
       .WillByDefault(Return(true));
 
   // Turn off Bluetooth, but without cleanup the transport layer.
-  router_->Cleanup();
+  router_->Close();
   CompleteResetFirmwareWithAcceleratedBtOn();
 
   // Turn on Bluetooth from kBtChipReady state, skip firmware download.
