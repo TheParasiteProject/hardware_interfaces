@@ -33,6 +33,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "android-base/logging.h"
@@ -71,6 +72,7 @@ constexpr int kDebugInfoPayloadOffset = 8;
 constexpr int kDebugInfoLastBlockOffset = 5;
 
 constexpr int kHandleDebugInfoCommandMs = 1000;
+constexpr int kRestartHalTimeoutMs = 6000;
 constexpr int kMaxCoredumpFiles = 3;
 const std::string kCoredumpFilePrefix = kCoredumpFilePath + kCoredumpPrefix;
 const std::string kSocdumpFilePrefix =
@@ -361,10 +363,9 @@ void DebugCentral::HandleDebugInfoEvent(const HalPacket& packet) {
 
   close(socdump_fd);
   if (last_soc_dump_packet) {
-    LOG(ERROR) << __func__ << ": Restart bthal service for recovery!";
+    LOG(ERROR) << __func__ << ": Restart Bluetooth HAL service for recovery!";
     last_soc_dump_packet = false;
     ThreadHandler::Cleanup();
-    kill(getpid(), SIGKILL);
   }
 }
 
@@ -384,6 +385,17 @@ void DebugCentral::GenerateCoredump(CoredumpErrorCode error_code,
 
   HAL_LOG(ERROR) << __func__ << ": Reason: "
                  << CoredumpErrorCodeToString(error_code, sub_error_code);
+
+  // Start a timer to automatically restart Bluetooth HAL after generating
+  // coredump. Normally the host stack kills itself after an error and before
+  // this thread timesout, which also terminates the Bluetooth HAL.
+  std::thread restart_hal_thread([]() {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kRestartHalTimeoutMs));
+    LOG(ERROR) << __func__ << ": Restarting Bluetooth HAL!";
+    kill(getpid(), SIGKILL);
+  });
+  restart_hal_thread.detach();
 
   // Inform vendor implementations that the dump has started.
   for (auto client : debug_clients_) {
