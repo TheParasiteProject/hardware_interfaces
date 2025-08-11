@@ -118,14 +118,18 @@ static std::vector<std::string> findUnmanagedVibratorNames() {
 
 class CompletionCallback : public BnVibratorCallback {
   public:
-    CompletionCallback(const std::function<void()> &callback) : mCallback(callback) {}
     ndk::ScopedAStatus onComplete() override {
-        mCallback();
+        completionPromise.set_value();
         return ndk::ScopedAStatus::ok();
     }
 
+    std::future_status wait_for(const std::chrono::milliseconds& timeout) {
+        return completionFuture.wait_for(timeout);
+    }
+
   private:
-    std::function<void()> mCallback;
+    std::promise<void> completionPromise;
+    std::future<void> completionFuture{completionPromise.get_future()};
 };
 
 class VibratorAidl : public testing::TestWithParam<std::tuple<int32_t, int32_t>> {
@@ -279,20 +283,17 @@ TEST_P(VibratorAidl, OnWithCallback) {
     if (!(capabilities & IVibrator::CAP_ON_CALLBACK))
         return;
 
-    std::promise<void> completionPromise;
-    std::future<void> completionFuture{completionPromise.get_future()};
-    auto callback = ndk::SharedRefBase::make<CompletionCallback>(
-            [&completionPromise] { completionPromise.set_value(); });
+    auto callback = ndk::SharedRefBase::make<CompletionCallback>();
     uint32_t durationMs = 250;
     auto timeout = std::chrono::milliseconds(durationMs) + VIBRATION_CALLBACK_TIMEOUT;
     EXPECT_OK(vibrator->on(durationMs, callback));
-    EXPECT_EQ(completionFuture.wait_for(timeout), std::future_status::ready);
+    EXPECT_EQ(callback->wait_for(timeout), std::future_status::ready);
     EXPECT_OK(vibrator->off());
 }
 
 TEST_P(VibratorAidl, OnCallbackNotSupported) {
     if (!(capabilities & IVibrator::CAP_ON_CALLBACK)) {
-        auto callback = ndk::SharedRefBase::make<CompletionCallback>([] {});
+        auto callback = ndk::SharedRefBase::make<CompletionCallback>();
         EXPECT_UNKNOWN_OR_UNSUPPORTED(vibrator->on(250, callback));
     }
 }
@@ -336,10 +337,7 @@ TEST_P(VibratorAidl, ValidateEffectWithCallback) {
             std::find(supported.begin(), supported.end(), effect) != supported.end();
 
         for (EffectStrength strength : kEffectStrengths) {
-            std::promise<void> completionPromise;
-            std::future<void> completionFuture{completionPromise.get_future()};
-            auto callback = ndk::SharedRefBase::make<CompletionCallback>(
-                    [&completionPromise] { completionPromise.set_value(); });
+            auto callback = ndk::SharedRefBase::make<CompletionCallback>();
             int lengthMs = 0;
             ndk::ScopedAStatus status = vibrator->perform(effect, strength, callback, &lengthMs);
 
@@ -355,7 +353,7 @@ TEST_P(VibratorAidl, ValidateEffectWithCallback) {
             if (lengthMs <= 0) continue;
 
             auto timeout = std::chrono::milliseconds(lengthMs) + VIBRATION_CALLBACK_TIMEOUT;
-            EXPECT_EQ(completionFuture.wait_for(timeout), std::future_status::ready);
+            EXPECT_EQ(callback->wait_for(timeout), std::future_status::ready);
 
             EXPECT_OK(vibrator->off());
         }
@@ -368,7 +366,7 @@ TEST_P(VibratorAidl, ValidateEffectWithCallbackNotSupported) {
 
     for (Effect effect : kEffects) {
         for (EffectStrength strength : kEffectStrengths) {
-            auto callback = ndk::SharedRefBase::make<CompletionCallback>([] {});
+            auto callback = ndk::SharedRefBase::make<CompletionCallback>();
             int lengthMs;
             EXPECT_UNKNOWN_OR_UNSUPPORTED(vibrator->perform(effect, strength, callback, &lengthMs))
                     << "\n  For effect: " << toString(effect) << " " << toString(strength);
@@ -416,7 +414,7 @@ TEST_P(VibratorAidl, PerformVendorEffectSupported) {
         scale += 0.5f;
         vendorScale += 0.2f;
 
-        auto callback = ndk::SharedRefBase::make<CompletionCallback>([] {});
+        auto callback = ndk::SharedRefBase::make<CompletionCallback>();
         ndk::ScopedAStatus status = vibrator->performVendorEffect(effect, callback);
 
         // No expectations on the actual status, the effect might be refused with illegal argument
@@ -456,7 +454,7 @@ TEST_P(VibratorAidl, PerformVendorEffectStability) {
             scale *= 2;
             vendorScale *= 1.5f;
 
-            auto callback = ndk::SharedRefBase::make<CompletionCallback>([] {});
+            auto callback = ndk::SharedRefBase::make<CompletionCallback>();
             ndk::ScopedAStatus status = vibrator->performVendorEffect(effect, callback);
 
             // No expectations on the actual status, the effect might be refused with illegal
@@ -786,10 +784,7 @@ TEST_P(VibratorAidl, ComposeCallback) {
             continue;
         }
 
-        std::promise<void> completionPromise;
-        std::future<void> completionFuture{completionPromise.get_future()};
-        auto callback = ndk::SharedRefBase::make<CompletionCallback>(
-                [&completionPromise] { completionPromise.set_value(); });
+        auto callback = ndk::SharedRefBase::make<CompletionCallback>();
         CompositeEffect effect;
         std::vector<CompositeEffect> composite;
         int32_t durationMs;
@@ -810,7 +805,7 @@ TEST_P(VibratorAidl, ComposeCallback) {
         EXPECT_OK(vibrator->compose(composite, callback))
                 << "\n  For primitive: " << toString(primitive);
 
-        EXPECT_EQ(completionFuture.wait_for(duration + VIBRATION_CALLBACK_TIMEOUT),
+        EXPECT_EQ(callback->wait_for(duration + VIBRATION_CALLBACK_TIMEOUT),
                   std::future_status::ready)
                 << "\n  For primitive: " << toString(primitive);
         end = high_resolution_clock::now();
@@ -970,10 +965,7 @@ TEST_P(VibratorAidl, ComposeValidPwleWithCallback) {
           (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS)))
         return;
 
-    std::promise<void> completionPromise;
-    std::future<void> completionFuture{completionPromise.get_future()};
-    auto callback = ndk::SharedRefBase::make<CompletionCallback>(
-            [&completionPromise] { completionPromise.set_value(); });
+    auto callback = ndk::SharedRefBase::make<CompletionCallback>();
     int32_t segmentDurationMaxMs;
     vibrator->getPwlePrimitiveDurationMax(&segmentDurationMaxMs);
     uint32_t durationMs = segmentDurationMaxMs * 2 + 100;  // Sum of 2 active and 1 braking below
@@ -992,7 +984,7 @@ TEST_P(VibratorAidl, ComposeValidPwleWithCallback) {
     std::vector<PrimitivePwle> pwleQueue = {active, braking, active};
 
     EXPECT_OK(vibrator->composePwle(pwleQueue, callback));
-    EXPECT_EQ(completionFuture.wait_for(timeout), std::future_status::ready);
+    EXPECT_EQ(callback->wait_for(timeout), std::future_status::ready);
     EXPECT_OK(vibrator->off());
 }
 
@@ -1192,11 +1184,7 @@ TEST_P(VibratorAidl, ComposeValidPwleV2EffectWithCallback) {
         return;
     }
 
-    std::promise<void> completionPromise;
-    std::future<void> completionFuture{completionPromise.get_future()};
-    auto callback = ndk::SharedRefBase::make<CompletionCallback>(
-            [&completionPromise] { completionPromise.set_value(); });
-
+    auto callback = ndk::SharedRefBase::make<CompletionCallback>();
     int32_t minDuration;
     EXPECT_OK(vibrator->getPwleV2PrimitiveDurationMinMillis(&minDuration));
     auto timeout = std::chrono::milliseconds(minDuration) + VIBRATION_CALLBACK_TIMEOUT;
@@ -1206,7 +1194,7 @@ TEST_P(VibratorAidl, ComposeValidPwleV2EffectWithCallback) {
     composite.pwlePrimitives.emplace_back(/*amplitude=*/0.5, minFrequency, minDuration);
 
     EXPECT_OK(vibrator->composePwleV2(composite, callback));
-    EXPECT_EQ(completionFuture.wait_for(timeout), std::future_status::ready);
+    EXPECT_EQ(callback->wait_for(timeout), std::future_status::ready);
     EXPECT_OK(vibrator->off());
 }
 
