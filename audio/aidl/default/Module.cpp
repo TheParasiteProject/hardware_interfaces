@@ -1398,7 +1398,6 @@ ndk::ScopedAStatus Module::setAudioPortConfigImpl(
 }
 
 bool Module::setAudioPortConfigGain(const AudioPort& port, const AudioGainConfig& gainRequested) {
-    auto& ports = getConfig().ports;
     if (gainRequested.index < 0 || gainRequested.index >= (int)port.gains.size()) {
         LOG(ERROR) << __func__ << ": gains for port " << port.id << " is undefined";
         return false;
