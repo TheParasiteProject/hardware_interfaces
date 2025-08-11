@@ -535,7 +535,7 @@ std::vector<aidlvhal::MinMaxSupportedValueResult> GRPCVehicleHardware::getMinMax
     if (!grpc_status.ok()) {
         LOG(ERROR) << __func__
                    << ": GRPC GetMinMaxSupportedValues Failed: " << grpc_status.error_message();
-        for (const auto& propIdAreaId : propIdAreaIds) {
+        for ([[maybe_unused]] const auto& propIdAreaId : propIdAreaIds) {
             aidlResults.push_back({
                     .status = aidlvhal::StatusCode::INTERNAL_ERROR,
             });
@@ -561,7 +561,7 @@ std::vector<aidlvhal::SupportedValuesListResult> GRPCVehicleHardware::getSupport
     if (!grpc_status.ok()) {
         LOG(ERROR) << __func__
                    << ": GRPC GetSupportedValuesLists Failed: " << grpc_status.error_message();
-        for (const auto& propIdAreaId : propIdAreaIds) {
+        for ([[maybe_unused]] const auto& propIdAreaId : propIdAreaIds) {
             aidlResults.push_back({
                     .status = aidlvhal::StatusCode::INTERNAL_ERROR,
             });
