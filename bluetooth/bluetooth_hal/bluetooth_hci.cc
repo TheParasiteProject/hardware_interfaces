@@ -94,11 +94,11 @@ void BluetoothHci::HandleSignal(int signum) {
     return;
   }
 
-  if (BluetoothFinderHandler::GetHandler().StartPoweredOffFinderMode()) {
-    return;
+  if (!BluetoothFinderHandler::GetHandler().StartPoweredOffFinderMode()) {
+    // Shutdown lower layer if finder is not enabled.
+    Close();
   }
 
-  Close();
   kill(getpid(), SIGKILL);
 }
 
