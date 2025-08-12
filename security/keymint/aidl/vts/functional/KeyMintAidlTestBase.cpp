@@ -1747,7 +1747,7 @@ bool KeyMintAidlTestBase::is_chipset_allowed_km4_strongbox(void) const {
     const string allowed_soc_models[] = {"SM8450", "SM8475", "SM8550", "SXR2230P",
                                          "SM4450", "SM7450", "SM6450"};
 
-    for (const string model : allowed_soc_models) {
+    for (const string& model : allowed_soc_models) {
         if (model.compare(buffer.data()) == 0) {
             GTEST_LOG_(INFO) << "QTI SOC Model " + model + " is allowed SB KM 4.0";
             return true;
