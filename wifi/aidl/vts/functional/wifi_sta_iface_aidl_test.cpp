@@ -130,6 +130,8 @@ class WifiStaIfaceAidlTest : public testing::TestWithParam<std::string> {
                testing::deviceSupportsFeature("android.hardware.type.television");
     }
 
+    bool isPcDevice() { return testing::deviceSupportsFeature("android.hardware.type.pc"); }
+
     // Detect Panel TV devices by using ro.oem.key1 property.
     // https://docs.partner.android.com/tv/build/platform/props-vars/ro-oem-key1
     bool isPanelTvDevice() {
@@ -208,6 +210,9 @@ TEST_P(WifiStaIfaceAidlTest, CheckApfIsSupported) {
             GTEST_SKIP() << "TV Device meets the <= 2W standby power demand requirement. It is not "
                             "required to support APF.";
         }
+    }
+    if (isPcDevice()) {
+        GTEST_SKIP() << "PC devices do not support APF.";
     }
     int vendor_api_level = property_get_int32("ro.vendor.api_level", 0);
     // Before VSR 14, APF support is optional.

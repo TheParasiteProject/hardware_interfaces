@@ -287,6 +287,7 @@ class HciRouterImpl : virtual public HciRouter,
  public:
   HciRouterImpl();
   bool Initialize(const std::shared_ptr<HciRouterCallback>& callback) override;
+  void Close() override;
   void Cleanup() override;
   bool Send(const HalPacket& packet) override;
   bool SendCommand(const HalPacket& packet,
@@ -413,7 +414,7 @@ bool HciRouterImpl::InitializeModules() {
   // Initialize transport.
   if (!InitializeTransport()) {
     LOG(ERROR) << "Failed to initialize transport!";
-    Cleanup();
+    Close();
     return false;
   }
 
@@ -427,7 +428,7 @@ bool HciRouterImpl::InitializeModules() {
   return true;
 }
 
-void HciRouterImpl::Cleanup() {
+void HciRouterImpl::Close() {
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   if (hal_state_ == HalState::kRunning &&
       HalConfigLoader::GetLoader().IsAcceleratedBtOnSupported()) {
@@ -438,7 +439,12 @@ void HciRouterImpl::Cleanup() {
 #endif
     return;
   }
+  Cleanup();
+}
 
+void HciRouterImpl::Cleanup() {
+  std::scoped_lock<std::recursive_mutex> lock(mutex_);
+  HAL_LOG(INFO) << "Shutting down the HciRouter";
   if (tx_handler_) {
     tx_handler_.reset();
   }

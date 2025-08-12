@@ -53,7 +53,7 @@ using ::bluetooth_hal::util::power::WakeSource;
 
 using HalStateChangedCallback = std::function<void(HalState, HalState)>;
 
-std::atomic<bool> BluetoothHci::is_signal_handled_{false};
+std::atomic<bool> BluetoothHci::is_sigterm_handled_{false};
 
 class HciCallback : public HciRouterCallback {
  public:
@@ -89,16 +89,16 @@ BluetoothHci::BluetoothHci() : bluetooth_hci_callback_(nullptr) {
 void BluetoothHci::HandleSignal(int signum) {
   LOG(ERROR) << __func__ << ": Received signal: " << signum;
 
-  if (is_signal_handled_.exchange(true)) {
+  if (is_sigterm_handled_.exchange(true)) {
     LOG(WARNING) << __func__ << ": Signal is already handled, Skip.";
     return;
   }
 
-  if (BluetoothFinderHandler::GetHandler().StartPoweredOffFinderMode()) {
-    return;
+  if (!BluetoothFinderHandler::GetHandler().StartPoweredOffFinderMode()) {
+    // Shutdown lower layer if finder is not enabled.
+    Close();
   }
 
-  Close();
   kill(getpid(), SIGKILL);
 }
 
@@ -195,7 +195,14 @@ bool BluetoothHci::Close() {
   ANCHOR_LOG_INFO(AnchorType::kClose) << __func__;
   HAL_LOG(INFO) << __func__;
   ScopedWakelock wakelock(WakeSource::kClose);
-  HciRouter::GetRouter().Cleanup();
+
+  const bool is_sigterm = is_sigterm_handled_;
+  if (is_sigterm) {
+    // Shutdown the lower layer directly if the Close was from a SIGTERM.
+    HciRouter::GetRouter().Cleanup();
+  } else {
+    HciRouter::GetRouter().Close();
+  }
   return true;
 }
 
