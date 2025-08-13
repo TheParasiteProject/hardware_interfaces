@@ -2289,7 +2289,7 @@ TEST_P(AudioCoreModule, SetAudioPortConfigInvalidPortAudioGain) {
     std::vector<AudioPort> ports;
     ASSERT_IS_OK(module->getAudioPorts(&ports));
     bool atLeastOnePortWithNonemptyGain = false;
-    for (const auto port : ports) {
+    for (const auto& port : ports) {
         AudioPortConfig portConfig;
         portConfig.portId = port.id;
         if (port.gains.empty()) {

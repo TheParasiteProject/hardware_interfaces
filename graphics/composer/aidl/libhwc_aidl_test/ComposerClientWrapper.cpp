@@ -154,7 +154,7 @@ ScopedAStatus ComposerClientWrapper::setPeakRefreshRateConfig(DisplayWrapper* di
     auto peakConfig = activeConfig;
 
     const auto displayConfigs = display->getDisplayConfigs();
-    for (const auto [config, displayConfig] : displayConfigs) {
+    for (const auto& [config, displayConfig] : displayConfigs) {
         if (displayConfig.configGroup == peakDisplayConfig.configGroup &&
             displayConfig.vsyncPeriod < peakDisplayConfig.vsyncPeriod) {
             peakDisplayConfig = displayConfig;
