@@ -174,7 +174,7 @@ class GraphicsCompositionTest : public GraphicsCompositionTestBase,
 };
 
 TEST_P(GraphicsCompositionTest, SingleSolidColorLayer) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto& testColorModes = mDisplayProperties.at(display.getDisplayId()).testColorModes;
         for (ColorMode mode : testColorModes) {
             EXPECT_TRUE(
@@ -241,7 +241,7 @@ TEST_P(GraphicsCompositionTest, SingleSolidColorLayer) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerBuffer) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto& testColorModes = mDisplayProperties.at(display.getDisplayId()).testColorModes;
         for (ColorMode mode : testColorModes) {
             EXPECT_TRUE(
@@ -317,7 +317,7 @@ TEST_P(GraphicsCompositionTest, SetLayerBuffer) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerBufferNoEffect) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto& testColorModes = mDisplayProperties.at(display.getDisplayId()).testColorModes;
         for (ColorMode mode : testColorModes) {
             EXPECT_TRUE(
@@ -387,7 +387,7 @@ TEST_P(GraphicsCompositionTest, SetLayerBufferNoEffect) {
 }
 
 TEST_P(GraphicsCompositionTest, SetReadbackBuffer) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto [dataspace, readbackSupported] =
                 GetDataspaceAndIfReadBackSupported(display.getDisplayId());
         if (!readbackSupported) {
@@ -403,7 +403,7 @@ TEST_P(GraphicsCompositionTest, SetReadbackBuffer) {
 }
 
 TEST_P(GraphicsCompositionTest, SetReadbackBuffer_BadDisplay) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto [_, readbackSupported] = GetDataspaceAndIfReadBackSupported(display.getDisplayId());
         if (!readbackSupported) {
             continue;
@@ -426,7 +426,7 @@ TEST_P(GraphicsCompositionTest, SetReadbackBuffer_BadDisplay) {
 }
 
 TEST_P(GraphicsCompositionTest, SetReadbackBuffer_BadParameter) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto [_, readbackSupported] = GetDataspaceAndIfReadBackSupported(display.getDisplayId());
         if (!readbackSupported) {
             continue;
@@ -444,7 +444,7 @@ TEST_P(GraphicsCompositionTest, SetReadbackBuffer_BadParameter) {
 }
 
 TEST_P(GraphicsCompositionTest, GetReadbackBufferFenceInactive) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         auto [_, readbackSupported] = GetDataspaceAndIfReadBackSupported(display.getDisplayId());
         if (!readbackSupported) {
             continue;
@@ -460,7 +460,7 @@ TEST_P(GraphicsCompositionTest, GetReadbackBufferFenceInactive) {
 }
 
 TEST_P(GraphicsCompositionTest, ClientComposition) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         EXPECT_TRUE(
                 mComposerClient
                         ->setClientTargetSlotCount(display.getDisplayId(), kClientTargetSlotCount)
@@ -626,7 +626,7 @@ TEST_P(GraphicsCompositionTest, Luts) {
         }
     }
 
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         ASSERT_TRUE(
                 mComposerClient
                         ->setClientTargetSlotCount(display.getDisplayId(), kClientTargetSlotCount)
@@ -744,7 +744,7 @@ TEST_P(GraphicsCompositionTest, MixedColorSpaces) {
         GTEST_SKIP();
     }
 
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         ASSERT_TRUE(
                 mComposerClient
                         ->setClientTargetSlotCount(display.getDisplayId(), kClientTargetSlotCount)
@@ -832,7 +832,7 @@ TEST_P(GraphicsCompositionTest, MixedColorSpaces) {
 }
 
 TEST_P(GraphicsCompositionTest, DeviceAndClientComposition) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         ASSERT_TRUE(
                 mComposerClient
                         ->setClientTargetSlotCount(display.getDisplayId(), kClientTargetSlotCount)
@@ -967,7 +967,7 @@ TEST_P(GraphicsCompositionTest, DeviceAndClientComposition) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerDamage) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1060,7 +1060,7 @@ TEST_P(GraphicsCompositionTest, SetLayerDamage) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerPlaneAlpha) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1122,7 +1122,7 @@ TEST_P(GraphicsCompositionTest, SetLayerPlaneAlpha) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerSourceCrop) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1196,7 +1196,7 @@ TEST_P(GraphicsCompositionTest, SetLayerSourceCrop) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerZOrder) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1298,7 +1298,7 @@ TEST_P(GraphicsCompositionTest, SetLayerZOrder) {
 }
 
 TEST_P(GraphicsCompositionTest, SetLayerBrightnessDims) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1489,7 +1489,7 @@ class GraphicsBlendModeCompositionTest
 };
 
 TEST_P(GraphicsBlendModeCompositionTest, None) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1544,7 +1544,7 @@ TEST_P(GraphicsBlendModeCompositionTest, None) {
 }
 
 TEST_P(GraphicsBlendModeCompositionTest, Coverage) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient
@@ -1595,7 +1595,7 @@ TEST_P(GraphicsBlendModeCompositionTest, Coverage) {
 }
 
 TEST_P(GraphicsBlendModeCompositionTest, Premultiplied) {
-    for (const DisplayWrapper display : mAllDisplays) {
+    for (const DisplayWrapper& display : mAllDisplays) {
         for (ColorMode mode : mDisplayProperties.at(display.getDisplayId()).testColorModes) {
             EXPECT_TRUE(
                     mComposerClient

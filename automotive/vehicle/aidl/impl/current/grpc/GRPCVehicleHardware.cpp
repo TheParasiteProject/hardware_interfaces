@@ -431,7 +431,7 @@ void GRPCVehicleHardware::pollValue() {
     proto::VehiclePropValues protoValues;
     while (!mShuttingDownFlag.load() && value_stream->Read(&protoValues)) {
         std::vector<aidlvhal::VehiclePropValue> values;
-        for (const auto protoValue : protoValues.values()) {
+        for (const auto& protoValue : protoValues.values()) {
             aidlvhal::VehiclePropValue aidlValue = {};
             proto_msg_converter::protoToAidl(protoValue, &aidlValue);
 
@@ -498,7 +498,7 @@ Status GRPCVehicleHardware::pollSupportedValuesChange() {
     proto::SupportedValuesChange supportedValuesChange;
     while (!mShuttingDownFlag.load() && value_stream->Read(&supportedValuesChange)) {
         std::vector<PropIdAreaId> propIdAreaIds;
-        for (const auto protoPropIdAreaId : supportedValuesChange.prop_id_area_ids()) {
+        for (const auto& protoPropIdAreaId : supportedValuesChange.prop_id_area_ids()) {
             PropIdAreaId propIdAreaId = {};
             proto_msg_converter::protoToAidl(protoPropIdAreaId, &propIdAreaId);
             propIdAreaIds.push_back(std::move(propIdAreaId));
