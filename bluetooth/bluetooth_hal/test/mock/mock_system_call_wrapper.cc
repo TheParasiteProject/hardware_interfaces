@@ -14,28 +14,20 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
 
-#include "bluetooth_hal/hal_types.h"
-#include "bluetooth_hal/util/power/wakelock.h"
-#include "gmock/gmock.h"
+#include "bluetooth_hal/util/system_call_wrapper.h"
 
 namespace bluetooth_hal {
 namespace util {
-namespace power {
 
-class MockWakelock : public Wakelock {
- public:
-  MOCK_METHOD(void, Acquire, (WakeSource source), (override));
-  MOCK_METHOD(void, Release, (WakeSource source), (override));
-  MOCK_METHOD(bool, IsAcquired, (), (override));
-  MOCK_METHOD(bool, IsWakeSourceAcquired, (WakeSource source), (override));
+SystemCallWrapper& SystemCallWrapper::GetWrapper() {
+  return *MockSystemCallWrapper::mock_system_call_wrapper_;
+}
 
-  static void SetMockWakelock(MockWakelock* wakelock);
+void MockSystemCallWrapper::SetMockWrapper(MockSystemCallWrapper* wrapper) {
+  mock_system_call_wrapper_ = wrapper;
+}
 
-  static inline MockWakelock* mock_wakelock_{nullptr};
-};
-
-}  // namespace power
 }  // namespace util
 }  // namespace bluetooth_hal

@@ -21,9 +21,7 @@
 namespace bluetooth_hal {
 namespace hci {
 
-static MockHciRouter* mock_hci_router_;
-
-HciRouter& HciRouter::GetRouter() { return *mock_hci_router_; }
+HciRouter& HciRouter::GetRouter() { return *MockHciRouter::mock_hci_router_; }
 
 void MockHciRouter::SetMockRouter(MockHciRouter* router) {
   mock_hci_router_ = router;

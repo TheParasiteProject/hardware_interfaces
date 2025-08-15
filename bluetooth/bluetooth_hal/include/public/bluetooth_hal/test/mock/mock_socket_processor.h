@@ -69,8 +69,9 @@ class MockSocketProcessor : public SocketProcessor {
 
   MOCK_METHOD(int, GetSocketFileMonitor, (), (override));
 
-  // Static function to set the mock processor for testing.
   static void SetMockProcessor(MockSocketProcessor* processor);
+
+  static inline MockSocketProcessor* mock_socket_processor_{nullptr};
 };
 
 }  // namespace thread

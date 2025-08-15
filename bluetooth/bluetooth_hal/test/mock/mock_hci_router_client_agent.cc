@@ -21,9 +21,9 @@
 namespace bluetooth_hal {
 namespace hci {
 
-static MockHciRouterClientAgent* mock_agent_;
-
-HciRouterClientAgent& HciRouterClientAgent::GetAgent() { return *mock_agent_; }
+HciRouterClientAgent& HciRouterClientAgent::GetAgent() {
+  return *MockHciRouterClientAgent::mock_agent_;
+}
 
 void MockHciRouterClientAgent::SetMockAgent(MockHciRouterClientAgent* agent) {
   mock_agent_ = agent;

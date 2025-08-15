@@ -40,6 +40,8 @@ class MockHciRouterClientAgent : public HciRouterClientAgent {
               (HalState new_state, HalState old_state), (override));
   MOCK_METHOD(bool, IsBluetoothEnabled, (), (override));
   MOCK_METHOD(bool, IsBluetoothChipReady, (), (override));
+
+  static inline MockHciRouterClientAgent* mock_agent_{nullptr};
 };
 
 }  // namespace hci

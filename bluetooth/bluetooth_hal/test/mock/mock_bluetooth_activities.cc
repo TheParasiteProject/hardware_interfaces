@@ -21,15 +21,13 @@
 namespace bluetooth_hal {
 namespace debug {
 
-static MockBluetoothActivities* mock_bluetooth_activities;
-
 BluetoothActivities& BluetoothActivities::Get() {
-  return *mock_bluetooth_activities;
+  return *MockBluetoothActivities::mock_bluetooth_activities_;
 }
 
 void MockBluetoothActivities::SetMockBluetoothActivities(
     MockBluetoothActivities* mock) {
-  mock_bluetooth_activities = mock;
+  mock_bluetooth_activities_ = mock;
 }
 
 }  // namespace debug

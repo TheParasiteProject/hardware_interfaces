@@ -21,9 +21,9 @@
 namespace bluetooth_hal {
 namespace debug {
 
-static MockVndSnoopLogger* mock_vnd_snoop_logger_;
-
-VndSnoopLogger& VndSnoopLogger::GetLogger() { return *mock_vnd_snoop_logger_; }
+VndSnoopLogger& VndSnoopLogger::GetLogger() {
+  return *MockVndSnoopLogger::mock_vnd_snoop_logger_;
+}
 
 void MockVndSnoopLogger::SetMockVndSnoopLogger(MockVndSnoopLogger* logger) {
   mock_vnd_snoop_logger_ = logger;

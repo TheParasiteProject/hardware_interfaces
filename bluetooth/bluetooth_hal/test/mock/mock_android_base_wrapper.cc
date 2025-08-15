@@ -21,14 +21,12 @@
 namespace bluetooth_hal {
 namespace util {
 
-static MockAndroidBaseWrapper* mock_android_base_wrapper = nullptr;
-
 AndroidBaseWrapper& AndroidBaseWrapper::GetWrapper() {
-  return *mock_android_base_wrapper;
+  return *MockAndroidBaseWrapper::mock_android_base_wrapper_;
 }
 
 void MockAndroidBaseWrapper::SetMockWrapper(MockAndroidBaseWrapper* wrapper) {
-  mock_android_base_wrapper = wrapper;
+  mock_android_base_wrapper_ = wrapper;
 }
 
 }  // namespace util

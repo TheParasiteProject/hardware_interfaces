@@ -596,7 +596,6 @@ cc_test {
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/transport_uart_h4.cc",
         "util/fd_watcher.cc",
-        "util/system_call_wrapper.cc",
         "util/timer_manager.cc",
         ":test_mock_util_srcs",
         ":test_mock_debug_srcs",

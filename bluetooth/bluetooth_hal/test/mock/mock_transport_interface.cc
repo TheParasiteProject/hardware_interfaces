@@ -24,53 +24,54 @@ namespace transport {
 
 using ::bluetooth_hal::HalState;
 
-static MockTransportInterface* mock_transport_interface = nullptr;
-
 TransportInterface& TransportInterface::GetTransport() {
-  return *mock_transport_interface;
+  return *MockTransportInterface::mock_transport_interface_;
 }
 
 bool TransportInterface::UpdateTransportType(TransportType requested_type) {
-  return mock_transport_interface->UpdateTransportType(requested_type);
+  return MockTransportInterface::mock_transport_interface_->UpdateTransportType(
+      requested_type);
 }
 
 TransportType TransportInterface::GetTransportType() {
-  return mock_transport_interface->GetTransportType();
+  return MockTransportInterface::mock_transport_interface_->GetTransportType();
 }
 
 void TransportInterface::CleanupTransport() {
-  mock_transport_interface->CleanupTransport();
+  MockTransportInterface::mock_transport_interface_->CleanupTransport();
 }
 
 bool TransportInterface::RegisterVendorTransport(TransportType type,
                                                  FactoryFn factory) {
-  return mock_transport_interface->RegisterVendorTransport(type,
-                                                           std::move(factory));
+  return MockTransportInterface::mock_transport_interface_
+      ->RegisterVendorTransport(type, std::move(factory));
 }
 
 bool TransportInterface::UnregisterVendorTransport(TransportType type) {
-  return mock_transport_interface->UnregisterVendorTransport(type);
+  return MockTransportInterface::mock_transport_interface_
+      ->UnregisterVendorTransport(type);
 }
 
 void TransportInterface::SetHciRouterBusy(bool is_busy) {
-  mock_transport_interface->SetHciRouterBusy(is_busy);
+  MockTransportInterface::mock_transport_interface_->SetHciRouterBusy(is_busy);
 }
 
 void TransportInterface::NotifyHalStateChange(HalState hal_state) {
-  mock_transport_interface->NotifyHalStateChange(hal_state);
+  MockTransportInterface::mock_transport_interface_->NotifyHalStateChange(
+      hal_state);
 }
 
 void TransportInterface::Subscribe(Subscriber& subscriber) {
-  mock_transport_interface->Subscribe(subscriber);
+  MockTransportInterface::mock_transport_interface_->Subscribe(subscriber);
 }
 
 void TransportInterface::Unsubscribe(Subscriber& subscriber) {
-  mock_transport_interface->Unsubscribe(subscriber);
+  MockTransportInterface::mock_transport_interface_->Unsubscribe(subscriber);
 }
 
 void MockTransportInterface::SetMockTransport(
     MockTransportInterface* transport) {
-  mock_transport_interface = transport;
+  MockTransportInterface::mock_transport_interface_ = transport;
 }
 
 }  // namespace transport

@@ -41,6 +41,7 @@ filegroup {
     srcs: [
         "mock/mock_wakelock.cc",
         "mock/mock_android_base_wrapper.cc",
+        "mock/mock_system_call_wrapper.cc",
     ],
 }
 

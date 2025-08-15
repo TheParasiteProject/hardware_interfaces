@@ -22,9 +22,7 @@ namespace bluetooth_hal {
 namespace util {
 namespace power {
 
-static MockWakelock* mock_wakelock_;
-
-Wakelock& Wakelock::GetWakelock() { return *mock_wakelock_; }
+Wakelock& Wakelock::GetWakelock() { return *MockWakelock::mock_wakelock_; }
 
 void MockWakelock::SetMockWakelock(MockWakelock* wakelock) {
   mock_wakelock_ = wakelock;
