@@ -26,9 +26,6 @@
 namespace bluetooth_hal {
 namespace config {
 
-class MockHalConfigLoader;
-static MockHalConfigLoader* mock_hal_config_loader = nullptr;
-
 class MockHalConfigLoader : public HalConfigLoader {
  public:
   MOCK_METHOD(bool, LoadConfig, (), (override));
@@ -97,15 +94,9 @@ class MockHalConfigLoader : public HalConfigLoader {
   MOCK_METHOD(bool, IsEnhancedPacketValidationSupported, (), (const, override));
 
   static void SetMockLoader(MockHalConfigLoader* loader);
+
+  static inline MockHalConfigLoader* mock_hal_config_loader_{nullptr};
 };
-
-HalConfigLoader& HalConfigLoader::GetLoader() {
-  return *mock_hal_config_loader;
-}
-
-void MockHalConfigLoader::SetMockLoader(MockHalConfigLoader* loader) {
-  mock_hal_config_loader = loader;
-}
 
 }  // namespace config
 }  // namespace bluetooth_hal

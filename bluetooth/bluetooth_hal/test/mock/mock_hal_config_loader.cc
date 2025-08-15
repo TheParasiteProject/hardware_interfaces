@@ -14,31 +14,26 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
 
-#include <string>
-#include <vector>
-
-#include "bluetooth_hal/config/cs_config_loader.h"
-#include "bluetooth_hal/hal_packet.h"
-#include "gmock/gmock.h"
+#include "android-base/logging.h"
+#include "bluetooth_hal/config/hal_config_loader.h"
 
 namespace bluetooth_hal {
 namespace config {
 
-class MockCsConfigLoader : public CsConfigLoader {
- public:
-  MOCK_METHOD(bool, LoadConfig, (), (override));
+HalConfigLoader& HalConfigLoader::GetLoader() {
+  if (!MockHalConfigLoader::mock_hal_config_loader_) {
+    LOG(FATAL) << __func__
+               << ": mock_hal_config_loader_ is nullptr. Did you forget to "
+                  "call SetMockLoader in your test SetUp?";
+  }
+  return *MockHalConfigLoader::mock_hal_config_loader_;
+}
 
-  MOCK_METHOD(const std::vector<::bluetooth_hal::hci::HalPacket>&,
-              GetCsCalibrationCommands, (), (const, override));
-  MOCK_METHOD(std::string, DumpConfigToString, (), (const, override));
-
-  static CsConfigLoader& GetLoader();
-  static void SetMockLoader(MockCsConfigLoader* loader);
-
-  static inline MockCsConfigLoader* mock_cs_config_loader_{nullptr};
-};
+void MockHalConfigLoader::SetMockLoader(MockHalConfigLoader* loader) {
+  mock_hal_config_loader_ = loader;
+}
 
 }  // namespace config
 }  // namespace bluetooth_hal
