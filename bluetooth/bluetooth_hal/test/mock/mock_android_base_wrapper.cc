@@ -16,12 +16,18 @@
 
 #include "bluetooth_hal/test/mock/mock_android_base_wrapper.h"
 
+#include "android-base/logging.h"
 #include "bluetooth_hal/util/android_base_wrapper.h"
 
 namespace bluetooth_hal {
 namespace util {
 
 AndroidBaseWrapper& AndroidBaseWrapper::GetWrapper() {
+  if (!MockAndroidBaseWrapper::mock_android_base_wrapper_) {
+    LOG(FATAL) << __func__
+               << ": mock_android_base_wrapper_ is nullptr. Did you forget to "
+                  "call SetMockWrapper in your test SetUp?";
+  }
   return *MockAndroidBaseWrapper::mock_android_base_wrapper_;
 }
 
