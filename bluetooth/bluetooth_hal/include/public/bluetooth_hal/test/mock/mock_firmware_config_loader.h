@@ -16,8 +16,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <optional>
+#include <string>
 
 #include "bluetooth_hal/config/firmware_config_loader.h"
 #include "gmock/gmock.h"

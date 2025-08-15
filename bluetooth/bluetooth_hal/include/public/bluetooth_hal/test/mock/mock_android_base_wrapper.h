@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "bluetooth_hal/util/android_base_wrapper.h"

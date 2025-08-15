@@ -16,6 +16,8 @@
 
 #include "bluetooth_hal/test/mock/mock_android_base_wrapper.h"
 
+#include "bluetooth_hal/util/android_base_wrapper.h"
+
 namespace bluetooth_hal {
 namespace util {
 

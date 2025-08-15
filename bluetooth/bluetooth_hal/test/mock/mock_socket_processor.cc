@@ -20,6 +20,7 @@
 #include <string>
 
 #include "android-base/logging.h"
+#include "bluetooth_hal/extensions/thread/socket_processor.h"
 #include "bluetooth_hal/hal_packet.h"
 
 namespace bluetooth_hal {

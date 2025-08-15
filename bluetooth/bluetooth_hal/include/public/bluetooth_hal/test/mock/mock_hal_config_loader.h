@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "bluetooth_hal/config/hal_config_loader.h"
-#include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "gmock/gmock.h"
 

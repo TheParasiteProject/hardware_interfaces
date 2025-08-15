@@ -18,10 +18,13 @@
 
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 #include "bluetooth_hal/util/system_call_wrapper.h"
 #include "gmock/gmock.h"
