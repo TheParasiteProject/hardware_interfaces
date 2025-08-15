@@ -126,11 +126,12 @@ TEST_F(DataProcessorTest,
 TEST_F(DataProcessorTest, ReadInavlidHciPacketNoCallbackInvoked) {
   std::vector<uint8_t> packet = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05};
   ON_CALL(mock_system_call_wrapper_, Read(test_fd_, _, _))
-      .WillByDefault(DoAll(Invoke([&]([[maybe_unused]] int fd, void* buffer,
-                                      [[maybe_unused]] size_t count) {
-                             buffer = static_cast<void*>(packet.data());
-                           }),
-                           Return(6)));
+      .WillByDefault(DoAll(
+          Invoke([&]([[maybe_unused]] int fd, [[maybe_unused]] void* buffer,
+                     [[maybe_unused]] size_t count) {
+            buffer = static_cast<void*>(packet.data());
+          }),
+          Return(6)));
   EXPECT_CALL(mock_packet_handler_, HalPacketCallback(_)).Times(0);
 
   EXPECT_DEATH(data_processor_->Recv(test_fd_), "");
