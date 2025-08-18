@@ -87,8 +87,8 @@ class BluetoothActivities {
   BluetoothActivities() = default;
 
  private:
-  static std::unique_ptr<BluetoothActivities> instance_;
-  static std::mutex mutex_;
+  static inline std::unique_ptr<BluetoothActivities> instance_;
+  static inline std::mutex mutex_;
 };
 
 }  // namespace debug
