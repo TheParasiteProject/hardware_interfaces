@@ -1,7 +1,7 @@
 <compatibility-matrix version="1.0" type="framework" level="202604">
     <hal format="aidl">
         <name>android.hardware.audio.core</name>
-        <version>1-3</version>
+        <version>1-4</version>
         <interface>
             <name>IModule</name>
             <instance>default</instance>

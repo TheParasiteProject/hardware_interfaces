@@ -1634,7 +1634,9 @@ class WithStream : public StreamWorkerMethods {
                            << result.getMessage();
             }
         } else {
-            // TODO: Use common->createMmapBuffer after interface update.
+            ScopedAStatus status = common->createMmapBuffer(desc);
+            if (status.isOk()) return true;
+            LOG(ERROR) << __func__ << ": createMmapBuffer failed: " << status.getMessage();
         }
         return false;
     }
@@ -3930,33 +3932,20 @@ class AudioStream : public AudioCoreModule {
     void SendInvalidCommand() {
         // Since the processing of the 'burst' command is different for MMAP and non-MMAP
         // streams, test them separately.
-        bool hasAtLeastOnePort = false;
-        {
-            auto ports =
-                    moduleConfig->getMixPorts(IOTraits<Stream>::is_input, true /*connectedOnly*/);
-            auto portIt = std::find_if(ports.begin(), ports.end(), [&](const AudioPort& port) {
-                return !isBitPositionFlagSet(port.flags.get<IOTraits<Stream>::flagTag>(),
-                                             IOTraits<Stream>::IoFlags::MMAP_NOIRQ);
-            });
-            if (portIt != ports.end()) {
-                const auto portConfig = moduleConfig->getSingleConfigForMixPort(
-                        IOTraits<Stream>::is_input, *portIt);
-                if (portConfig.has_value()) {
-                    hasAtLeastOnePort = true;
-                    EXPECT_NO_FATAL_FAILURE(SendInvalidCommandImpl(portConfig.value()));
-                }
-            }
+        std::vector<AudioPort> ports = moduleConfig->getNonMmapMixPorts(
+                IOTraits<Stream>::is_input, true /*connectedOnly*/, true /*singlePort*/);
+        if (auto mmapPorts = moduleConfig->getMmapMixPorts(
+                    IOTraits<Stream>::is_input, true /*connectedOnly*/, true /*singlePort*/);
+            !mmapPorts.empty()) {
+            ports.push_back(std::move(*mmapPorts.begin()));
         }
-        {
-            auto ports = moduleConfig->getMmapMixPorts(IOTraits<Stream>::is_input,
-                                                       true /*connectedOnly*/, true /*singlePort*/);
-            if (!ports.empty()) {
-                const auto portConfig = moduleConfig->getSingleConfigForMixPort(
-                        IOTraits<Stream>::is_input, *ports.begin());
-                if (portConfig.has_value()) {
-                    hasAtLeastOnePort = true;
-                    EXPECT_NO_FATAL_FAILURE(SendInvalidCommandImpl(portConfig.value()));
-                }
+        bool hasAtLeastOnePort = false;
+        for (const auto& port : ports) {
+            const auto portConfig =
+                    moduleConfig->getSingleConfigForMixPort(IOTraits<Stream>::is_input, port);
+            if (portConfig.has_value()) {
+                hasAtLeastOnePort = true;
+                EXPECT_NO_FATAL_FAILURE(SendInvalidCommandImpl(portConfig.value()));
             }
         }
         if (!hasAtLeastOnePort) {
@@ -4105,6 +4094,66 @@ class AudioStream : public AudioCoreModule {
         }
     }
 
+    void CreateMmapBufferErrors() {
+        if (aidlVersion < kAidlVersion4) {
+            GTEST_SKIP() << "Not tested for HALs implementing version < " << kAidlVersion4;
+        }
+        bool hasAtLeastOnePort = false;
+        {
+            const std::vector<AudioPort> ports = moduleConfig->getNonMmapMixPorts(
+                    IOTraits<Stream>::is_input, true /*connectedOnly*/, true /*singlePort*/);
+            if (!ports.empty()) {
+                const auto portConfig = moduleConfig->getSingleConfigForMixPort(
+                        IOTraits<Stream>::is_input, *ports.begin());
+                if (portConfig.has_value()) {
+                    hasAtLeastOnePort = true;
+                    EXPECT_NO_FATAL_FAILURE(CreateMmapBufferErrorsImpl(
+                            portConfig.value(), false /*closeStream*/, EX_UNSUPPORTED_OPERATION));
+                }
+            }
+        }
+        {
+            const std::vector<AudioPort> ports = moduleConfig->getMmapMixPorts(
+                    IOTraits<Stream>::is_input, true /*connectedOnly*/, true /*singlePort*/);
+            if (!ports.empty()) {
+                const auto portConfig = moduleConfig->getSingleConfigForMixPort(
+                        IOTraits<Stream>::is_input, *ports.begin());
+                if (portConfig.has_value()) {
+                    hasAtLeastOnePort = true;
+                    // It is not required that the stream in standby must give an error,
+                    // however it is reasonable to require that 'createMmapBuffer' gives an
+                    // error on a closed stream.
+                    EXPECT_NO_FATAL_FAILURE(CreateMmapBufferErrorsImpl(
+                            portConfig.value(), true /*closeStream*/, EX_ILLEGAL_STATE));
+                }
+            }
+        }
+        if (!hasAtLeastOnePort) {
+            GTEST_SKIP() << "No mix port for attached devices";
+        }
+    }
+
+    void CreateMmapBufferErrorsImpl(const AudioPortConfig& portConfig, bool closeStream,
+                                    int expectedError) {
+        std::shared_ptr<IStreamCommon> common;
+        {
+            StreamFixture<Stream> stream;
+            ASSERT_NO_FATAL_FAILURE(stream.SetUpStreamForMixPortConfig(
+                    module.get(), moduleConfig.get(), portConfig));
+            ASSERT_IS_OK(stream.getStream()->getStreamCommon(&common));
+            if (!closeStream) {
+                MmapBufferDescriptor desc;
+                EXPECT_STATUS(expectedError, common->createMmapBuffer(&desc))
+                        << "Expected: " << expectedError;
+            }
+        }
+        if (closeStream) {
+            MmapBufferDescriptor desc;
+            EXPECT_STATUS(expectedError, common->createMmapBuffer(&desc))
+                    << "Expected: " << expectedError;
+        }
+    }
+
     void OpenTwiceSamePortConfigImpl(const AudioPortConfig& portConfig) {
         StreamFixture<Stream> stream1;
         ASSERT_NO_FATAL_FAILURE(
@@ -4202,6 +4251,7 @@ TEST_IN_AND_OUT_STREAM(SetVendorParameters);
 TEST_IN_AND_OUT_STREAM(HwGainHwVolume);
 TEST_IN_AND_OUT_STREAM(AddRemoveEffectInvalidArguments);
 TEST_IN_AND_OUT_STREAM(StreamDebugDump);
+TEST_IN_AND_OUT_STREAM(CreateMmapBufferErrors);
 
 namespace aidl::android::hardware::audio::core {
 std::ostream& operator<<(std::ostream& os, const IStreamIn::MicrophoneDirection& md) {
