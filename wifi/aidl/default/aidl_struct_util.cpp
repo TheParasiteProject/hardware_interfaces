@@ -1820,6 +1820,8 @@ bool convertAidlNanPublishRequestToLegacy(const NanPublishRequest& aidl_request,
             (aidl_request.baseConfigs.securityConfig.securityType != NanDataPathSecurityType::OPEN)
                     ? legacy_hal::NAN_DP_CONFIG_SECURITY
                     : legacy_hal::NAN_DP_CONFIG_NO_SECURITY;
+    legacy_request->sdea_params.gtk_protection =
+            aidl_request.baseConfigs.securityConfig.requiresEnhancedFrameProtection ? 1 : 0;
 
     legacy_request->sdea_params.ranging_state = aidl_request.baseConfigs.rangingRequired
                                                         ? legacy_hal::NAN_RANGING_ENABLE
@@ -1955,6 +1957,8 @@ bool convertAidlNanSubscribeRequestToLegacy(const NanSubscribeRequest& aidl_requ
             (aidl_request.baseConfigs.securityConfig.securityType != NanDataPathSecurityType::OPEN)
                     ? legacy_hal::NAN_DP_CONFIG_SECURITY
                     : legacy_hal::NAN_DP_CONFIG_NO_SECURITY;
+    legacy_request->sdea_params.gtk_protection =
+            aidl_request.baseConfigs.securityConfig.requiresEnhancedFrameProtection ? 1 : 0;
     legacy_request->sdea_params.ranging_state = aidl_request.baseConfigs.rangingRequired
                                                         ? legacy_hal::NAN_RANGING_ENABLE
                                                         : legacy_hal::NAN_RANGING_DISABLE;
