@@ -17,10 +17,12 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 
 #include "bluetooth_hal/hal_packet.h"
+#include "bluetooth_hal/hal_types.h"
 
 namespace bluetooth_hal {
 namespace debug {

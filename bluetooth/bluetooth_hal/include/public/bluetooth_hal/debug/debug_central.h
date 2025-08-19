@@ -16,16 +16,15 @@
 
 #pragma once
 
-#include <signal.h>
-
 #include <cstdint>
+#include <cstring>
 #include <list>
 #include <map>
 #include <mutex>
-#include <queue>
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "android-base/logging.h"

@@ -18,11 +18,9 @@
 
 #include "bluetooth_hal/debug/bluetooth_activities.h"
 
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
 #include <list>
 #include <memory>
 #include <mutex>
