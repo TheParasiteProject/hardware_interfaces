@@ -234,6 +234,20 @@ std::vector<AudioPort> ModuleConfig::getMmapMixPorts(bool isInput, bool connecte
                    : findMixPorts(isInput, connectedOnly, singlePort, outputFlagMatcher);
 }
 
+std::vector<AudioPort> ModuleConfig::getNonMmapMixPorts(bool isInput, bool connectedOnly,
+                                                        bool singlePort) const {
+    static const auto inputFlagMatcher = [&](const AudioPort& port) {
+        return !isBitPositionFlagSet(port.flags.get<AudioIoFlags::Tag::input>(),
+                                     AudioInputFlags::MMAP_NOIRQ);
+    };
+    static const auto outputFlagMatcher = [&](const AudioPort& port) {
+        return !isBitPositionFlagSet(port.flags.get<AudioIoFlags::Tag::output>(),
+                                     AudioOutputFlags::MMAP_NOIRQ);
+    };
+    return isInput ? findMixPorts(isInput, connectedOnly, singlePort, inputFlagMatcher)
+                   : findMixPorts(isInput, connectedOnly, singlePort, outputFlagMatcher);
+}
+
 std::vector<AudioPort> ModuleConfig::getRemoteSubmixPorts(bool isInput, bool singlePort) const {
     AudioDeviceType deviceType = isInput ? AudioDeviceType::IN_SUBMIX : AudioDeviceType::OUT_SUBMIX;
     auto ports = getAudioPortsForDeviceTypes(std::vector<AudioDeviceType>{deviceType},
