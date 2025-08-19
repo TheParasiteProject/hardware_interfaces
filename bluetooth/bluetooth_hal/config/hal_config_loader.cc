@@ -28,7 +28,6 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/config/config_constants.h"
-#include "bluetooth_hal/config/config_util.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/android_base_wrapper.h"
