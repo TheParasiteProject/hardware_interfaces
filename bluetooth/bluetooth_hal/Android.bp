@@ -35,6 +35,7 @@ cc_defaults {
     ],
     whole_static_libs: [
         "hal_proto_lib",
+        "libbluetooth_hal_flags_c_lib",
     ],
     static_libs: [
         "libbluetooth_offload_hal",
