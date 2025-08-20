@@ -117,9 +117,12 @@ void HciRouterClientAgentImpl::NotifyHalStateChange(HalState new_state,
     LOG(FATAL) << __func__
                << " (old_state, current_state_in_client) is mismatched! "
                   "[ old_state("
+               << HalStateToString(old_state) << ":"
                << static_cast<int>(old_state) << ") -> new_state("
+               << HalStateToString(new_state) << ":"
                << static_cast<int>(new_state)
                << ") ], current_state_in_client: "
+               << HalStateToString(current_state_) << ":"
                << static_cast<int>(current_state_);
     return;
   }

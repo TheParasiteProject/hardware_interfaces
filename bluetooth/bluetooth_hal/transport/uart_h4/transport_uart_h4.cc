@@ -267,7 +267,8 @@ void TransportUartH4::TeardownLowPowerMode() {
 
 void TransportUartH4::NotifyHalStateChange(HalState hal_state) {
   LOG(INFO) << __func__ << ": HAL state changed to "
-            << static_cast<int>(hal_state);
+            << HalStateToString(hal_state) << " ("
+            << static_cast<int>(hal_state) << ")";
   switch (hal_state) {
     case HalState::kPreFirmwareDownload:
     case HalState::kFirmwareDownloadCompleted: {

@@ -25,7 +25,9 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <queue>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -512,15 +514,17 @@ bool HciRouterImpl::InitializeTransport() {
 
 void HciRouterImpl::UpdateHalState(HalState state) {
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
-  HAL_LOG(INFO) << "Bluetooth HAL state changed: "
-                << static_cast<int>(hal_state_) << " -> "
-                << static_cast<int>(state);
+
+  std::stringstream ss;
+  ss << HalStateToString(hal_state_) << " (" << static_cast<int>(hal_state_)
+     << ") -> " << HalStateToString(state) << " (" << static_cast<int>(state)
+     << ")";
+  HAL_LOG(INFO) << "Bluetooth HAL state changed: " << ss.str();
   if (!IsHalStateValid(state)) {
-    LOG(FATAL) << "Invalid Bluetooth HAL state changed! "
-               << static_cast<int>(hal_state_) << " -> "
-               << static_cast<int>(state);
+    LOG(FATAL) << "Invalid Bluetooth HAL state changed! " << ss.str();
   }
-  HalState old_state = hal_state_;
+
+  auto old_state = hal_state_;
   hal_state_ = state;
 
   std::shared_ptr<void> defer_task;

@@ -23,6 +23,7 @@
 #include <functional>
 #include <future>
 #include <sstream>
+#include <string_view>
 #include <thread>
 
 #include "android-base/logging.h"
@@ -58,6 +59,41 @@ constexpr char kEvbDefaultBdaddrProp[] = "ro.vendor.bluetooth.evb_bdaddr";
 constexpr uint16_t kHciVscWriteBdAddress = 0xfc01;
 constexpr uint16_t kHciVscWriteBdAddressLength = 0x0A;
 constexpr int kCommandTimeoutMs = 2000;
+
+std::string_view ProvisioningStateToString(
+    ChipProvisioner::ProvisioningState state) {
+  switch (state) {
+    case ChipProvisioner::ProvisioningState::kIdle:
+      return "Idle";
+    case ChipProvisioner::ProvisioningState::kInitialReset:
+      return "InitialReset";
+    case ChipProvisioner::ProvisioningState::kReadChipId:
+      return "ReadChipId";
+    case ChipProvisioner::ProvisioningState::kSetRuntimeBaudRate:
+      return "SetRuntimeBaudRate";
+    case ChipProvisioner::ProvisioningState::kCheckFirmwareStatus:
+      return "CheckFirmwareStatus";
+    case ChipProvisioner::ProvisioningState::kSetFastDownload:
+      return "SetFastDownload";
+    case ChipProvisioner::ProvisioningState::kDownloadMinidrv:
+      return "DownloadMinidrv";
+    case ChipProvisioner::ProvisioningState::kWriteFirmware:
+      return "WriteFirmware";
+    case ChipProvisioner::ProvisioningState::kFinalReset:
+      return "FinalReset";
+    case ChipProvisioner::ProvisioningState::kReadFwVersion:
+      return "ReadFwVersion";
+    case ChipProvisioner::ProvisioningState::kWriteBdAddress:
+      return "WriteBdAddress";
+    case ChipProvisioner::ProvisioningState::kSetupLowPowerMode:
+      return "SetupLowPowerMode";
+    case ChipProvisioner::ProvisioningState::kDone:
+      return "Done";
+    case ChipProvisioner::ProvisioningState::kError:
+      return "Error";
+  }
+  return "Unknown";
+}
 
 }  // namespace
 
@@ -327,8 +363,9 @@ bool ChipProvisioner::SendCommandNoAck(const HalPacket& packet) {
 void ChipProvisioner::RunProvisioningSequence() {
   bool running = true;
   while (running) {
-    LOG(INFO) << __func__
-              << ": Executing provisioning state: " << static_cast<int>(state_);
+    LOG(INFO) << __func__ << ": Executing provisioning state: "
+              << ProvisioningStateToString(state_) << " ("
+              << static_cast<int>(state_) << ")";
     switch (state_) {
       case ProvisioningState::kInitialReset:
         if (ExecuteCurrentSetupStep(SetupCommandType::kReset)) {
