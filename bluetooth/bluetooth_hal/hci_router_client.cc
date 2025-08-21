@@ -36,13 +36,13 @@ namespace hci {
 using ::bluetooth_hal::HalState;
 
 HciRouterClient::HciRouterClient() {
-  HciRouterClientAgent::GetAgent().RegisterRouterClient(this);
+  HciRouterClientAgent::GetAgent().RegisterClient(this);
 }
 
 HciRouterClient::~HciRouterClient() {
   std::scoped_lock<std::recursive_mutex> lock(mutex_);
   monitors_.clear();
-  HciRouterClientAgent::GetAgent().UnregisterRouterClient(this);
+  HciRouterClientAgent::GetAgent().UnregisterClient(this);
 }
 
 MonitorMode HciRouterClient::OnPacketCallback(const HalPacket& packet) {

@@ -34,8 +34,8 @@ class HciRouterClientAgentImpl : public HciRouterClientAgent {
       : current_state_(HalState::kShutdown),
         is_bluetooth_chip_ready_(false),
         is_bluetooth_enabled_(false) {};
-  bool RegisterRouterClient(HciRouterClientCallback* callback) override;
-  bool UnregisterRouterClient(HciRouterClientCallback* callback) override;
+  bool RegisterClient(HciRouterClientCallback* callback) override;
+  bool UnregisterClient(HciRouterClientCallback* callback) override;
   MonitorMode DispatchPacketToClients(const HalPacket& packet) override;
   void NotifyHalStateChange(HalState new_state, HalState old_state) override;
   bool IsBluetoothEnabled() override;
@@ -60,8 +60,7 @@ HciRouterClientAgent& HciRouterClientAgent::GetAgent() {
   return agent;
 }
 
-bool HciRouterClientAgentImpl::RegisterRouterClient(
-    HciRouterClientCallback* client) {
+bool HciRouterClientAgentImpl::RegisterClient(HciRouterClientCallback* client) {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   if (router_clients_.count(client) > 0) {
     LOG(WARNING) << "callback already registered!";
@@ -78,7 +77,7 @@ bool HciRouterClientAgentImpl::RegisterRouterClient(
   return true;
 }
 
-bool HciRouterClientAgentImpl::UnregisterRouterClient(
+bool HciRouterClientAgentImpl::UnregisterClient(
     HciRouterClientCallback* callback) {
   std::unique_lock<std::recursive_mutex> lock(mutex_);
   if (router_clients_.erase(callback) == 0) {

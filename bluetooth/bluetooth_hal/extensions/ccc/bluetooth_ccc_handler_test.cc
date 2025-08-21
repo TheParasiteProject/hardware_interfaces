@@ -114,7 +114,7 @@ class BluetoothCccHandlerTest : public Test {
     ON_CALL(mock_system_call_wrapper_, Open(_, _)).WillByDefault(Return(1));
 
     MockHciRouterClientAgent::SetMockAgent(&mock_hci_router_client_agent_);
-    EXPECT_CALL(mock_hci_router_client_agent_, RegisterRouterClient(NotNull()))
+    EXPECT_CALL(mock_hci_router_client_agent_, RegisterClient(NotNull()))
         .WillOnce(Return(true));
 
     MockHciRouter::SetMockRouter(&mock_hci_router_);
@@ -125,8 +125,7 @@ class BluetoothCccHandlerTest : public Test {
   }
 
   void TearDown() override {
-    EXPECT_CALL(mock_hci_router_client_agent_,
-                UnregisterRouterClient(ccc_handler_))
+    EXPECT_CALL(mock_hci_router_client_agent_, UnregisterClient(ccc_handler_))
         .WillOnce(Return(true));
     delete (ccc_handler_);
   }
