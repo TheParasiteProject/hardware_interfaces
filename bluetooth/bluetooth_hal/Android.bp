@@ -136,7 +136,6 @@ filegroup {
         "extensions/cs/bluetooth_channel_sounding_session.cc",
         "extensions/cs/bluetooth_channel_sounding_util.cc",
         "extensions/cs/bluetooth_channel_sounding_distance_estimator.cc",
-        "extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.cc",
         "extensions/channel_avoidance/bluetooth_channel_avoidance_handler.cc",
         "extensions/ext/bluetooth_ext_handler.cc",
         "extensions/finder/bluetooth_finder.cc",
@@ -155,7 +154,6 @@ filegroup {
     name: "hal_hwinit_srcs",
     srcs: [
         "chip/chip_provisioner.cc",
-        "chip/chip_provisioner_interface.cc",
         "chip/async_chip_provisioner.cc",
     ],
 }
@@ -387,7 +385,6 @@ cc_test {
         "extensions/cs/bluetooth_channel_sounding_handler.cc",
         "extensions/cs/bluetooth_channel_sounding_handler_test.cc",
         "extensions/cs/bluetooth_channel_sounding_distance_estimator.cc",
-        "extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.cc",
         ":test_mock_router_srcs",
         ":test_mock_util_srcs",
     ],

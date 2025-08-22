@@ -16,33 +16,38 @@
 
 #pragma once
 
-#include <functional>
-#include <memory>
-
 #include "aidl/android/hardware/bluetooth/ranging/ChannelSoudingRawData.h"
+#include "bluetooth_hal/util/provider_factory.h"
 
 namespace bluetooth_hal {
 namespace extensions {
 namespace cs {
 
-class ChannelSoundingDistanceEstimatorInterface {
- public:
-  using FactoryFn = std::function<
-      std::unique_ptr<ChannelSoundingDistanceEstimatorInterface>()>;
-  using ChannelSoudingRawData =
-      ::aidl::android::hardware::bluetooth::ranging::ChannelSoudingRawData;
+class ChannelSoundingDistanceEstimator;
 
+class ChannelSoundingDistanceEstimatorInterface
+    : public ::bluetooth_hal::util::ProviderFactory<
+          ChannelSoundingDistanceEstimatorInterface,
+          ChannelSoundingDistanceEstimator> {
+ public:
   /**
    * @brief Registers a vendor-specific factory for creating
    * ChannelSoundingDistanceEstimatorInterface instances.
    *
-   * If a vendor factory is registered,
-   * ChannelSoundingDistanceEstimatorInterface::Create() will use it. Otherwise,
-   * a default implementation will be created.
-   *
    * @param factory The factory function to register.
    */
-  static void RegisterVendorChannelSoundingDistanceEstimator(FactoryFn factory);
+  static void RegisterVendorChannelSoundingDistanceEstimator(
+      FactoryFn factory) {
+    RegisterProviderFactory(std::move(factory));
+  }
+
+  /**
+   * @brief Unregisters the vendor-specific factory.
+   *
+   */
+  static void UnregisterVendorhannelSoundingDistanceEstimator() {
+    UnregisterProviderFactory();
+  }
 
   virtual ~ChannelSoundingDistanceEstimatorInterface() = default;
 
@@ -57,7 +62,9 @@ class ChannelSoundingDistanceEstimatorInterface {
    * @param raw_data The raw data from the channel sounding procedure.
    * @return The estimated distance.
    */
-  virtual double EstimateDistance(const ChannelSoudingRawData& raw_data) = 0;
+  virtual double EstimateDistance(
+      const ::aidl::android::hardware::bluetooth::ranging::
+          ChannelSoudingRawData& raw_data) = 0;
 
   /**
    * @brief Gets the confidence level of the last estimation.
@@ -65,20 +72,6 @@ class ChannelSoundingDistanceEstimatorInterface {
    * @return The confidence level.
    */
   virtual double GetConfidenceLevel() = 0;
-
-  /**
-   * @brief Creates an instance of ChannelSoundingDistanceEstimatorInterface.
-   *
-   * This factory method will use a registered vendor factory if available,
-   * otherwise it will create a default implementation.
-   *
-   * @return A unique_ptr to a ChannelSoundingDistanceEstimatorInterface
-   * instance.
-   */
-  static std::unique_ptr<ChannelSoundingDistanceEstimatorInterface> Create();
-
- private:
-  static FactoryFn vendor_factory_;
 };
 
 }  // namespace cs

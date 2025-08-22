@@ -42,10 +42,10 @@ void TransportInterface::CleanupTransport() {
   mock_transport_interface->CleanupTransport();
 }
 
-bool TransportInterface::RegisterVendorTransport(
-    std::unique_ptr<TransportInterface> transport) {
-  return mock_transport_interface->RegisterVendorTransport(
-      std::move(transport));
+bool TransportInterface::RegisterVendorTransport(TransportType type,
+                                                 FactoryFn factory) {
+  return mock_transport_interface->RegisterVendorTransport(type,
+                                                           std::move(factory));
 }
 
 bool TransportInterface::UnregisterVendorTransport(TransportType type) {

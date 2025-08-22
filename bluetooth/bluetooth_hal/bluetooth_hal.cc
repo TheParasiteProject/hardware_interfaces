@@ -44,6 +44,7 @@ using ::bluetooth_hal::extensions::cs::
     ChannelSoundingDistanceEstimatorInterface;
 using ::bluetooth_hal::extensions::finder::BluetoothFinder;
 using ::bluetooth_hal::transport::TransportInterface;
+using ::bluetooth_hal::transport::TransportType;
 
 using ::ndk::SharedRefBase;
 
@@ -53,8 +54,8 @@ BluetoothHal& BluetoothHal::GetHal() {
 }
 
 bool BluetoothHal::RegisterVendorTransport(
-    std::unique_ptr<::bluetooth_hal::transport::TransportInterface> transport) {
-  return TransportInterface::RegisterVendorTransport(std::move(transport));
+    TransportType type, TransportInterface::FactoryFn factory) {
+  return TransportInterface::RegisterVendorTransport(type, std::move(factory));
 }
 
 void BluetoothHal::RegisterVendorChipProvisioner(
