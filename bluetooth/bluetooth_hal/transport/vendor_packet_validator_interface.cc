@@ -14,29 +14,30 @@
  * limitations under the License.
  */
 
-#include "bluetooth_hal/chip/chip_provisioner_interface.h"
+#include "bluetooth_hal/transport/vendor_packet_validator_interface.h"
 
 #include <memory>
 
-#include "bluetooth_hal/chip/chip_provisioner.h"
+#include "bluetooth_hal/transport/vendor_packet_validator.h"
 
 namespace bluetooth_hal {
-namespace chip {
+namespace transport {
 
-ChipProvisionerInterface::FactoryFn ChipProvisionerInterface::vendor_factory_ =
-    nullptr;
+VendorPacketValidatorInterface::FactoryFn
+    VendorPacketValidatorInterface::vendor_factory_ = nullptr;
 
-std::unique_ptr<ChipProvisionerInterface> ChipProvisionerInterface::Create() {
+std::unique_ptr<VendorPacketValidatorInterface>
+VendorPacketValidatorInterface::Create() {
   if (vendor_factory_) {
     return vendor_factory_();
   }
-  return std::make_unique<ChipProvisioner>();
+  return std::make_unique<VendorPacketValidator>();
 }
 
-void ChipProvisionerInterface::RegisterVendorChipProvisioner(
+void VendorPacketValidatorInterface::RegisterVendorPacketValidator(
     FactoryFn factory) {
   vendor_factory_ = std::move(factory);
 }
 
-}  // namespace chip
+}  // namespace transport
 }  // namespace bluetooth_hal

@@ -30,6 +30,7 @@
 #include "bluetooth_hal/transport/device_control/uart_manager.h"
 #include "bluetooth_hal/transport/transport_interface.h"
 #include "bluetooth_hal/transport/uart_h4/data_processor.h"
+#include "bluetooth_hal/transport/vendor_packet_validator_interface.h"
 #include "bluetooth_hal/util/android_base_wrapper.h"
 #include "bluetooth_hal/util/power/wakelock.h"
 #include "bluetooth_hal/util/timer_manager.h"
@@ -311,6 +312,12 @@ bool TransportUartH4::IsTransportWakelockEnabled() {
   LOG(VERBOSE) << __func__ << ": Transport wakelock is "
                << (transport_wakelock_enabled_ ? "enabled" : "disabled") << ".";
   return transport_wakelock_enabled_;
+}
+
+void TransportUartH4::RegisterVendorPacketValidator(
+    VendorPacketValidatorInterface::FactoryFn factory) {
+  VendorPacketValidatorInterface::RegisterVendorPacketValidator(
+      std::move(factory));
 }
 
 }  // namespace transport

@@ -32,6 +32,7 @@
 #include "android-base/logging.h"
 #include "android-base/properties.h"
 #include "android/binder_auto_utils.h"
+#include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_distance_estimator_interface.h"
 #include "bluetooth_hal/extensions/cs/bluetooth_channel_sounding_util.h"
 #include "bluetooth_hal/hal_types.h"

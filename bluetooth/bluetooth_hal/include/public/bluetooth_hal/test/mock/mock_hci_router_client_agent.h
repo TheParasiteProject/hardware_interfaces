@@ -31,10 +31,10 @@ class MockHciRouterClientAgent : public HciRouterClientAgent {
  public:
   static void SetMockAgent(MockHciRouterClientAgent* mock_agent);
 
-  MOCK_METHOD(bool, RegisterRouterClient, (HciRouterClientCallback * callback),
+  MOCK_METHOD(bool, RegisterClient, (HciRouterClientCallback * callback),
               (override));
-  MOCK_METHOD(bool, UnregisterRouterClient,
-              (HciRouterClientCallback * callback), (override));
+  MOCK_METHOD(bool, UnregisterClient, (HciRouterClientCallback * callback),
+              (override));
   MOCK_METHOD(MonitorMode, DispatchPacketToClients, (const HalPacket& packet),
               (override));
   MOCK_METHOD(void, NotifyHalStateChange,
