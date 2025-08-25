@@ -39,6 +39,8 @@ class MockBluetoothActivities : public BluetoothActivities {
   MOCK_METHOD(void, OnBluetoothChipClosed, (), ());
 
   static void SetMockBluetoothActivities(MockBluetoothActivities* mock);
+
+  static inline MockBluetoothActivities* mock_bluetooth_activities_{nullptr};
 };
 
 }  // namespace debug

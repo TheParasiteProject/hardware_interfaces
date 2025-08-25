@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 
-#include "bluetooth_hal/test/mock/mock_wakelock.h"
+#include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
 
 #include "android-base/logging.h"
-#include "bluetooth_hal/util/power/wakelock.h"
+#include "bluetooth_hal/util/system_call_wrapper.h"
 
 namespace bluetooth_hal {
 namespace util {
-namespace power {
 
-Wakelock& Wakelock::GetWakelock() {
-  if (!MockWakelock::mock_wakelock_) {
+SystemCallWrapper& SystemCallWrapper::GetWrapper() {
+  if (!MockSystemCallWrapper::mock_system_call_wrapper_) {
     LOG(FATAL) << __func__
-               << ": mock_wakelock_ is nullptr. Did you forget to call "
-                  "SetMockWakelock in your test SetUp?";
+               << ": mock_system_call_wrapper_ is nullptr. Did you forget to "
+                  "call SetMockWrapper in your test SetUp?";
   }
-  return *MockWakelock::mock_wakelock_;
+  return *MockSystemCallWrapper::mock_system_call_wrapper_;
 }
 
-void MockWakelock::SetMockWakelock(MockWakelock* wakelock) {
-  mock_wakelock_ = wakelock;
+void MockSystemCallWrapper::SetMockWrapper(MockSystemCallWrapper* wrapper) {
+  mock_system_call_wrapper_ = wrapper;
 }
 
-}  // namespace power
 }  // namespace util
 }  // namespace bluetooth_hal

@@ -27,9 +27,6 @@
 namespace bluetooth_hal {
 namespace config {
 
-class MockFirmwareConfigLoader;
-static MockFirmwareConfigLoader* mock_firmware_config_loader = nullptr;
-
 class MockFirmwareConfigLoader : public FirmwareConfigLoader {
  public:
   MOCK_METHOD(bool, LoadConfig, (), (override));
@@ -54,22 +51,9 @@ class MockFirmwareConfigLoader : public FirmwareConfigLoader {
   static void ResetLoader();
 
   static void SetMockLoader(MockFirmwareConfigLoader* loader);
+
+  static inline MockFirmwareConfigLoader* mock_firmware_config_loader_{nullptr};
 };
-
-FirmwareConfigLoader& FirmwareConfigLoader::GetLoader() {
-  return *mock_firmware_config_loader;
-}
-
-void MockFirmwareConfigLoader::SetMockLoader(MockFirmwareConfigLoader* loader) {
-  mock_firmware_config_loader = loader;
-}
-
-void FirmwareConfigLoader::ResetLoader() {
-  if (mock_firmware_config_loader != nullptr) {
-    delete mock_firmware_config_loader;
-    mock_firmware_config_loader = nullptr;
-  }
-}
 
 }  // namespace config
 }  // namespace bluetooth_hal

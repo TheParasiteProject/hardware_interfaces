@@ -32,9 +32,6 @@
 namespace bluetooth_hal {
 namespace util {
 
-class MockSystemCallWrapper;
-static MockSystemCallWrapper* mock_system_call_wrapper = nullptr;
-
 class MockSystemCallWrapper : public SystemCallWrapper {
  public:
   MOCK_METHOD(int, Select,
@@ -95,15 +92,9 @@ class MockSystemCallWrapper : public SystemCallWrapper {
   MOCK_METHOD(int, Kill, (pid_t pid, int signal), (override));
 
   static void SetMockWrapper(MockSystemCallWrapper* wrapper);
+
+  static inline MockSystemCallWrapper* mock_system_call_wrapper_{nullptr};
 };
-
-SystemCallWrapper& SystemCallWrapper::GetWrapper() {
-  return *mock_system_call_wrapper;
-}
-
-void MockSystemCallWrapper::SetMockWrapper(MockSystemCallWrapper* wrapper) {
-  mock_system_call_wrapper = wrapper;
-}
 
 }  // namespace util
 }  // namespace bluetooth_hal

@@ -516,9 +516,6 @@ std::string HalConfigLoaderImpl::DumpConfigToString() const {
   return ss.str();
 }
 
-std::mutex HalConfigLoader::loader_mutex_;
-HalConfigLoader* HalConfigLoader::loader_ = nullptr;
-
 HalConfigLoader& HalConfigLoader::GetLoader() {
   std::lock_guard<std::mutex> lock(loader_mutex_);
   if (loader_ == nullptr) {

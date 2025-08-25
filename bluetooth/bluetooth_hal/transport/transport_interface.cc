@@ -38,15 +38,6 @@ namespace transport {
 using ::bluetooth_hal::HalState;
 using ::bluetooth_hal::config::HalConfigLoader;
 
-TransportType TransportInterface::current_transport_type_ =
-    TransportType::kUnknown;
-std::unique_ptr<TransportInterface> TransportInterface::current_transport_;
-std::recursive_mutex TransportInterface::transport_mutex_;
-std::atomic<bool> TransportInterface::is_hci_router_busy_ = false;
-std::atomic<HalState> TransportInterface::hal_state_ = HalState::kInit;
-std::vector<std::reference_wrapper<Subscriber>>
-    TransportInterface::subscribers_;
-
 TransportInterface& TransportInterface::GetTransport() {
   std::lock_guard<std::recursive_mutex> lock(transport_mutex_);
 

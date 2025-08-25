@@ -305,10 +305,10 @@ cc_test {
         "extensions/thread/socket_processor.cc",
         "extensions/thread/thread_daemon.cc",
         "extensions/thread/thread_handler.cc",
-        "util/system_call_wrapper.cc",
         ":test_mock_transport_srcs",
         ":test_mock_util_srcs",
         ":test_mock_debug_srcs",
+        ":test_mock_hal_config_srcs",
         ":test_mock_router_client_agent_srcs",
     ],
     static_libs: [
@@ -365,6 +365,7 @@ cc_test {
         "extensions/sar/bluetooth_sar_handler.cc",
         "extensions/sar/bluetooth_sar_handler_test.cc",
         ":test_mock_router_srcs",
+        ":test_mock_hal_config_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -386,6 +387,7 @@ cc_test {
         "extensions/cs/bluetooth_channel_sounding_distance_estimator.cc",
         ":test_mock_router_srcs",
         ":test_mock_util_srcs",
+        ":test_mock_cs_config_srcs",
     ],
     header_libs: [
         "libeigen",
@@ -429,6 +431,7 @@ cc_test {
     srcs: [
         "extensions/thread/socket_processor.cc",
         "extensions/thread/socket_processor_test.cc",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -445,6 +448,7 @@ cc_test {
         "extensions/thread/thread_daemon.cc",
         "extensions/thread/thread_daemon_test.cc",
         ":test_mock_thread_srcs",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -466,6 +470,7 @@ cc_test {
         "extensions/ccc/bluetooth_ccc_timesync_event_test.cc",
         "extensions/ccc/bluetooth_ccc_timesync_command_test.cc",
         "extensions/ccc/bluetooth_ccc_handler_test.cc",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -537,6 +542,7 @@ cc_test {
         "config/firmware_config_loader_test.cc",
         ":test_mock_util_srcs",
         ":test_mock_transport_srcs",
+        ":test_mock_hal_config_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -558,6 +564,7 @@ cc_test {
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/hci_packetizer_test.cc",
         ":test_mock_debug_srcs",
+        ":test_mock_hal_config_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -600,10 +607,10 @@ cc_test {
         "transport/uart_h4/hci_packetizer.cc",
         "transport/uart_h4/transport_uart_h4.cc",
         "util/fd_watcher.cc",
-        "util/system_call_wrapper.cc",
         "util/timer_manager.cc",
         ":test_mock_util_srcs",
         ":test_mock_debug_srcs",
+        ":test_mock_hal_config_srcs",
     ],
     static_libs: [
         "libgmock",
@@ -632,7 +639,6 @@ cc_test {
         "transport/uart_h4/transport_uart_h4.cc",
         "transport/uart_h4/transport_uart_h4_test.cc",
         "util/fd_watcher.cc",
-        "util/system_call_wrapper.cc",
         "util/timer_manager.cc",
         ":test_mock_util_srcs",
         ":test_mock_debug_srcs",
@@ -659,6 +665,8 @@ cc_test {
         "transport/uart_h4/data_processor_test.cc",
         "util/fd_watcher.cc",
         ":test_mock_debug_srcs",
+        ":test_mock_hal_config_srcs",
+        ":test_mock_util_srcs",
     ],
     static_libs: [
         "libgmock",

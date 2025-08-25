@@ -135,9 +135,6 @@ BluetoothActivitiesImpl::BluetoothActivitiesImpl()
   RegisterMonitor(disconnection_complete_event_monitor_, MonitorMode::kMonitor);
 }
 
-std::unique_ptr<BluetoothActivities> BluetoothActivities::instance_;
-std::mutex BluetoothActivities::mutex_;
-
 void BluetoothActivities::Start() { BluetoothActivities::Get(); }
 
 BluetoothActivities& BluetoothActivities::Get() {

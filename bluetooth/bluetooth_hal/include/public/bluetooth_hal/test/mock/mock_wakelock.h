@@ -32,6 +32,8 @@ class MockWakelock : public Wakelock {
   MOCK_METHOD(bool, IsWakeSourceAcquired, (WakeSource source), (override));
 
   static void SetMockWakelock(MockWakelock* wakelock);
+
+  static inline MockWakelock* mock_wakelock_{nullptr};
 };
 
 }  // namespace power

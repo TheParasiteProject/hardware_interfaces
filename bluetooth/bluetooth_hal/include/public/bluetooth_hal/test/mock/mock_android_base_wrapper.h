@@ -41,6 +41,8 @@ class MockAndroidBaseWrapper : public AndroidBaseWrapper {
               (const std::string& s, uint8_t* out, uint8_t max), (override));
 
   static void SetMockWrapper(MockAndroidBaseWrapper* wrapper);
+
+  static inline MockAndroidBaseWrapper* mock_android_base_wrapper_{nullptr};
 };
 
 }  // namespace util

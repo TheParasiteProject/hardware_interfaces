@@ -26,9 +26,6 @@
 namespace bluetooth_hal {
 namespace config {
 
-class MockCsConfigLoader;
-static MockCsConfigLoader* mock_cs_config_loader = nullptr;
-
 class MockCsConfigLoader : public CsConfigLoader {
  public:
   MOCK_METHOD(bool, LoadConfig, (), (override));
@@ -38,15 +35,10 @@ class MockCsConfigLoader : public CsConfigLoader {
   MOCK_METHOD(std::string, DumpConfigToString, (), (const, override));
 
   static CsConfigLoader& GetLoader();
-
   static void SetMockLoader(MockCsConfigLoader* loader);
+
+  static inline MockCsConfigLoader* mock_cs_config_loader_{nullptr};
 };
-
-CsConfigLoader& CsConfigLoader::GetLoader() { return *mock_cs_config_loader; }
-
-void MockCsConfigLoader::SetMockLoader(MockCsConfigLoader* loader) {
-  mock_cs_config_loader = loader;
-}
 
 }  // namespace config
 }  // namespace bluetooth_hal
