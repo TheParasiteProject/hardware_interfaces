@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <future>
 #include <optional>
@@ -103,10 +106,10 @@ class ChipProvisioner : public ChipProvisionerInterface,
   void UpdateHalState(::bluetooth_hal::HalState state);
   bool ExecuteCurrentSetupStep(
       ::bluetooth_hal::config::SetupCommandType next_command_type);
-  bool SendCommandNoAck(const hci::HalPacket& packet);
-  bool SendCommandAndWait(const hci::HalPacket& packet);
+  bool SendCommandNoAck(const ::bluetooth_hal::hci::HalPacket& packet);
+  bool SendCommandAndWait(const ::bluetooth_hal::hci::HalPacket& packet);
   bool ProvisionBluetoothAddress();
-  std::optional<hci::HalPacket> PrepareWriteBdAddressPacket();
+  std::optional<::bluetooth_hal::hci::HalPacket> PrepareWriteBdAddressPacket();
 
   virtual bool WriteFwPatchramPacket();
 

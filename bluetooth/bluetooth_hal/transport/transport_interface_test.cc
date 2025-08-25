@@ -24,6 +24,7 @@
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
 #include "bluetooth_hal/test/mock/mock_subscriber.h"
+#include "bluetooth_hal/test/mock/mock_system_call_wrapper.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -42,6 +43,7 @@ using ::testing::Test;
 using ::bluetooth_hal::HalState;
 using ::bluetooth_hal::config::MockHalConfigLoader;
 using ::bluetooth_hal::hci::HalPacket;
+using ::bluetooth_hal::util::MockSystemCallWrapper;
 
 namespace cfg_consts = ::bluetooth_hal::config::constants;
 
@@ -195,9 +197,11 @@ class VendorTransportTest : public Test {
  protected:
   void SetUp() override {
     MockHalConfigLoader::SetMockLoader(&mock_hal_config_loader_);
+    MockSystemCallWrapper::SetMockWrapper(&mock_system_call_wrapper_);
 
     ON_CALL(mock_hal_config_loader_, GetRfkillFolderPrefix())
         .WillByDefault(ReturnRef(rfkill_folder_prefix_str_));
+    ON_CALL(mock_system_call_wrapper_, Open(_, _)).WillByDefault(Return(-1));
   }
 
   void TearDown() override {
@@ -212,8 +216,10 @@ class VendorTransportTest : public Test {
       static_cast<TransportType>(static_cast<int>(kVendorType1) + 1);
 
   MockHalConfigLoader mock_hal_config_loader_;
+  MockSystemCallWrapper mock_system_call_wrapper_;
   MockTransportInterfaceCallback mock_callback_;
   std::string rfkill_folder_prefix_str_{cfg_consts::kRfkillFolderPrefix};
+  std::string rfkill_type_bluetooth_str_{cfg_consts::kRfkillTypeBluetooth};
 };
 
 TEST_F(VendorTransportTest, RegisterNullVendorTransportReturnsFalse) {

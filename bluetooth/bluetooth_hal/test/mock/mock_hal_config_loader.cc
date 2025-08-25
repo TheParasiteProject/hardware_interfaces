@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 
-#include "bluetooth_hal/test/mock/mock_wakelock.h"
+#include "bluetooth_hal/test/mock/mock_hal_config_loader.h"
 
 #include "android-base/logging.h"
-#include "bluetooth_hal/util/power/wakelock.h"
+#include "bluetooth_hal/config/hal_config_loader.h"
 
 namespace bluetooth_hal {
-namespace util {
-namespace power {
+namespace config {
 
-Wakelock& Wakelock::GetWakelock() {
-  if (!MockWakelock::mock_wakelock_) {
+HalConfigLoader& HalConfigLoader::GetLoader() {
+  if (!MockHalConfigLoader::mock_hal_config_loader_) {
     LOG(FATAL) << __func__
-               << ": mock_wakelock_ is nullptr. Did you forget to call "
-                  "SetMockWakelock in your test SetUp?";
+               << ": mock_hal_config_loader_ is nullptr. Did you forget to "
+                  "call SetMockLoader in your test SetUp?";
   }
-  return *MockWakelock::mock_wakelock_;
+  return *MockHalConfigLoader::mock_hal_config_loader_;
 }
 
-void MockWakelock::SetMockWakelock(MockWakelock* wakelock) {
-  mock_wakelock_ = wakelock;
+void MockHalConfigLoader::SetMockLoader(MockHalConfigLoader* loader) {
+  mock_hal_config_loader_ = loader;
 }
 
-}  // namespace power
-}  // namespace util
+}  // namespace config
 }  // namespace bluetooth_hal

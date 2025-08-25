@@ -18,11 +18,9 @@
 
 #include "bluetooth_hal/debug/bluetooth_activities.h"
 
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -136,9 +134,6 @@ BluetoothActivitiesImpl::BluetoothActivitiesImpl()
   RegisterMonitor(connection_complete_event_monitor_, MonitorMode::kMonitor);
   RegisterMonitor(disconnection_complete_event_monitor_, MonitorMode::kMonitor);
 }
-
-std::unique_ptr<BluetoothActivities> BluetoothActivities::instance_;
-std::mutex BluetoothActivities::mutex_;
 
 void BluetoothActivities::Start() { BluetoothActivities::Get(); }
 

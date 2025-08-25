@@ -19,6 +19,7 @@
 #include "bluetooth_hal/chip/chip_provisioner.h"
 
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <future>

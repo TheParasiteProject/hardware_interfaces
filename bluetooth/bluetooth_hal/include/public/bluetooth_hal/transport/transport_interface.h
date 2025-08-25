@@ -251,17 +251,18 @@ class TransportInterface {
   static void Unsubscribe(Subscriber& subscriber);
 
  protected:
-  static std::atomic<bool> is_hci_router_busy_;
-  static std::atomic<::bluetooth_hal::HalState> hal_state_;
-  static std::vector<std::reference_wrapper<Subscriber>> subscribers_;
+  static inline std::atomic<bool> is_hci_router_busy_{false};
+  static inline std::atomic<::bluetooth_hal::HalState> hal_state_{
+      ::bluetooth_hal::HalState::kInit};
+  static inline std::vector<std::reference_wrapper<Subscriber>> subscribers_;
 
  private:
   static std::pair<std::unique_ptr<TransportInterface>, TransportType>
   CreateOrAcquireTransport(TransportType requested_type);
 
-  static TransportType current_transport_type_;
-  static std::recursive_mutex transport_mutex_;
-  static std::unique_ptr<TransportInterface> current_transport_;
+  static inline TransportType current_transport_type_{TransportType::kUnknown};
+  static inline std::recursive_mutex transport_mutex_;
+  static inline std::unique_ptr<TransportInterface> current_transport_;
 };
 
 }  // namespace transport

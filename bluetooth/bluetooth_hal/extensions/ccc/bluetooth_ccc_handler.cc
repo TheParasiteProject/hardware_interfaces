@@ -20,10 +20,11 @@
 
 #include <fcntl.h>
 
-#include <array>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string_view>
 #include <vector>
 

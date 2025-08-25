@@ -16,10 +16,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <vector>
-
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/transport/subscriber.h"
@@ -65,6 +61,8 @@ class MockTransportInterface : public TransportInterface {
   MOCK_METHOD(TransportType, GetInstanceTransportType, (), (const, override));
 
   static void SetMockTransport(MockTransportInterface* transport);
+
+  static inline MockTransportInterface* mock_transport_interface_{nullptr};
 };
 }  // namespace transport
 }  // namespace bluetooth_hal
