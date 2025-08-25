@@ -16,10 +16,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <vector>
-
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/transport/subscriber.h"

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "bluetooth_hal/config/cs_config_loader.h"

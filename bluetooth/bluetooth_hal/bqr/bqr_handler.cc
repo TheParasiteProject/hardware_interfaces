@@ -20,7 +20,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iomanip>
 #include <unordered_map>
 
 #include "android-base/logging.h"

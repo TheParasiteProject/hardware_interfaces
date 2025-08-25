@@ -102,7 +102,6 @@ filegroup {
 filegroup {
     name: "hal_debug_srcs",
     srcs: [
-        "debug/bluetooth_activity.cc",
         "debug/bluetooth_activities.cc",
         "debug/debug_central.cc",
         "debug/debug_client.cc",

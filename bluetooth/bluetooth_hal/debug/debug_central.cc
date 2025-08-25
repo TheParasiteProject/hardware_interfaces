@@ -22,19 +22,22 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <ctime>
 #include <iomanip>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "android-base/logging.h"
 #include "android-base/properties.h"
@@ -42,7 +45,6 @@
 #include "bluetooth_hal/bqr/bqr_root_inflammation_event.h"
 #include "bluetooth_hal/bqr/bqr_types.h"
 #include "bluetooth_hal/config/hal_config_loader.h"
-#include "bluetooth_hal/debug/bluetooth_activity.h"
 #include "bluetooth_hal/debug/debug_util.h"
 #include "bluetooth_hal/extensions/thread/thread_handler.h"
 #include "bluetooth_hal/hal_packet.h"
@@ -195,7 +197,8 @@ void DebugCentral::AddLog(AnchorType type, const std::string& log) {
 }
 
 void DebugCentral::ReportBqrError(BqrErrorCode error, std::string extra_info) {
-  HalPacket bqr_event({0xff, 0x04, 0x58, 0x05, 0x00, (uint8_t)error});
+  HalPacket bqr_event(
+      {0xff, 0x04, 0x58, 0x05, 0x00, static_cast<uint8_t>(error)});
 
   HAL_LOG(ERROR) << extra_info;
   LOG(ERROR) << __func__ << ": Root inflamed event with error_code: ("

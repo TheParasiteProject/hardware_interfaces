@@ -20,6 +20,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/chip/chip_provisioner.h"

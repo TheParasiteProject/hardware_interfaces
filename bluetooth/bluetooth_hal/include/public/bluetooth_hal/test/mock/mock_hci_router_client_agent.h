@@ -18,9 +18,8 @@
 
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
-#include "bluetooth_hal/hci_monitor.h"
-#include "bluetooth_hal/hci_router_callback.h"
 #include "bluetooth_hal/hci_router_client_agent.h"
+#include "bluetooth_hal/hci_router_client_callback.h"
 #include "gmock/gmock.h"
 
 namespace bluetooth_hal {

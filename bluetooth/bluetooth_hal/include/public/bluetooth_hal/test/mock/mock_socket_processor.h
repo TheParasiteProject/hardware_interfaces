@@ -28,10 +28,6 @@
 namespace bluetooth_hal {
 namespace thread {
 
-// A mock implementation of the SocketProcessor class for testing purposes.
-// This class provides mock methods for all the virtual functions defined
-// in the SocketProcessor base class, allowing for precise control and
-// verification of socket operations during testing.
 class MockSocketProcessor : public SocketProcessor {
  public:
   // Mocks the static Initialize and Cleanup methods of SocketProcessor.
