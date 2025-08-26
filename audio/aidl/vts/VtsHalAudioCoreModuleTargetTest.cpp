@@ -4448,6 +4448,50 @@ TEST_P(AudioStreamIn, OpenInputStreamWithInvalidTags) {
     }
 }
 
+TEST_P(AudioStreamIn, GetInputFramesLost) {
+    constexpr bool connectedOnly = true;
+    const auto ports = moduleConfig->getInputMixPorts(connectedOnly);
+    if (ports.empty()) {
+        GTEST_SKIP() << "No input mix ports for attached devices";
+    }
+
+    bool hasAtLeastOneStreamTested = false;
+    for (const auto& port : ports) {
+        SCOPED_TRACE(port.toString());
+        StreamFixture<IStreamIn> stream;
+        ASSERT_NO_FATAL_FAILURE(stream.SetUpStreamForMixPort(module.get(), moduleConfig.get(), port,
+                                                             connectedOnly));
+        if (!stream.skipTestReason().empty()) {
+            LOG(INFO) << "Skipping test for port " << port.toString() << ": "
+                      << stream.skipTestReason();
+            continue;
+        }
+
+        // Get the command and reply message queues from the stream context.
+        const auto* context = stream.getStreamContext();
+        ASSERT_NE(nullptr, context);
+        auto* commandMQ = context->getCommandMQ();
+        ASSERT_NE(nullptr, commandMQ);
+        auto* replyMQ = context->getReplyMQ();
+        ASSERT_NE(nullptr, replyMQ);
+
+        StreamDescriptor::Reply reply{};
+        ASSERT_TRUE(commandMQ->writeBlocking(&kGetStatusCommand, 1))
+                << "Failed to write getStatus command";
+        ASSERT_TRUE(replyMQ->readBlocking(&reply, 1)) << "Failed to read getStatus reply";
+
+        EXPECT_EQ(STATUS_OK, reply.status);
+        EXPECT_EQ(0, reply.xrunFrames)
+                << "xrunFrames should be 0 for a never started stream. Reply: " << reply.toString();
+
+        hasAtLeastOneStreamTested = true;
+    }
+
+    if (!hasAtLeastOneStreamTested) {
+        GTEST_SKIP() << "No port configs were available to run the test";
+    }
+}
+
 const std::vector<AudioUsage> kAudioUsages = {ndk::enum_range<AudioUsage>().begin(),
                                               ndk::enum_range<AudioUsage>().end()};
 const std::vector<AudioContentType> kAudioContentTypes = {
