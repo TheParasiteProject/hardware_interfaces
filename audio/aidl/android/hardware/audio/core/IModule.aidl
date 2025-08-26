@@ -493,9 +493,10 @@ interface IModule {
      * This method provides supported ranges (inclusive) for the speed factor
      * and the pitch factor.
      *
-     * If the HAL module supports setting the playback rate, it is recommended
-     * to support speed and pitch factor values at least in the range from 0.5f
-     * to 2.0f.
+     * If the HAL module supports setting the playback rate, it must support
+     * speed factor values at least in the range from 0.5f to 2.0f.
+     * It is also recommended to support pitch factor values in the same range,
+     * but it is not required.
      *
      * @throws EX_UNSUPPORTED_OPERATION If setting of playback rate parameters
      *                                  is not supported by the module.
