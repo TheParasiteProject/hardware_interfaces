@@ -189,16 +189,6 @@ class DebugCentral {
                               uint8_t vendor_error_code = 0);
 
   /**
-   * @brief Request the Bluetooth HAL to generate a coredump.
-   *
-   * @param error_code The reason for the coredump.
-   * @param sub_error_code An optional sub error code that is used by some of
-   * the CoredumpErrorCodes.
-   */
-  void GenerateCoredump(CoredumpErrorCode error_code,
-                        uint8_t sub_error_code = 0);
-
-  /**
    * @brief The debug central only keeps one coredump per Bluetooth cycle.
    * Invoking this function forces a reset to the coredump generator in case
    * more coredumps are needed.
@@ -248,6 +238,8 @@ class DebugCentral {
   bool is_coredump_generated_;
 
   std::string DumpBluetoothHalLog(const std::vector<Coredump>& client_dumps);
+  void GenerateCoredump(CoredumpErrorCode error_code,
+                        uint8_t sub_error_code = 0);
   bool OkToGenerateCrashDump(uint8_t error_code);
   bool IsHardwareStageSupported();
   std::string GetOrCreateCoredumpTimestampString();

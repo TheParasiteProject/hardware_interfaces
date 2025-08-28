@@ -29,19 +29,14 @@
 
 #include "android-base/logging.h"
 #include "bluetooth_hal/debug/debug_central.h"
-#include "bluetooth_hal/debug/debug_types.h"
 #include "bluetooth_hal/hal_packet.h"
 #include "bluetooth_hal/hal_types.h"
 #include "bluetooth_hal/util/fd_watcher.h"
 #include "bluetooth_hal/util/system_call_wrapper.h"
-#include "com_android_bluetooth_bluetooth_hal_flags.h"
 
 namespace bluetooth_hal {
 namespace transport {
 
-namespace hal_flags = ::com::android::bluetooth::bluetooth_hal::flags;
-
-using ::bluetooth_hal::debug::CoredumpErrorCode;
 using ::bluetooth_hal::debug::DebugCentral;
 using ::bluetooth_hal::hci::HalPacket;
 using ::bluetooth_hal::hci::HciPacketType;
@@ -122,14 +117,7 @@ void DataProcessor::ParseHciPacket(std::span<const uint8_t> buffer) {
     const size_t bytes_handled = hci_packetizer_.ProcessData(buffer);
 
     if (!bytes_handled) {
-      if (hal_flags::
-              bluetooth_hal_coredump_when_receiving_unimplemented_packet_type()) {
-        DebugCentral::Get().GenerateCoredump(
-            CoredumpErrorCode::kControllerUnimplementedPacketType);
-        break;
-      } else {
-        LOG(FATAL) << __func__ << ": Cannot process data from hci packetizer!";
-      }
+      LOG(FATAL) << __func__ << ": Cannot process data from hci packetizer!";
     }
 
     buffer = buffer.subspan(bytes_handled);

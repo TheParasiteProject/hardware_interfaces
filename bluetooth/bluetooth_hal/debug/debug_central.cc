@@ -521,8 +521,6 @@ std::string DebugCentral::CoredumpErrorCodeToString(
       return "Controller Debug Info Data Dump Without Root Inflammed (BtFw)";
     case CoredumpErrorCode::kControllerDebugInfo:
       return "Debug Info Event (BtFw)";
-    case CoredumpErrorCode::kControllerUnimplementedPacketType:
-      return "Controller Unimplemented Packet Type (BtFw)";
     case CoredumpErrorCode::kVendor:
       return "Vendor Error";
     default: {
