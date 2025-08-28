@@ -73,7 +73,6 @@ enum class CoredumpErrorCode : uint8_t {
   kControllerRootInflammed,
   kControllerDebugDumpWithoutRootInflammed,
   kControllerDebugInfo,
-  kControllerUnimplementedPacketType,
 
   // Vendor specific error code for external implementations.
   kVendor = 0xFF,
