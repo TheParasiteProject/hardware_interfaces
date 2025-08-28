@@ -615,7 +615,9 @@ cc_test {
     static_libs: [
         "libgmock",
         "hal_proto_lib",
-
+        "libbluetooth_hal_flags_c_lib_for_test",
+        "libaconfig_storage_read_api_cc",
+        "liblog",
     ],
     shared_libs: [
         "libbase",
@@ -646,6 +648,9 @@ cc_test {
     static_libs: [
         "libgmock",
         "hal_proto_lib",
+        "libbluetooth_hal_flags_c_lib_for_test",
+        "libaconfig_storage_read_api_cc",
+        "liblog",
     ],
     shared_libs: [
         "libbase",
@@ -670,6 +675,9 @@ cc_test {
     ],
     static_libs: [
         "libgmock",
+        "libbluetooth_hal_flags_c_lib_for_test",
+        "libaconfig_storage_read_api_cc",
+        "liblog",
     ],
     shared_libs: [
         "libbase",
