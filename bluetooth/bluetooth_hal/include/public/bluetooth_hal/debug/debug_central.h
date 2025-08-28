@@ -100,8 +100,6 @@ class DurationTracker {
 
 class DebugCentral {
  public:
-  virtual ~DebugCentral() = default;
-
   /*
    * Get a singleton static instance of the debug central.
    */
@@ -114,7 +112,7 @@ class DebugCentral {
    * @param debug_client The client resigers for debug information.
    * @return return true if success, otherwise false.
    */
-  virtual bool RegisterDebugClient(DebugClient* debug_client) = 0;
+  bool RegisterDebugClient(DebugClient* debug_client);
 
   /**
    * @brief Unregister the debug client that was registered.
@@ -122,29 +120,29 @@ class DebugCentral {
    * @param callback The debug client to be unregistered.
    * @return return true if success, otherwise false.
    */
-  virtual bool UnregisterDebugClient(DebugClient* debug_client) = 0;
+  bool UnregisterDebugClient(DebugClient* debug_client);
 
   /*
    * Invokes when bugreport is triggered, dump all information to the debug fd.
    */
-  virtual void Dump(int fd) = 0;
+  void Dump(int fd);
 
   /*
    * set bluetooth serial port information.
    */
-  virtual void SetBtUartDebugPort(const std::string& uart_port) = 0;
+  void SetBtUartDebugPort(const std::string& uart_port);
 
   /*
    * Write debug message to logger.
    */
-  virtual void AddLog(AnchorType type, const std::string& log) = 0;
+  void AddLog(AnchorType type, const std::string& log);
 
   /*
    * Notify BtHal have detected error, we will collect debug log first then and
    * report eror code to stack via BQR root inflammation event
    */
-  virtual void ReportBqrError(::bluetooth_hal::bqr::BqrErrorCode error,
-                              std::string extra_info) = 0;
+  void ReportBqrError(::bluetooth_hal::bqr::BqrErrorCode error,
+                      std::string extra_info);
 
   /**
    * @brief Inform DebugCentral to handle Root Inflammation Event reported from
@@ -152,8 +150,8 @@ class DebugCentral {
    *
    * @param packet The root inflammation event.
    */
-  virtual void HandleRootInflammationEvent(
-      const ::bluetooth_hal::bqr::BqrRootInflammationEvent& event) = 0;
+  void HandleRootInflammationEvent(
+      const ::bluetooth_hal::bqr::BqrRootInflammationEvent& event);
 
   /**
    * @brief Inform DebugCentral to handle Debug Info Event reported from the
@@ -161,15 +159,14 @@ class DebugCentral {
    *
    * @param packet The debug info event.
    */
-  virtual void HandleDebugInfoEvent(
-      const ::bluetooth_hal::hci::HalPacket& packet) = 0;
+  void HandleDebugInfoEvent(const ::bluetooth_hal::hci::HalPacket& packet);
 
   /**
    * @brief Inform DebugCentral to handle Debug Info Command sent from the
    * stack. It generates a Bluetooth HAL coredump if the Bluetooth chip did
    * not report Debug Info events in time.
    */
-  virtual void HandleDebugInfoCommand() = 0;
+  void HandleDebugInfoCommand();
 
   /**
    * @brief Request the Bluetooth HAL to generate a vendor dump file. This also
@@ -187,9 +184,9 @@ class DebugCentral {
    * coredump file. If the coredump was initiated by the vendor implementation,
    * this vendor erroc code is also sent back to the caller as sub_error_code.
    */
-  virtual void GenerateVendorDumpFile(const std::string& file_path,
-                                      const std::vector<uint8_t>& data,
-                                      uint8_t vendor_error_code = 0) = 0;
+  void GenerateVendorDumpFile(const std::string& file_path,
+                              const std::vector<uint8_t>& data,
+                              uint8_t vendor_error_code = 0);
 
   /**
    * @brief Request the Bluetooth HAL to generate a coredump.
@@ -198,22 +195,22 @@ class DebugCentral {
    * @param sub_error_code An optional sub error code that is used by some of
    * the CoredumpErrorCodes.
    */
-  virtual void GenerateCoredump(CoredumpErrorCode error_code,
-                                uint8_t sub_error_code = 0) = 0;
+  void GenerateCoredump(CoredumpErrorCode error_code,
+                        uint8_t sub_error_code = 0);
 
   /**
    * @brief The debug central only keeps one coredump per Bluetooth cycle.
    * Invoking this function forces a reset to the coredump generator in case
    * more coredumps are needed.
    */
-  virtual void ResetCoredumpGenerator() = 0;
+  void ResetCoredumpGenerator();
 
   /**
    * @brief Check if the DebugCentral is generating a coredump.
    *
    * @return true if the DebugCentral is generating a coredump, otherwise false.
    */
-  virtual bool IsCoredumpGenerated() = 0;
+  bool IsCoredumpGenerated();
 
   /**
    * @brief Get the timestamp of the coredump generated recently. The timestamp
@@ -223,7 +220,7 @@ class DebugCentral {
    * YYYY-MM-DD-MM-SS. Returns an empty string if no coredump was generated
    * recently.
    */
-  virtual std::string& GetCoredumpTimestampString() = 0;
+  std::string& GetCoredumpTimestampString();
 
   /**
    * @brief A helper function that returns the std::string format of
@@ -236,6 +233,26 @@ class DebugCentral {
    */
   static std::string CoredumpErrorCodeToString(CoredumpErrorCode error_code,
                                                uint8_t sub_error_code);
+
+ private:
+  static constexpr int kMaxHalLogLines = 400;
+  std::string serial_debug_port_;
+  std::string crash_timestamp_;
+  std::recursive_mutex mutex_;
+  std::list<std::pair<std::string, std::string>> hal_log_;
+  std::map<AnchorType, std::pair<std::string, std::string>> anchor_log_;
+  ::bluetooth_hal::util::Timer debug_info_command_timer_;
+  DebugMonitor debug_monitor_;
+  ::bluetooth_hal::bqr::BqrHandler bqr_handler_;
+  std::unordered_set<DebugClient*> debug_clients_;
+  bool is_coredump_generated_;
+
+  std::string DumpBluetoothHalLog(const std::vector<Coredump>& client_dumps);
+  bool OkToGenerateCrashDump(uint8_t error_code);
+  bool IsHardwareStageSupported();
+  std::string GetOrCreateCoredumpTimestampString();
+  int OpenOrCreateCoredumpBin(const std::string& file_prefix);
+  std::vector<Coredump> GetCoredumpFromDebugClients();
 };
 
 class LogHelper {

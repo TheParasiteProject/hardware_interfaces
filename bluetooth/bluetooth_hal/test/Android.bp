@@ -78,6 +78,5 @@ filegroup {
     srcs: [
         "mock/mock_vnd_snoop_logger.cc",
         "mock/mock_bluetooth_activities.cc",
-        "mock/mock_debug_central.cc",
     ],
 }
