@@ -778,43 +778,96 @@ TEST_P(VibratorAidl, ComposeCallback) {
 
     std::vector<CompositePrimitive> supported;
     EXPECT_OK(vibrator->getSupportedPrimitives(&supported));
+    if (supported.empty()) {
+        return;
+    }
+
+    int32_t maxSize;
+    EXPECT_OK(vibrator->getCompositionSizeMax(&maxSize));
+    int32_t maxDelay;
+    EXPECT_OK(vibrator->getCompositionDelayMax(&maxDelay));
+
+    std::map<CompositePrimitive, int32_t> primitiveDurations;
+    for (const auto& primitive : supported) {
+        int32_t durationMs = 0;
+        EXPECT_OK(vibrator->getPrimitiveDuration(primitive, &durationMs));
+        primitiveDurations[primitive] = durationMs;
+    }
+
+    auto testComposition = [&](const std::vector<CompositeEffect>& composite,
+                               const std::string& message = "") {
+        if (composite.empty()) {
+            return;
+        }
+
+        int32_t expectedDurationMs = 0;
+        for (const auto& effect : composite) {
+            expectedDurationMs += effect.delayMs + primitiveDurations.at(effect.primitive);
+        }
+
+        auto callback = ndk::SharedRefBase::make<CompletionCallback>();
+        auto expectedDuration = std::chrono::milliseconds(expectedDurationMs);
+        auto start = high_resolution_clock::now();
+
+        EXPECT_OK(vibrator->compose(composite, callback)) << message;
+
+        EXPECT_EQ(callback->wait_for(expectedDuration + VIBRATION_CALLBACK_TIMEOUT),
+                  std::future_status::ready)
+                << message;
+        auto end = high_resolution_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        EXPECT_GE(elapsed.count(), expectedDuration.count()) << message;
+        EXPECT_OK(vibrator->off()) << message;
+    };
 
     for (CompositePrimitive primitive : supported) {
         if (primitive == CompositePrimitive::NOOP) {
             continue;
         }
 
-        auto callback = ndk::SharedRefBase::make<CompletionCallback>();
+        // Test individual primitives
         CompositeEffect effect;
-        std::vector<CompositeEffect> composite;
-        int32_t durationMs;
-        std::chrono::milliseconds duration;
-        std::chrono::time_point<high_resolution_clock> start, end;
-        std::chrono::milliseconds elapsed;
-
         effect.delayMs = 0;
         effect.primitive = primitive;
         effect.scale = 1.0f;
-        composite.emplace_back(effect);
+        testComposition({effect}, "\n  For primitive: " + toString(primitive));
 
-        EXPECT_OK(vibrator->getPrimitiveDuration(primitive, &durationMs))
-                << "\n  For primitive: " << toString(primitive);
-        duration = std::chrono::milliseconds(durationMs);
+        // Test a composition of multiple effects
+        const size_t compositeSize = std::min((size_t)maxSize, (size_t)5);
 
-        start = high_resolution_clock::now();
-        EXPECT_OK(vibrator->compose(composite, callback))
-                << "\n  For primitive: " << toString(primitive);
+        std::vector<CompositeEffect> composite;
+        for (size_t i = 0; i < compositeSize; i++) {
+            CompositeEffect effect;
+            effect.primitive = primitive;
+            effect.scale = 1.0f;
+            composite.push_back(effect);
+        }
 
-        EXPECT_EQ(callback->wait_for(duration + VIBRATION_CALLBACK_TIMEOUT),
-                  std::future_status::ready)
-                << "\n  For primitive: " << toString(primitive);
-        end = high_resolution_clock::now();
+        // Effect with no delay
+        for (auto& effect : composite) {
+            effect.delayMs = 0;
+        }
+        testComposition(composite, "\n  For 0ms composite with primitive: " + toString(primitive));
 
-        elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        EXPECT_GE(elapsed.count(), duration.count())
-                << "\n  For primitive: " << toString(primitive);
+        // Effect with 10ms delay
+        if (maxDelay < 10) {
+            return;
+        }
+        for (auto& effect : composite) {
+            effect.delayMs = 10;
+        }
+        testComposition(composite, "\n  For 10ms composite with primitive: " + toString(primitive));
 
-        EXPECT_OK(vibrator->off()) << "\n  For primitive: " << toString(primitive);
+        // Effect with 100ms delay
+        if (maxDelay < 100) {
+            return;
+        }
+        for (auto& effect : composite) {
+            effect.delayMs = 100;
+        }
+        testComposition(composite,
+                        "\n  For 100ms composite with primitive: " + toString(primitive));
     }
 }
 
