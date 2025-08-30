@@ -383,6 +383,8 @@ interface IModule {
      *                             - If the port config can not be found by the ID.
      *                             - If the port config is not of an input mix port.
      *                             - If a buffer of the requested size can not be provided.
+     *                             - If the sinkMetadata's 'RecordTrackMetadata.tags' value is
+     *                               invalid.
      * @throws EX_ILLEGAL_STATE In the following cases:
      *                          - If the port config already has a stream opened on it.
      *                          - If the limit on the open stream count for the port has
@@ -456,6 +458,8 @@ interface IModule {
      *                             - If a buffer of the requested size can not be provided.
      *                             - If the callback is not provided for a non-blocking
      *                               port configuration.
+     *                             - If the sourceMetadata's 'PlaybackTrackMetadata.tags' value is
+     *                               invalid.
      * @throws EX_ILLEGAL_STATE In the following cases:
      *                          - If the port config already has a stream opened on it.
      *                          - If the limit on the open stream count for the port has
