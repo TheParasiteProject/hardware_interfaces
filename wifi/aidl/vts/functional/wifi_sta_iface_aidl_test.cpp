@@ -62,6 +62,9 @@ static bool sWifiFrameworkDisabledByTest = false;
 class WifiStaIfaceAidlTest : public testing::TestWithParam<std::string> {
   public:
     void SetUp() override {
+        if (!::testing::deviceSupportsFeature("android.hardware.wifi")) {
+            GTEST_SKIP() << "Skipping this test since wifi is not supported.";
+        }
         stopWifiService(getInstanceName());
         wifi_sta_iface_ = getWifiStaIface(getInstanceName());
         if (wifi_sta_iface_ == nullptr) {
