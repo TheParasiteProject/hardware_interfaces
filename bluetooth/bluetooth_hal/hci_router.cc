@@ -580,7 +580,7 @@ void HciRouterImpl::UpdateHalState(HalState state) {
   }
   HciRouterClientAgent::GetAgent().NotifyHalStateChange(state, old_state);
 
-  TransportInterface::GetTransport().NotifyHalStateChange(state);
+  TransportInterface::NotifyHalStateChange(state);
 }
 
 bool HciRouterImpl::IsHalStateValid(HalState new_state) {

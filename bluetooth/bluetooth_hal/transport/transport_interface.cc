@@ -45,6 +45,8 @@ TransportInterface& TransportInterface::GetTransport() {
     return *current_transport_;
   }
 
+  // TODO: b/442448282 - It is not safe to do auto initialize here, need to
+  // separate the logic from GetTransport().
   const std::vector<TransportType>& current_transport_type_priorities =
       HalConfigLoader::GetLoader().GetTransportTypePriority();
 
