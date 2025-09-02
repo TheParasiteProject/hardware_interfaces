@@ -4895,6 +4895,10 @@ TEST_P(AudioStreamOut, PlaybackRate) {
     if (status.getExceptionCode() == EX_UNSUPPORTED_OPERATION) {
         GTEST_SKIP() << "Audio playback rate configuration is not supported";
     }
+    if (aidlVersion >= kAidlVersion4) {
+        EXPECT_LE(factors.minSpeed, 0.5f);
+        EXPECT_GE(factors.maxSpeed, 2.0f);
+    }
     EXPECT_LE(factors.minSpeed, factors.maxSpeed);
     EXPECT_LE(factors.minPitch, factors.maxPitch);
     EXPECT_LE(factors.minSpeed, 1.0f);
@@ -4907,7 +4911,7 @@ TEST_P(AudioStreamOut, PlaybackRate) {
     constexpr auto tsVoice = AudioPlaybackRate::TimestretchMode::VOICE;
     constexpr auto fbFail = AudioPlaybackRate::TimestretchFallbackMode::FAIL;
     constexpr auto fbMute = AudioPlaybackRate::TimestretchFallbackMode::MUTE;
-    const std::vector<AudioPlaybackRate> validValues = {
+    std::vector<AudioPlaybackRate> validValues = {
             AudioPlaybackRate{1.0f, 1.0f, tsDefault, fbFail},
             AudioPlaybackRate{1.0f, 1.0f, tsDefault, fbMute},
             AudioPlaybackRate{factors.maxSpeed, factors.maxPitch, tsDefault, fbMute},
@@ -4917,6 +4921,12 @@ TEST_P(AudioStreamOut, PlaybackRate) {
             AudioPlaybackRate{factors.maxSpeed, factors.maxPitch, tsVoice, fbMute},
             AudioPlaybackRate{factors.minSpeed, factors.minPitch, tsVoice, fbMute},
     };
+    if (aidlVersion >= kAidlVersion4) {
+        validValues.push_back(AudioPlaybackRate{0.5f, 1.0f, tsDefault, fbFail});
+        validValues.push_back(AudioPlaybackRate{2.0f, 1.0f, tsDefault, fbMute});
+        validValues.push_back(AudioPlaybackRate{0.5f, 1.0f, tsVoice, fbMute});
+        validValues.push_back(AudioPlaybackRate{2.0f, 1.0f, tsVoice, fbFail});
+    }
     const std::vector<AudioPlaybackRate> invalidValues = {
             AudioPlaybackRate{factors.maxSpeed, factors.maxPitch * 2, tsDefault, fbFail},
             AudioPlaybackRate{factors.maxSpeed * 2, factors.maxPitch, tsDefault, fbFail},
