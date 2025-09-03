@@ -7,3 +7,10 @@ flag {
     description: "Test Flag for libbluetooth_hal"
     bug: "439734528"
 }
+
+flag {
+    name: "coredump_when_receiving_unimplemented_packet_type"
+    namespace: "pixel_bluetooth"
+    description: "Flag for the unimplemented packet type coredump fix"
+    bug: "440031741"
+}
