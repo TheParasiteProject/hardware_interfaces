@@ -495,6 +495,29 @@ static bool isDynamicProfile(const AudioProfile& profile) {
            profile.sampleRates.empty() || profile.channelMasks.empty();
 }
 
+std::optional<AudioPortConfig> ModuleConfig::generateConfigForPort(
+        const AudioPort& port, const AudioPortConfig& audioConfig) {
+    for (const auto& profile : port.profiles) {
+        if (isDynamicProfile(profile)) continue;
+        if (profile.format != audioConfig.format.value()) continue;
+        for (auto channelMask : profile.channelMasks) {
+            if (channelMask != audioConfig.channelMask.value()) continue;
+            for (auto sampleRate : profile.sampleRates) {
+                if (sampleRate != audioConfig.sampleRate.value().value) continue;
+                AudioPortConfig config{};
+                config.portId = port.id;
+                config.sampleRate = audioConfig.sampleRate;
+                config.channelMask = audioConfig.channelMask;
+                config.format = audioConfig.format;
+                config.flags = port.flags;
+                config.ext = port.ext;
+                return config;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 std::vector<AudioPort> ModuleConfig::findMixPorts(
         bool isInput, bool connectedOnly, bool singlePort,
         const std::function<bool(const AudioPort&)>& pred) const {

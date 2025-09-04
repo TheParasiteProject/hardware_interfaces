@@ -3262,6 +3262,52 @@ class StreamFixture {
         }
     }
 
+    void SetUpPortConfigForDevicePortWithConfig(
+            IModule* module, ModuleConfig* moduleConfig, const AudioPort& devicePort,
+            bool connectedOnly, const std::optional<AudioDeviceAddress>& connectionAddress,
+            const AudioPortConfig& audioConfig) {
+        std::optional<AudioPort> connectedDevicePort;
+        ASSERT_NO_FATAL_FAILURE(SetUpDevicePort(module, moduleConfig, {devicePort.id},
+                                                connectedOnly, &connectedDevicePort,
+                                                connectionAddress));
+        if (!connectedDevicePort.has_value()) {
+            mSkipTestReason = std::string("Device port id ")
+                                      .append(std::to_string(devicePort.id))
+                                      .append(" can not be set up");
+            return;
+        }
+        const auto mixPorts = moduleConfig->getRoutableMixPortsForDevicePort(
+                *connectedDevicePort, true /*connectedOnly*/);
+        std::optional<AudioPort> mixPort;
+        for (const auto& mp : mixPorts) {
+            // Note: flags are not checked because `audioConfig` may originate from a port of
+            // a different direction.
+            for (const auto& profile : mp.profiles) {
+                if (profile.format == audioConfig.format.value() &&
+                    std::find(profile.sampleRates.begin(), profile.sampleRates.end(),
+                              audioConfig.sampleRate->value) != profile.sampleRates.end() &&
+                    std::find(profile.channelMasks.begin(), profile.channelMasks.end(),
+                              audioConfig.channelMask.value()) != profile.channelMasks.end()) {
+                    mixPort = mp;
+                    break;
+                }
+            }
+        }
+        if (!mixPort.has_value()) {
+            mSkipTestReason = std::string("No routable mix ports supporting config ")
+                                      .append(audioConfig.toString())
+                                      .append(" found for device port id ")
+                                      .append(std::to_string(connectedDevicePort->id));
+            return;
+        }
+        auto mixPortConfig = moduleConfig->generateConfigForPort(*mixPort, audioConfig);
+        ASSERT_TRUE(mixPortConfig.has_value())
+                << "Failed to generate config for mix port id " << mixPort->toString()
+                << " from configuration " << audioConfig.toString();
+        ASSERT_NO_FATAL_FAILURE(
+                SetUpPortConfig(module, moduleConfig, *mixPortConfig, *connectedDevicePort));
+    }
+
     void SetUpPortConfigForMixPortOrConfig(
             IModule* module, ModuleConfig* moduleConfig, const AudioPort& initialMixPort,
             bool connectedOnly, const std::optional<AudioPortConfig>& mixPortConfig = {}) {
@@ -3314,6 +3360,24 @@ class StreamFixture {
             const std::optional<AudioDeviceAddress>& connectionAddress = std::nullopt) {
         ASSERT_NO_FATAL_FAILURE(SetUpPortConfigForDevicePort(module, moduleConfig, devicePort,
                                                              connectedOnly, connectionAddress));
+        if (!mSkipTestReason.empty()) return;
+        ASSERT_NO_FATAL_FAILURE(SetUpStream(module));
+    }
+    void SetUpStreamForDevicePortForNewMixPortConfig(
+            IModule* module, ModuleConfig* moduleConfig, const AudioPort& devicePort,
+            bool connectedOnly = false,
+            const std::optional<AudioDeviceAddress>& connectionAddress = std::nullopt) {
+        ASSERT_NO_FATAL_FAILURE(SetUpPortConfigForDevicePort(module, moduleConfig, devicePort,
+                                                             connectedOnly, connectionAddress));
+        if (!mSkipTestReason.empty()) return;
+        ASSERT_NO_FATAL_FAILURE(SetUpStream(module));
+    }
+    void SetUpStreamForDevicePortWithConfig(
+            IModule* module, ModuleConfig* moduleConfig, const AudioPort& devicePort,
+            bool connectedOnly, const std::optional<AudioDeviceAddress>& connectionAddress,
+            const AudioPortConfig& audioConfig) {
+        ASSERT_NO_FATAL_FAILURE(SetUpPortConfigForDevicePortWithConfig(
+                module, moduleConfig, devicePort, connectedOnly, connectionAddress, audioConfig));
         if (!mSkipTestReason.empty()) return;
         ASSERT_NO_FATAL_FAILURE(SetUpStream(module));
     }
@@ -3487,7 +3551,7 @@ class StreamFixture {
                 *connectedDevicePort, true /*connectedOnly*/);
         if (mixPorts.empty()) {
             mSkipTestReason = std::string("No routable mix ports found for device port id ")
-                                      .append(std::to_string(devicePort.id));
+                                      .append(std::to_string(connectedDevicePort->id));
             return;
         }
         ASSERT_NO_FATAL_FAILURE(
@@ -3658,6 +3722,16 @@ class StreamFixtureWithWorker {
         mStream = std::make_unique<StreamFixture<Stream>>();
         ASSERT_NO_FATAL_FAILURE(mStream->SetUpStreamForDevicePort(
                 module, moduleConfig, devicePort, false /*connectedOnly*/, connectionAddress));
+        MaybeSetSkipTestReason();
+    }
+
+    void SetUp(IModule* module, ModuleConfig* moduleConfig, const AudioPort& devicePort,
+               const std::optional<AudioDeviceAddress>& connectionAddress,
+               const AudioPortConfig& audioConfig) {
+        mStream = std::make_unique<StreamFixture<Stream>>();
+        ASSERT_NO_FATAL_FAILURE(mStream->SetUpStreamForDevicePortWithConfig(
+                module, moduleConfig, devicePort, false /*connectedOnly*/, connectionAddress,
+                audioConfig));
         MaybeSetSkipTestReason();
     }
 
@@ -6144,7 +6218,7 @@ class WithRemoteSubmix {
                    << " stream for: " << mAddress.value_or(AudioDeviceAddress{}).toString();
     }
 
-    static std::optional<AudioPort> getRemoteSubmixAudioPort(ModuleConfig* moduleConfig) {
+    static std::optional<AudioPort> getRemoteSubmixDevicePort(ModuleConfig* moduleConfig) {
         auto ports =
                 moduleConfig->getRemoteSubmixPorts(IOTraits<Stream>::is_input, true /*singlePort*/);
         if (ports.empty()) return {};
@@ -6152,9 +6226,16 @@ class WithRemoteSubmix {
     }
 
     void SetUp(IModule* module, ModuleConfig* moduleConfig) {
-        auto devicePort = getRemoteSubmixAudioPort(moduleConfig);
+        auto devicePort = getRemoteSubmixDevicePort(moduleConfig);
         ASSERT_TRUE(devicePort.has_value()) << "Device port for remote submix device not found";
         ASSERT_NO_FATAL_FAILURE(mStream.SetUp(module, moduleConfig, *devicePort, mAddress));
+        mAddress = mStream.getDevice().address;
+    }
+    void SetUp(IModule* module, ModuleConfig* moduleConfig, const AudioPortConfig& audioConfig) {
+        auto devicePort = getRemoteSubmixDevicePort(moduleConfig);
+        ASSERT_TRUE(devicePort.has_value()) << "Device port for remote submix device not found";
+        ASSERT_NO_FATAL_FAILURE(
+                mStream.SetUp(module, moduleConfig, *devicePort, mAddress, audioConfig));
         mAddress = mStream.getDevice().address;
     }
     void SetUp(IModule* module, ModuleConfig* moduleConfig,
@@ -6288,18 +6369,24 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
             ASSERT_TRUE(otherStream->getAudioDeviceAddress().has_value());
             requestedAddress = otherStream->getAudioDeviceAddress().value();
         }
-        if (requestedAddress.has_value()) {
-            thisStream = std::make_unique<WithRemoteSubmix<ThisStream>>(requestedAddress.value());
+        thisStream = requestedAddress.has_value()
+                             ? std::make_unique<WithRemoteSubmix<ThisStream>>(*requestedAddress)
+                             : std::make_unique<WithRemoteSubmix<ThisStream>>();
+        if (otherStream) {
+            // If the other stream exists, use its audio configuration for setup. It is assumed that
+            // input and output mix ports of the remote submix provide matching profiles.
+            ASSERT_NO_FATAL_FAILURE(thisStream->SetUp(module.get(), moduleConfig.get(),
+                                                      otherStream->getPortConfig()));
         } else {
-            thisStream = std::make_unique<WithRemoteSubmix<ThisStream>>();
+            // Otherwise, use the first available mix port config.
+            ASSERT_NO_FATAL_FAILURE(thisStream->SetUp(module.get(), moduleConfig.get()));
         }
-        ASSERT_NO_FATAL_FAILURE(thisStream->SetUp(module.get(), moduleConfig.get()));
         // Note: any issue with connection attempts is considered as a problem.
         ASSERT_EQ("", thisStream->skipTestReason());
         const auto actualAddress = thisStream->getAudioDeviceAddress();
         ASSERT_TRUE(actualAddress.has_value());
-        if (requestedAddress.has_value() && requestedAddress.value() != AudioDeviceAddress{}) {
-            ASSERT_EQ(requestedAddress.value(), actualAddress.value());
+        if (requestedAddress.has_value() && *requestedAddress != AudioDeviceAddress{}) {
+            ASSERT_EQ(*requestedAddress, *actualAddress);
         }
     }
 
