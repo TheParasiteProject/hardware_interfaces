@@ -518,6 +518,25 @@ std::optional<AudioPortConfig> ModuleConfig::generateConfigForPort(
     return std::nullopt;
 }
 
+std::optional<AudioPortConfig> ModuleConfig::generateMismatchedConfigForPorts(
+        const std::vector<AudioPort>& ports, const AudioPortConfig& audioConfig) {
+    for (const auto& port : ports) {
+        for (const auto& profile : port.profiles) {
+            if (isDynamicProfile(profile)) continue;
+            std::vector<AudioPortConfig> configs;
+            combineAudioConfigs(port, profile, &configs);
+            for (const auto config : configs) {
+                if (config.format != audioConfig.format ||
+                    config.channelMask != audioConfig.channelMask ||
+                    config.sampleRate != audioConfig.sampleRate) {
+                    return config;
+                }
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 std::vector<AudioPort> ModuleConfig::findMixPorts(
         bool isInput, bool connectedOnly, bool singlePort,
         const std::function<bool(const AudioPort&)>& pred) const {
