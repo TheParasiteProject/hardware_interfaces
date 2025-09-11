@@ -294,7 +294,7 @@ protected:
         usleep(10000);
 
         if (get_vsr_api_level() >= 202504) {
-            uint8_t cmd[] = {NCI_ANDROID_SET_PASSIVE_OBSERVER_TECH, 0x0B};
+            uint8_t cmd[] = {NCI_ANDROID_SET_PASSIVE_OBSERVER_TECH, 0x03};
             status = NFA_SendVsCommand(NCI_MSG_PROP_ANDROID, sizeof(cmd), cmd, nfaVSCallback);
             if (status == NFA_STATUS_OK) {
                 if (!sNfaVsCommand.wait(1000)) {
