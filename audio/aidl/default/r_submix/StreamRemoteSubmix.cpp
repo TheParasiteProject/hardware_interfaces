@@ -91,13 +91,20 @@ void StreamRemoteSubmix::shutdown() {
         std::lock_guard guard(mLock);
         mCurrentRoute.swap(currentRoute);
     }
-    if (!currentRoute) return;
+    if (!currentRoute) {
+        LOG(DEBUG) << __func__ << ": no current route";
+        return;
+    }
     currentRoute->closeStream(mIsInput);
     // If all stream instances are closed, we can remove route information for this port.
     if (!currentRoute->hasAtleastOneStreamOpen()) {
         currentRoute->releasePipe();
-        LOG(DEBUG) << __func__ << ": pipe destroyed";
+        LOG(DEBUG) << __func__ << ": pipe " << currentRoute->getDeviceAddress().toString()
+                   << " destroyed";
         currentRoute->remove();
+    } else {
+        LOG(DEBUG) << __func__ << ": pipe " << currentRoute->getDeviceAddress().toString()
+                   << " status: " << currentRoute->dump();
     }
 }
 
@@ -414,14 +421,13 @@ ndk::ScopedAStatus StreamRemoteSubmix::setConnectedDevices(const ConnectedDevice
         }
     }
     RETURN_STATUS_IF_ERROR(StreamCommonImpl::setConnectedDevices(devices));
-    auto currentRoute = prepareCurrentRoute(newAddress);
-    {
+    auto newCurrentRoute = prepareCurrentRoute(newAddress);
+    if (newCurrentRoute) {
         std::lock_guard guard(mLock);
-        mCurrentRoute = currentRoute;
-    }
-    if (currentRoute) {
+        mCurrentRoute = newCurrentRoute;
         LOG(DEBUG) << __func__ << ": connected to " << newAddress.toString();
     } else {
+        // Do not update `mCurrentRoute`, it will be cleaned up by the worker thread.
         LOG(DEBUG) << __func__ << ": disconnected";
     }
     return ndk::ScopedAStatus::ok();
