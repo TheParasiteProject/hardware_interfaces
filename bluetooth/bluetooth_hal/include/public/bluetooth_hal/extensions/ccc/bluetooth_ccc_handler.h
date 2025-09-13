@@ -45,6 +45,10 @@ class BluetoothCccHandler : public ::bluetooth_hal::hci::HciRouterClient {
   bool UnregisterLmpEvents(
       const ::bluetooth_hal::hci::BluetoothAddress& address);
 
+  bool UnregisterLmpEventsWithType(
+      const ::bluetooth_hal::hci::BluetoothAddress& address,
+      AddressType address_type);
+
  protected:
   void OnCommandCallback(
       const ::bluetooth_hal::hci::HalPacket& packet) override;

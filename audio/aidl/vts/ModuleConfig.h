@@ -129,6 +129,13 @@ class ModuleConfig {
     std::optional<SrcSinkPair> getRoutableSrcSinkPair(bool isInput) const;
     std::vector<SrcSinkGroup> getRoutableSrcSinkGroups(bool isInput) const;
 
+    std::optional<aidl::android::media::audio::common::AudioPortConfig> generateConfigForPort(
+            const aidl::android::media::audio::common::AudioPort& port,
+            const aidl::android::media::audio::common::AudioPortConfig& audioConfig);
+    std::optional<aidl::android::media::audio::common::AudioPortConfig>
+    generateMismatchedConfigForPorts(
+            const std::vector<aidl::android::media::audio::common::AudioPort>& ports,
+            const aidl::android::media::audio::common::AudioPortConfig& audioConfig);
     std::vector<aidl::android::media::audio::common::AudioPortConfig>
     getPortConfigsForAttachedDevicePorts() const {
         return generateAudioDevicePortConfigs(getAttachedDevicePorts(), false);
