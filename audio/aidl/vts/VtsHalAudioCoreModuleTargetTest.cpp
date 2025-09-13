@@ -6507,6 +6507,8 @@ class WithRemoteSubmix {
     const AudioPortConfig& getPortConfig() const { return mStream.getPortConfig(); }
     std::string skipTestReason() const { return mStream.skipTestReason(); }
 
+    void TeardownPatch() { mStream.TeardownPatch(); }
+
   private:
     StreamFixtureWithWorker<Stream> mStream;
     std::optional<AudioDeviceAddress> mAddress;
@@ -6545,6 +6547,17 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
 
     void CreateOutputStream(const std::optional<AudioDeviceAddress>& address = std::nullopt) {
         CreateStream<IStreamOut, IStreamIn>(streamOut, streamIn, address);
+    }
+
+    void CreateOutputStreamMismatchingConfig(const AudioDeviceAddress& address,
+                                             const AudioPortConfig& config) {
+        auto devicePort =
+                WithRemoteSubmix<IStreamOut>::getRemoteSubmixDevicePort(moduleConfig.get());
+        ASSERT_TRUE(devicePort.has_value()) << "Device port for remote submix device not found";
+        ASSERT_IS_OK(CreateMismatchedStreamNoChecks<IStreamOut>(streamOut, devicePort.value(),
+                                                                address, config));
+        ASSERT_TRUE(streamOut->getAudioDeviceAddress().has_value());
+        ASSERT_EQ(address, streamOut->getAudioDeviceAddress().value());
     }
 
     ScopedAStatus CreateMismatchedInputStreamNoChecks(const AudioPort& devicePort) {
@@ -6624,6 +6637,16 @@ class AudioModuleRemoteSubmix : public AudioCoreModule {
                 otherStream->getAudioDeviceAddress().value());
         return thisStream->SetUpMismatchedConfigNoChecks(module.get(), moduleConfig.get(),
                                                          devicePort, otherStream->getPortConfig());
+    }
+
+    template <class Stream>
+    ScopedAStatus CreateMismatchedStreamNoChecks(std::unique_ptr<WithRemoteSubmix<Stream>>& stream,
+                                                 const AudioPort& devicePort,
+                                                 const AudioDeviceAddress& address,
+                                                 const AudioPortConfig& config) {
+        stream = std::make_unique<WithRemoteSubmix<Stream>>(address);
+        return stream->SetUpMismatchedConfigNoChecks(module.get(), moduleConfig.get(), devicePort,
+                                                     config);
     }
 
   public:
@@ -6825,6 +6848,37 @@ TEST_P(AudioModuleRemoteSubmix, OutputAndInputMismatchingConfigs) {
     ASSERT_NO_FATAL_FAILURE(streamIn->SendBurstCommands(false /*callPrepareToCloseBeforeJoin*/));
     ASSERT_NO_FATAL_FAILURE(
             streamOut->JoinWorkerAfterBurstCommands(false /*callPrepareToCloseBeforeJoin*/));
+}
+
+// It must be possible to open a stream, then close it, and open another stream
+// with different configuration on the same address.
+TEST_P(AudioModuleRemoteSubmix, ReopenSameAddressDifferentConfig) {
+    const auto address = AudioDeviceAddress::make<AudioDeviceAddress::id>("0");
+    ASSERT_NO_FATAL_FAILURE(CreateOutputStream(address));
+    auto portConfig = streamOut->getPortConfig();
+    ASSERT_NO_FATAL_FAILURE(
+            streamOut->SendBurstCommands(true /*callPrepareToCloseBeforeJoin*/, 0 /*burstCount*/));
+    streamOut.reset();
+
+    // This assumes that the remote submix offers at least two configurations.
+    ASSERT_NO_FATAL_FAILURE(CreateOutputStreamMismatchingConfig(address, portConfig));
+    ASSERT_NO_FATAL_FAILURE(
+            streamOut->SendBurstCommands(true /*callPrepareToCloseBeforeJoin*/, 0 /*burstCount*/));
+}
+
+TEST_P(AudioModuleRemoteSubmix, ReopenSameAddressDifferentConfigTeardownPatch) {
+    const auto address = AudioDeviceAddress::make<AudioDeviceAddress::id>("0");
+    ASSERT_NO_FATAL_FAILURE(CreateOutputStream(address));
+    auto portConfig = streamOut->getPortConfig();
+    ASSERT_NO_FATAL_FAILURE(
+            streamOut->SendBurstCommands(true /*callPrepareToCloseBeforeJoin*/, 0 /*burstCount*/));
+    ASSERT_NO_FATAL_FAILURE(streamOut->TeardownPatch());
+    streamOut.reset();
+
+    // This assumes that the remote submix offers at least two configurations.
+    ASSERT_NO_FATAL_FAILURE(CreateOutputStreamMismatchingConfig(address, portConfig));
+    ASSERT_NO_FATAL_FAILURE(
+            streamOut->SendBurstCommands(true /*callPrepareToCloseBeforeJoin*/, 0 /*burstCount*/));
 }
 
 INSTANTIATE_TEST_SUITE_P(AudioModuleRemoteSubmixTest, AudioModuleRemoteSubmix,
